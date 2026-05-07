@@ -1,0 +1,640 @@
+// ----------------------------------------------------
+// コリジョンデバッグ描画 [collision_debug.cpp]
+// ====================================================
+// collision.cpp から分離されたデバッグ描画関数群。
+// Initialize/Finalize と全ての DebugDraw 系関数を含む。
+// ----------------------------------------------------
+
+#include "collision.h"
+#include "collision_internal.h"
+#include "direct3d.h"
+#include "shader.h"
+#include "shader3d.h"
+#include "texture.h"
+
+#include <algorithm>
+#include <cmath>
+using namespace DirectX;
+
+#include "camera.h"
+
+// グローバル変数の定義 (collision_internal.h で extern 宣言)
+ID3D11Buffer *g_pCollDebugVertexBuffer = nullptr;
+ID3D11DeviceContext *g_pCollDebugContext = nullptr;
+int g_CollDebugWhiteTexId = -1;
+
+// 頂点構造体 (AABB/OBB/Circle/Box 描画用、Shader3D互換レイアウト)
+struct Vertex {
+  XMFLOAT3 position;
+  XMFLOAT3 normal;
+  XMFLOAT4 color;
+  XMFLOAT2 uv;
+};
+
+void Collision_DebugInitialize(ID3D11Device *pDevice,
+                               ID3D11DeviceContext *pContext) {
+  g_pCollDebugContext = Direct3D_GetContext();
+
+  D3D11_BUFFER_DESC bd = {};
+  bd.Usage = D3D11_USAGE_DYNAMIC;
+  bd.ByteWidth = sizeof(DebugVertex) * MAX_VERTICES;
+  bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+  bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+  HRESULT hr =
+      Direct3D_GetDevice()->CreateBuffer(&bd, nullptr, &g_pCollDebugVertexBuffer);
+
+  g_CollDebugWhiteTexId = Texture_Load(L"resource/texture/white.png");
+  if (g_CollDebugWhiteTexId < 0) {
+    g_CollDebugWhiteTexId = 0;
+  }
+}
+
+void Collision_DebugFinalize() {
+  if (g_pCollDebugVertexBuffer) {
+    g_pCollDebugVertexBuffer->Release();
+    g_pCollDebugVertexBuffer = nullptr;
+  }
+}
+
+void Collision_DebugDraw(const Circle &circle, const DirectX::XMFLOAT4 &color) {
+  int numVertex = (int)(circle.radius * 2.0f * XM_PI + 1);
+
+  Shader_Begin();
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+
+  Vertex *v = (Vertex *)msr.pData;
+
+  const float rad = XM_2PI / numVertex;
+
+  for (int i = 0; i < numVertex; i++) {
+    v[i].position.x = cosf(rad * i) * circle.radius + circle.center.x;
+    v[i].position.y = sinf(rad * i) * circle.radius + circle.center.y;
+    v[i].position.z = 0.0f;
+    v[i].color = color;
+    v[i].uv = {0.0f, 0.0f};
+  }
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  Shader_SetWorldMatrix(XMMatrixIdentity());
+
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(numVertex, 0);
+}
+
+void Collision_DebugDraw(const Box &box, const DirectX::XMFLOAT4 &color) {
+  Shader_Begin();
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+
+  Vertex *v = (Vertex *)msr.pData;
+
+  v[0].position = {box.center.x - box.half_width,
+                   box.center.y - box.half_height, 0.0f};
+  v[1].position = {box.center.x + box.half_width,
+                   box.center.y - box.half_height, 0.0f};
+  v[2].position = {box.center.x + box.half_width,
+                   box.center.y + box.half_height, 0.0f};
+  v[3].position = {box.center.x - box.half_width,
+                   box.center.y + box.half_height, 0.0f};
+  v[4].position = {box.center.x - box.half_width,
+                   box.center.y - box.half_height, 0.0f};
+
+  for (int i = 0; i < 5; i++) {
+    v[i].color = color;
+    v[i].uv = {0.0f, 0.0f};
+  }
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  Shader_SetWorldMatrix(XMMatrixIdentity());
+
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(5, 0);
+}
+
+void Collision_DebugDraw(const AABB &aabb, const DirectX::XMFLOAT4 &color) {
+  const int numVertex = 24;
+  Shader3D_Begin();
+  D3D11_MAPPED_SUBRESOURCE msr;
+  if (FAILED(g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                             &msr))) {
+    return;
+  }
+  Vertex *v = (Vertex *)msr.pData;
+  XMFLOAT3 p[8];
+  p[0] = {aabb.min.x, aabb.min.y, aabb.min.z};
+  p[1] = {aabb.max.x, aabb.min.y, aabb.min.z};
+  p[2] = {aabb.min.x, aabb.max.y, aabb.min.z};
+  p[3] = {aabb.max.x, aabb.max.y, aabb.min.z};
+  p[4] = {aabb.min.x, aabb.min.y, aabb.max.z};
+  p[5] = {aabb.max.x, aabb.min.y, aabb.max.z};
+  p[6] = {aabb.min.x, aabb.max.y, aabb.max.z};
+  p[7] = {aabb.max.x, aabb.max.y, aabb.max.z};
+
+  int indices[] = {
+      0, 1, 2, 3, 4, 5, 6, 7,
+      0, 2, 1, 3, 4, 6, 5, 7,
+      0, 4, 1, 5, 2, 6, 3, 7
+  };
+  for (int i = 0; i < numVertex; i++) {
+    v[i].position = p[indices[i]];
+    v[i].normal = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    v[i].color = color;
+    v[i].uv = {0.0f, 0.0f};
+  }
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+  Shader3D_SetWorldMatrix(XMMatrixIdentity());
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(numVertex, 0);
+}
+
+void Collision_DebugDrawOBB(const AABB &localAabb,
+                            const DirectX::XMMATRIX &mtxWorld,
+                            const DirectX::XMFLOAT4 &color) {
+  const int numVertex = 24;
+  Shader3D_Begin();
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  if (FAILED(g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                             &msr)))
+    return;
+
+  Vertex *v = (Vertex *)msr.pData;
+  XMFLOAT3 p[8] = {{localAabb.min.x, localAabb.min.y, localAabb.min.z},
+                   {localAabb.max.x, localAabb.min.y, localAabb.min.z},
+                   {localAabb.min.x, localAabb.max.y, localAabb.min.z},
+                   {localAabb.max.x, localAabb.max.y, localAabb.min.z},
+                   {localAabb.min.x, localAabb.min.y, localAabb.max.z},
+                   {localAabb.max.x, localAabb.min.y, localAabb.max.z},
+                   {localAabb.min.x, localAabb.max.y, localAabb.max.z},
+                   {localAabb.max.x, localAabb.max.y, localAabb.max.z}};
+
+  int indices[] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3,
+                   4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7};
+  for (int i = 0; i < numVertex; i++) {
+    v[i].position = p[indices[i]];
+    v[i].normal = XMFLOAT3(0.0f, 1.0f, 0.0f);
+    v[i].color = color;
+    v[i].uv = {0.0f, 0.0f};
+  }
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  Shader3D_SetWorldMatrix(mtxWorld);
+
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(numVertex, 0);
+}
+
+void Collision_DebugDrawSphereMtx(float radius,
+                                  const DirectX::XMMATRIX &mtxWorld,
+                                  const DirectX::XMFLOAT4 &color) {
+  const int segments = 16;
+  Shader3D_Begin();
+  D3D11_MAPPED_SUBRESOURCE msr;
+  if (FAILED(g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                             &msr)))
+    return;
+  Vertex *v = (Vertex *)msr.pData;
+  int idx = 0;
+  float step = DirectX::XM_2PI / segments;
+  for (int i = 0; i < segments; ++i) {
+    float c1 = cosf(step * i) * radius;
+    float s1 = sinf(step * i) * radius;
+    float c2 = cosf(step * (i + 1)) * radius;
+    float s2 = sinf(step * (i + 1)) * radius;
+
+    v[idx].position = {c1, 0, s1};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {c2, 0, s2};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {c1, s1, 0};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {c2, s2, 0};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {0, c1, s1};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {0, c2, s2};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+  }
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+  Shader3D_SetWorldMatrix(mtxWorld);
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(idx, 0);
+}
+
+void Collision_DebugDrawCapsuleMtx(float radius, float halfHeight,
+                                   const DirectX::XMMATRIX &mtxWorld,
+                                   const DirectX::XMFLOAT4 &color) {
+  const int segments = 16;
+  Shader3D_Begin();
+  D3D11_MAPPED_SUBRESOURCE msr;
+  if (FAILED(g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                             &msr)))
+    return;
+  Vertex *v = (Vertex *)msr.pData;
+  int idx = 0;
+  float step = DirectX::XM_2PI / segments;
+  for (int i = 0; i < segments; ++i) {
+    float c1 = cosf(step * i) * radius;
+    float s1 = sinf(step * i) * radius;
+    float c2 = cosf(step * (i + 1)) * radius;
+    float s2 = sinf(step * (i + 1)) * radius;
+    v[idx].position = {c1, halfHeight, s1};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {c2, halfHeight, s2};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {c1, -halfHeight, s1};
+    v[idx].normal = {0, -1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {c2, -halfHeight, s2};
+    v[idx].normal = {0, -1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+  }
+  for (int i = 0; i < 4; ++i) {
+    float c1 = cosf(step * (i * 4)) * radius;
+    float s1 = sinf(step * (i * 4)) * radius;
+    v[idx].position = {c1, halfHeight, s1};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {c1, -halfHeight, s1};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+  }
+  int hemiSegments = segments / 2;
+  float hemiStep = DirectX::XM_PI / hemiSegments;
+  for (int i = 0; i < hemiSegments; ++i) {
+    float h_c1 = cosf(hemiStep * i) * radius;
+    float h_s1 = sinf(hemiStep * i) * radius;
+    float h_c2 = cosf(hemiStep * (i + 1)) * radius;
+    float h_s2 = sinf(hemiStep * (i + 1)) * radius;
+    v[idx].position = {h_s1, halfHeight + h_c1, 0};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {h_s2, halfHeight + h_c2, 0};
+    v[idx].normal = {0, 1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {0, halfHeight + h_c1, h_s1};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {0, halfHeight + h_c2, h_s2};
+    v[idx].normal = {1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {h_s1, -halfHeight - h_c1, 0};
+    v[idx].normal = {0, -1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {h_s2, -halfHeight - h_c2, 0};
+    v[idx].normal = {0, -1, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+
+    v[idx].position = {0, -halfHeight - h_c1, h_s1};
+    v[idx].normal = {-1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+    v[idx].position = {0, -halfHeight - h_c2, h_s2};
+    v[idx].normal = {-1, 0, 0};
+    v[idx].color = color;
+    v[idx++].uv = {0, 0};
+  }
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+  Shader3D_SetWorldMatrix(mtxWorld);
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(idx, 0);
+}
+
+void Collision_DebugDrawConeOBB(const DirectX::XMFLOAT3 &baseCenter,
+                                const DirectX::XMFLOAT3 &tip, float radius,
+                                const DirectX::XMMATRIX &mtxWorld,
+                                const DirectX::XMFLOAT4 &color) {
+  const int segments = 16;
+  const int numVertex = segments * 4;
+
+  Shader3D_Begin();
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  if (FAILED(g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                             &msr)))
+    return;
+
+  Vertex *v = (Vertex *)msr.pData;
+
+  XMVECTOR vBase = XMLoadFloat3(&baseCenter);
+  XMVECTOR vTip = XMLoadFloat3(&tip);
+  XMVECTOR vDir = XMVector3Normalize(vTip - vBase);
+
+  XMVECTOR vUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+  if (std::abs(XMVectorGetY(vDir)) > 0.99f) {
+    vUp = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+  }
+  XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vUp, vDir));
+  vUp = XMVector3Normalize(XMVector3Cross(vDir, vRight));
+
+  XMFLOAT3 basePoints[16];
+  for (int i = 0; i < segments; i++) {
+    float angle = (XM_2PI * i) / segments;
+    XMVECTOR point =
+        vBase + vRight * (radius * cosf(angle)) + vUp * (radius * sinf(angle));
+    XMStoreFloat3(&basePoints[i], point);
+  }
+
+  int vIdx = 0;
+  for (int i = 0; i < segments; i++) {
+    int next = (i + 1) % segments;
+
+    v[vIdx].position = basePoints[i];
+    v[vIdx].normal = XMFLOAT3(0, 1, 0);
+    v[vIdx].color = color;
+    v[vIdx].uv = XMFLOAT2(0, 0);
+    vIdx++;
+
+    v[vIdx].position = basePoints[next];
+    v[vIdx].normal = XMFLOAT3(0, 1, 0);
+    v[vIdx].color = color;
+    v[vIdx].uv = XMFLOAT2(0, 0);
+    vIdx++;
+
+    v[vIdx].position = basePoints[i];
+    v[vIdx].normal = XMFLOAT3(0, 1, 0);
+    v[vIdx].color = color;
+    v[vIdx].uv = XMFLOAT2(0, 0);
+    vIdx++;
+
+    v[vIdx].position = tip;
+    v[vIdx].normal = XMFLOAT3(0, 1, 0);
+    v[vIdx].color = color;
+    v[vIdx].uv = XMFLOAT2(0, 0);
+    vIdx++;
+  }
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  Shader3D_SetWorldMatrix(mtxWorld);
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+  g_pCollDebugContext->Draw(numVertex, 0);
+}
+
+void Collision_DebugDraw(const Sphere &sphere, const DirectX::XMFLOAT4 &color) {
+  const int segments = 24;
+  const int verticesPerRing = segments + 1;
+
+  XMMATRIX view = XMLoadFloat4x4(&Camera_GetMatrix());
+  XMMATRIX proj = XMLoadFloat4x4(&Camera_GetPerspectiveMatrix());
+
+  Shader3D_Begin();
+
+  Shader3D_SetViewMatrix(view);
+  Shader3D_SetProjMatrix(proj);
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  HRESULT hr =
+      g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+  if (FAILED(hr))
+    return;
+
+  // Vertex33 は shader3d.h で定義
+  struct Vertex33 *v = (struct Vertex33 *)msr.pData;
+  float angleStep = XM_2PI / segments;
+
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float x = cosf(angle) * sphere.radius;
+    float z = sinf(angle) * sphere.radius;
+
+    v[i].position = {sphere.center.x + x, sphere.center.y, sphere.center.z + z};
+    v[i].normal = {0, 1, 0};
+    v[i].color = color;
+    v[i].texcoord = {0, 0};
+  }
+
+  int offset2 = verticesPerRing;
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float x = cosf(angle) * sphere.radius;
+    float y = sinf(angle) * sphere.radius;
+
+    v[offset2 + i].position = {sphere.center.x + x, sphere.center.y + y,
+                               sphere.center.z};
+    v[offset2 + i].normal = {0, 1, 0};
+    v[offset2 + i].color = color;
+    v[offset2 + i].texcoord = {0, 0};
+  }
+
+  int offset3 = verticesPerRing * 2;
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float y = cosf(angle) * sphere.radius;
+    float z = sinf(angle) * sphere.radius;
+
+    v[offset3 + i].position = {sphere.center.x, sphere.center.y + y,
+                               sphere.center.z + z};
+    v[offset3 + i].normal = {0, 1, 0};
+    v[offset3 + i].color = color;
+    v[offset3 + i].texcoord = {0, 0};
+  }
+
+  Direct3D_GetContext()->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  Shader3D_SetWorldMatrix(XMMatrixIdentity());
+
+  UINT stride = sizeof(Vertex);
+  UINT offset = 0;
+  Direct3D_GetContext()->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride,
+                                            &offset);
+
+  Direct3D_GetContext()->IASetPrimitiveTopology(
+      D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+
+  Direct3D_GetContext()->Draw(verticesPerRing, 0);
+  Direct3D_GetContext()->Draw(verticesPerRing, verticesPerRing);
+  Direct3D_GetContext()->Draw(verticesPerRing, verticesPerRing * 2);
+}
+
+void CollisionDebug_DrawSphere(const Sphere &sphere, const XMFLOAT4 &color) {
+  char buf[256];
+  sprintf_s(buf, "繪製球體: 中心(%.1f, %.1f, %.1f) 半徑%.1f\n", sphere.center.x,
+            sphere.center.y, sphere.center.z, sphere.radius);
+  OutputDebugStringA(buf);
+  if (!g_pCollDebugVertexBuffer)
+    return;
+
+  const int segments = 32;
+  const int verticesPerRing = segments + 1;
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  HRESULT hr =
+      g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+  if (FAILED(hr))
+    return;
+
+  DebugVertex *v = (DebugVertex *)msr.pData;
+  float angleStep = XM_2PI / segments;
+
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float x = cosf(angle) * sphere.radius;
+    float z = sinf(angle) * sphere.radius;
+
+    v[i].position = {sphere.center.x + x, sphere.center.y, sphere.center.z + z};
+    v[i].normal = {0, 1, 0};
+    v[i].color = color;
+    v[i].uv = {0, 0};
+  }
+
+  int offset2 = verticesPerRing;
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float x = cosf(angle) * sphere.radius;
+    float y = sinf(angle) * sphere.radius;
+
+    v[offset2 + i].position = {sphere.center.x + x, sphere.center.y + y,
+                               sphere.center.z};
+    v[offset2 + i].normal = {0, 0, 1};
+    v[offset2 + i].color = color;
+    v[offset2 + i].uv = {0, 0};
+  }
+
+  int offset3 = verticesPerRing * 2;
+  for (int i = 0; i <= segments; i++) {
+    float angle = i * angleStep;
+    float y = cosf(angle) * sphere.radius;
+    float z = sinf(angle) * sphere.radius;
+
+    v[offset3 + i].position = {sphere.center.x, sphere.center.y + y,
+                               sphere.center.z + z};
+    v[offset3 + i].normal = {1, 0, 0};
+    v[offset3 + i].color = color;
+    v[offset3 + i].uv = {0, 0};
+  }
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  XMMATRIX view = XMLoadFloat4x4(&Camera_GetMatrix());
+  XMMATRIX proj = XMLoadFloat4x4(&Camera_GetPerspectiveMatrix());
+
+  Shader3D_SetWorldMatrix(XMMatrixIdentity());
+  Shader3D_Begin();
+
+  UINT stride = sizeof(DebugVertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+
+  g_pCollDebugContext->Draw(verticesPerRing, 0);
+  g_pCollDebugContext->Draw(verticesPerRing, verticesPerRing);
+  g_pCollDebugContext->Draw(verticesPerRing, verticesPerRing * 2);
+}
+
+void CollisionDebug_DrawTest() {
+  if (!g_pCollDebugVertexBuffer)
+    return;
+
+  D3D11_MAPPED_SUBRESOURCE msr;
+  HRESULT hr =
+      g_pCollDebugContext->Map(g_pCollDebugVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+  if (FAILED(hr)) {
+    OutputDebugStringA("Map 失敗!\n");
+    return;
+  }
+
+  DebugVertex *v = (DebugVertex *)msr.pData;
+
+  v[0].position = {0.0f, 0.5f, 0.0f};
+  v[0].color = {100.0f, 0.0f, 0.0f, 1.0f};
+  v[0].normal = {0, 0, 1};
+  v[0].uv = {0, 0};
+
+  v[1].position = {-0.5f, -0.5f, 0.0f};
+  v[1].color = {0.0f, 100.0f, 0.0f, 1.0f};
+  v[1].normal = {0, 0, 1};
+  v[1].uv = {0, 0};
+
+  v[2].position = {0.5f, -0.5f, 0.0f};
+  v[2].color = {0.0f, 0.0f, 100.0f, 1.0f};
+  v[2].normal = {0, 0, 1};
+  v[2].uv = {0, 0};
+
+  g_pCollDebugContext->Unmap(g_pCollDebugVertexBuffer, 0);
+
+  OutputDebugStringA("準備繪製三角形\n");
+
+  Shader3D_SetWorldMatrix(XMMatrixIdentity());
+  Shader3D_Begin();
+
+  UINT stride = sizeof(DebugVertex);
+  UINT offset = 0;
+  g_pCollDebugContext->IASetVertexBuffers(0, 1, &g_pCollDebugVertexBuffer, &stride, &offset);
+  g_pCollDebugContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  Texture_SetTexture(g_CollDebugWhiteTexId);
+
+  g_pCollDebugContext->Draw(3, 0);
+
+  OutputDebugStringA("繪製完成\n");
+}

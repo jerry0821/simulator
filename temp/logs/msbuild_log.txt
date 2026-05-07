@@ -1,0 +1,397 @@
+MSBuild のバージョン 17.14.23+b0019275e (.NET Framework)
+2026/03/07 22:19:55 にビルドを開始しました。
+
+ノード 1 上のプロジェクト "D:\HAL\directX\engine\Game_07.sln" (既定のターゲット)。
+ValidateSolutionConfiguration:
+  ソリューション構成 "Debug|x64" をビルドしています。
+プロジェクト "D:\HAL\directX\engine\Game_07.sln" (1) は、ノード 1 上に "D:\HAL\directX\engine\GameSample02.vcxproj" (2) をビルドしています (既定のターゲット)。
+PrepareForBuild:
+  構造化出力が有効になっています。コンパイラ診断の書式設定にはエラー階層が反映されます。詳細については、https://aka.ms/cpp/structured-output を参照してください。
+InitializeBuildStatus:
+  "AlwaysCreate" が指定されたため "Game_07\x64\Debug\Game_07.tlog\unsuccessfulbuild" を作成しています。
+  "Game_07\x64\Debug\Game_07.tlog\unsuccessfulbuild" のタッチ タスクを実行しています。
+FxCompile:
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_2d.cso" /Od /Zi shader_pixel_2d.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_2d.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_3d.cso" /Od /Zi shader_pixel_3d.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_3d.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_3d_unlit.cso" /Od /Zi shader_pixel_3d_unlit.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_3d_unlit.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_billboard.cso" /Od /Zi shader_pixel_billboard.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_billboard.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_field.cso" /Od /Zi shader_pixel_field.hlsl 
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_field.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_particle.cso" /Od /Zi shader_pixel_particle.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_particle.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_toon.cso" /Od /Zi shader_pixel_toon.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_toon.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T ps_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_pixel_toon_outline.cso" /Od /Zi shader_pixel_toon_outline.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_pixel_toon_outline.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_2d.cso" /Od /Zi shader_vertex_2d.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_2d.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_3d.cso" /Od /Zi shader_vertex_3d.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_3d.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_toon.cso" /Od /Zi shader_vertex_3d_toon.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_toon.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_unlit.cso" /Od /Zi shader_vertex_3d_unlit.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_unlit.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_billboard.cso" /Od /Zi shader_vertex_billboard.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_billboard.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_field.cso" /Od /Zi shader_vertex_field.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_field.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_particle.cso" /Od /Zi shader_vertex_particle.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_particle.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_toon.cso" /Od /Zi shader_vertex_toon.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_toon.cso
+  C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\fxc.exe /nologo /E"main" /T vs_5_0 /Fo "D:\HAL\directX\engine\x64\Debug\shader_vertex_toon_outline.cso" /Od /Zi shader_vertex_toon_outline.hlsl 
+  compilation object save succeeded; see D:\HAL\directX\engine\x64\Debug\shader_vertex_toon_outline.cso
+ClCompile:
+  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\bin\HostX86\x64\CL.exe /c /ID:\HAL\directX\engine\imgui /ZI /JMC /nologo /W4 /WX- /diagnostics:column /sdl /MP /Od /D _DEBUG /D _WINDOWS /D NOMINMAX /D _MBCS /Gm- /EHsc /RTC1 /MTd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /std:c++20 /permissive- /Fo"Game_07\x64\Debug\\" /Fd"Game_07\x64\Debug\vc143.pdb" /external:W4 /Gd /TP /FC /errorReport:queue billboard.cpp camera.cpp collision.cpp cube.cpp sphere.cpp cylinder.cpp capsule.cpp debug_menu.cpp debug_ostream.cpp debug_text.cpp direct3d.cpp easing_cube.cpp game.cpp game_window.cpp grid.cpp imgui\imgui.cpp imgui\imgui_draw.cpp imgui\imgui_impl_dx11.cpp imgui\imgui_impl_win32.cpp imgui\imgui_tables.cpp imgui\imgui_widgets.cpp keyboard.cpp key_logger.cpp light.cpp main.cpp map.cpp map_editor.cpp meshfield.cpp model.cpp mouse.cpp pad_logger.cpp particle.cpp sampler.cpp resource_manager.cpp scene.cpp shader.cpp shader3d.cpp shader3d_unlit.cpp shader_billboard.cpp shader_field.cpp shader_particle.cpp shader_toon.cpp sprite.cpp sprite_anim.cpp system_timer.cpp texture.cpp WICTextureLoader11.cpp
+  billboard.cpp
+  camera.cpp
+  collision.cpp
+  cube.cpp
+  sphere.cpp
+  cylinder.cpp
+  capsule.cpp
+  debug_menu.cpp
+  debug_ostream.cpp
+  debug_text.cpp
+  direct3d.cpp
+  easing_cube.cpp
+  game.cpp
+  game_window.cpp
+  grid.cpp
+  imgui.cpp
+  imgui_draw.cpp
+  imgui_impl_dx11.cpp
+  imgui_impl_win32.cpp
+  imgui_tables.cpp
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'collision.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'billboard.cpp' をコンパイルしています)
+  
+  imgui_widgets.cpp
+  keyboard.cpp
+  key_logger.cpp
+  light.cpp
+  main.cpp
+  map.cpp
+D:\HAL\directX\engine\main.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'map.cpp' をコンパイルしています)
+  
+  map_editor.cpp
+  meshfield.cpp
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'cube.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\meshfield.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'game.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'easing_cube.cpp' をコンパイルしています)
+  
+  model.cpp
+  mouse.cpp
+  pad_logger.cpp
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'map_editor.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\capsule.cpp(88,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(89,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(90,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(91,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(108,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(109,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(110,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(111,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(125,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(126,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(127,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(128,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\sphere.cpp(60,26): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\sphere.cpp(61,29): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\capsule.cpp(167,28): warning C4100: 'elapsed_Time': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(56,24): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(57,27): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(58,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(59,31): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(76,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(102,31): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.cpp(562,53): warning C4100: 'pContext': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.cpp(561,46): warning C4100: 'pDevice': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.cpp(1030,13): warning C4189: 'totalVertices': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\collision.cpp(1114,13): warning C4189: 'totalVertices': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+  particle.cpp
+  sampler.cpp
+  resource_manager.cpp
+  scene.cpp
+  shader.cpp
+  shader3d.cpp
+D:\HAL\directX\engine\resource_manager.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'resource_manager.cpp' をコンパイルしています)
+  
+  shader3d_unlit.cpp
+  shader_billboard.cpp
+  shader_field.cpp
+D:\HAL\directX\engine\direct3d.cpp(477,20): warning C4838: 'int' から 'float' への変換には縮小変換が必要です [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\direct3d.cpp(477,20): warning C4244: '初期化中': 'int' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\direct3d.cpp(477,22): warning C4838: 'int' から 'float' への変換には縮小変換が必要です [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\direct3d.cpp(477,22): warning C4244: '初期化中': 'int' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'game.cpp' をコンパイルしています)
+  
+  shader_particle.cpp
+  shader_toon.cpp
+  sprite.cpp
+  sprite_anim.cpp
+  system_timer.cpp
+  texture.cpp
+  WICTextureLoader11.cpp
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'main.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\map_editor.cpp(445,9): warning C4456: 'objCount' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+      D:\HAL\directX\engine\map_editor.cpp(299,7):
+      'objCount' の宣言を確認してください
+  
+D:\HAL\directX\engine\map_editor.cpp(638,17): warning C4456: 'objCount' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+      D:\HAL\directX\engine\map_editor.cpp(299,7):
+      'objCount' の宣言を確認してください
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'model.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'map.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'sprite_anim.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\model.cpp(195,21): warning C4456: 'i' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+      D:\HAL\directX\engine\model.cpp(170,20):
+      'i' の宣言を確認してください
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'particle.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  (ソース ファイル 'resource_manager.cpp' をコンパイルしています)
+  
+D:\HAL\directX\engine\particle.cpp(60,35): warning C4244: '-=': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\particle.cpp(64,30): warning C4244: '初期化中': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\particle.cpp(74,22): warning C4244: '引数': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\particle.cpp(78,18): warning C4244: '+=': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\resource_manager.cpp(27,20): warning C4189: 'pair': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+Link:
+  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\bin\HostX86\x64\link.exe /ERRORREPORT:QUEUE /OUT:"D:\HAL\directX\engine\x64\Debug\Game_07.exe" /INCREMENTAL /ILK:"Game_07\x64\Debug\Game_07.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"D:\HAL\directX\engine\x64\Debug\Game_07.pdb" /SUBSYSTEM:WINDOWS /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"D:\HAL\directX\engine\x64\Debug\Game_07.lib" /MACHINE:X64 Game_07\x64\Debug\billboard.obj
+  Game_07\x64\Debug\camera.obj
+  Game_07\x64\Debug\collision.obj
+  Game_07\x64\Debug\cube.obj
+  Game_07\x64\Debug\sphere.obj
+  Game_07\x64\Debug\cylinder.obj
+  Game_07\x64\Debug\capsule.obj
+  Game_07\x64\Debug\debug_menu.obj
+  Game_07\x64\Debug\debug_ostream.obj
+  Game_07\x64\Debug\debug_text.obj
+  Game_07\x64\Debug\direct3d.obj
+  Game_07\x64\Debug\easing_cube.obj
+  Game_07\x64\Debug\game.obj
+  Game_07\x64\Debug\game_window.obj
+  Game_07\x64\Debug\grid.obj
+  Game_07\x64\Debug\imgui.obj
+  Game_07\x64\Debug\imgui_draw.obj
+  Game_07\x64\Debug\imgui_impl_dx11.obj
+  Game_07\x64\Debug\imgui_impl_win32.obj
+  Game_07\x64\Debug\imgui_tables.obj
+  Game_07\x64\Debug\imgui_widgets.obj
+  Game_07\x64\Debug\keyboard.obj
+  Game_07\x64\Debug\key_logger.obj
+  Game_07\x64\Debug\light.obj
+  Game_07\x64\Debug\map.obj
+  Game_07\x64\Debug\map_editor.obj
+  Game_07\x64\Debug\meshfield.obj
+  Game_07\x64\Debug\model.obj
+  Game_07\x64\Debug\mouse.obj
+  Game_07\x64\Debug\pad_logger.obj
+  Game_07\x64\Debug\particle.obj
+  Game_07\x64\Debug\sampler.obj
+  Game_07\x64\Debug\resource_manager.obj
+  Game_07\x64\Debug\scene.obj
+  Game_07\x64\Debug\shader.obj
+  Game_07\x64\Debug\shader3d.obj
+  Game_07\x64\Debug\shader3d_unlit.obj
+  Game_07\x64\Debug\shader_billboard.obj
+  Game_07\x64\Debug\shader_field.obj
+  Game_07\x64\Debug\shader_particle.obj
+  Game_07\x64\Debug\shader_toon.obj
+  Game_07\x64\Debug\sprite.obj
+  Game_07\x64\Debug\sprite_anim.obj
+  Game_07\x64\Debug\system_timer.obj
+  Game_07\x64\Debug\texture.obj
+  Game_07\x64\Debug\WICTextureLoader11.obj
+  Game_07\x64\Debug\main.obj
+  GameSample02.vcxproj -> D:\HAL\directX\engine\x64\Debug\Game_07.exe
+PostBuildEvent:
+  xcopy /D /Y "D:\HAL\directX\engine\x64\Debug\*.cso" "D:\HAL\directX\engine\resource/shader"
+  :VCEnd
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_2d.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_3d.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_3d_unlit.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_billboard.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_field.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_particle.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_toon.cso
+  D:\HAL\directX\engine\x64\Debug\shader_pixel_toon_outline.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_2d.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_3d.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_toon.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_3d_unlit.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_billboard.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_field.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_particle.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_toon.cso
+  D:\HAL\directX\engine\x64\Debug\shader_vertex_toon_outline.cso
+  17 個のファイルをコピーしました
+FinalizeBuildStatus:
+  ファイル "Game_07\x64\Debug\Game_07.tlog\unsuccessfulbuild" を削除しています。
+  "Game_07\x64\Debug\Game_07.tlog\Game_07.lastbuildstate" のタッチ タスクを実行しています。
+プロジェクト "D:\HAL\directX\engine\GameSample02.vcxproj" (既定のターゲット) のビルドが完了しました。
+プロジェクト "D:\HAL\directX\engine\Game_07.sln" (既定のターゲット) のビルドが完了しました。
+
+ビルドに成功しました。
+
+"D:\HAL\directX\engine\Game_07.sln" (既定のターゲット) (1) ->
+"D:\HAL\directX\engine\GameSample02.vcxproj" (既定のターゲット) (2) ->
+(FxCompile ターゲット) -> 
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\shader_pixel_field.hlsl(136,34-82): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop [D:\HAL\directX\engine\GameSample02.vcxproj]
+
+
+"D:\HAL\directX\engine\Game_07.sln" (既定のターゲット) (1) ->
+"D:\HAL\directX\engine\GameSample02.vcxproj" (既定のターゲット) (2) ->
+(ClCompile ターゲット) -> 
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\main.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\meshfield.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(88,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(89,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(90,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(91,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(108,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(109,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(110,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(111,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(125,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(126,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(127,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(128,25): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\sphere.cpp(60,26): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\sphere.cpp(61,29): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\capsule.cpp(167,28): warning C4100: 'elapsed_Time': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(56,24): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(57,27): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(58,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(59,31): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(76,28): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(93,37): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(94,33): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(102,31): warning C4244: '初期化中': 'int' から 'unsigned short' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(119,33): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244: '引数': 'int' から '_Ty' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         with [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         [ [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:             _Ty=unsigned short [D:\HAL\directX\engine\GameSample02.vcxproj]
+D:\HAL\directX\engine\cylinder.cpp(120,37): warning C4244:         ] [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.cpp(562,53): warning C4100: 'pContext': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.cpp(561,46): warning C4100: 'pDevice': 参照されないパラメーター [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.cpp(1030,13): warning C4189: 'totalVertices': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.cpp(1114,13): warning C4189: 'totalVertices': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\resource_manager.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\direct3d.cpp(477,20): warning C4838: 'int' から 'float' への変換には縮小変換が必要です [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\direct3d.cpp(477,20): warning C4244: '初期化中': 'int' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\direct3d.cpp(477,22): warning C4838: 'int' から 'float' への変換には縮小変換が必要です [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\direct3d.cpp(477,22): warning C4244: '初期化中': 'int' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\map_editor.cpp(445,9): warning C4456: 'objCount' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\map_editor.cpp(638,17): warning C4456: 'objCount' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\resource_manager.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\model.cpp(195,21): warning C4456: 'i' を宣言すると、以前のローカル宣言が隠蔽されます [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\collision.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\particle.cpp(60,35): warning C4244: '-=': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\particle.cpp(64,30): warning C4244: '初期化中': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\particle.cpp(74,22): warning C4244: '引数': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\particle.cpp(78,18): warning C4244: '+=': 'double' から 'float' への変換です。データが失われる可能性があります。 [D:\HAL\directX\engine\GameSample02.vcxproj]
+  D:\HAL\directX\engine\resource_manager.cpp(27,20): warning C4189: 'pair': ローカル変数が初期化されましたが、参照されていません [D:\HAL\directX\engine\GameSample02.vcxproj]
+
+    69 個の警告
+    0 エラー
+
+経過時間 00:00:10.50

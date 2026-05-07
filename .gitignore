@@ -1,0 +1,12 @@
+.vs/
+x64/
+Game_07/
+*.VC.db
+*.suo
+*.ipch
+*.obj
+*.idb
+*.pdb
+*.ilk
+*.recipe
+*.tlog
