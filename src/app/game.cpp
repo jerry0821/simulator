@@ -40,17 +40,14 @@ using namespace DirectX;
 #include "collision.h"
 
 
-#include "map_editor.h"
 #include "render_frame_context.h"
 #include "render_water_surface.h"
-#include "debug_menu.h"
 #include "render_state.h"
 #include "sprite3d.h"
 
 
 static ID3D11RasterizerState* g_pWireframeState = nullptr;
 static ID3D11RasterizerState* g_pSolidState = nullptr;
-extern bool g_IsBuildMode;
 
 namespace
 {
@@ -101,10 +98,6 @@ void GameController::Finalize()
 void GameController::Update(double elapsed_time)
 {
 	Camera_Update(elapsed_time);
-
-	if (g_IsBuildMode) {
-		m_map_editor_controller.Update();
-	}
 }
 
 void GameController::Draw(const RenderFrameContext& frame_context)
@@ -125,10 +118,6 @@ void GameController::Draw(const RenderFrameContext& frame_context)
 	}
 
 	m_map_controller.Draw(frame_context);
-
-	if (g_IsBuildMode) {
-		m_map_editor_controller.Draw();
-	}
 }
 
 void GameController::DrawDepthPrePass(const RenderFrameContext& frame_context)

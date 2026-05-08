@@ -1,4 +1,4 @@
-﻿// ----------------------------------------------------
+// ----------------------------------------------------
 // debug gui [debug_gui.h]
 // ====================================================
 // Created by: Jerry
@@ -11,32 +11,29 @@
 #include <string>
 #include <vector>
 
+#include "camera.h"
+#include "compute_noise_texture.h"
 #include "compute_shared_resource_registry.h"
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_win32.h"
-#include "imgui/imgui_impl_dx11.h"
+#include "direct3d.h"
 #include "frustum_culling_debug.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_dx11.h"
+#include "imgui/imgui_impl_win32.h"
 #include "instancing_debug.h"
 #include "light.h"
 #include "meshfield.h"
 #include "render_frame_context.h"
-#include "render_water_surface.h"
-#include "shader_field.h"
 #include "render_frame_plan.h"
 #include "render_resource_usage.h"
+#include "render_water_surface.h"
 #include "scene_stress_debug.h"
-#include "direct3d.h"
-#include <DirectXMath.h>
-using namespace DirectX;
-#include "game.h"
-#include "camera.h"
-#include "compute_noise_texture.h"
+#include "shader_field.h"
+#include "terrain_surface_settings.h"
 #include "wind_field_cpu.h"
+#include <DirectXMath.h>
 
+using namespace DirectX;
 
-extern bool g_AutoSpawnActive;
-
-bool g_IsBuildMode = false;
 static RenderFramePlan g_FramePlan;
 static InstancingStats g_InstancingStats;
 static FrustumCullingStats g_FrustumCullingStats;
@@ -253,7 +250,7 @@ void DrawWindFieldOverlay(
         }
     }
 }
-}
+} // namespace
 
 void DebugMenu_Initialize(ID3D11Device* device, ID3D11DeviceContext* context, HWND hwnd)
 {
@@ -385,21 +382,7 @@ void DebugMenu_Begin()
 
 void DebugMenu_Draw(const RenderFrameContext* frame_context)
 {
-    //
-    // 
-    // 
-    // 
-    // 
-    // ("Debug Menu");
-
-    //// === FPS Display ===
-    //ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    //ImGui::Text("Frame Time: %.3f ms", 1000.0f / ImGui::GetIO().Framerate);
-
-    //ImGui::Separator();
-
     ImGui::Begin("Debug Menu");
-    ImGui::Checkbox("Build Mode", &g_IsBuildMode);
     bool instancing_enabled = InstancingDebug_IsEnabled();
     if (ImGui::Checkbox("Instancing", &instancing_enabled))
     {
@@ -426,7 +409,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         ? ImVec4(0.45f, 0.95f, 0.55f, 1.0f)
         : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
     ImGui::TextColored(shader_status_color, "Shader Reload: %s", g_ShaderReloadMessage.c_str());
-    ImGui::Text("Hold Ctrl to snap to grid.");
+    ImGui::TextDisabled("Map editor and object placement controls are disabled in simulator mode.");
     ImGui::End();
 
     ImGui::Begin("Portfolio");
@@ -735,50 +718,24 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Lowland End", &g_TerrainMaterialSettings.lowland_height_end, 0.0f, 80.0f);
     ImGui::End();
 
-    //// ====== Player Debug ======
-    //if (ImGui::CollapsingHeader("Player"))
-    //{
-    //    extern int g_PlayerModelIndex;
-    //
-    //    
-    //    const char* modelNames[] = { "Kirby", "Slime", "Eevee" };
-    //    ImGui::Combo("Player Model", &g_PlayerModelIndex, modelNames, IM_ARRAYSIZE(modelNames));
-    //    if (ImGui::Button("Apply Model")) {
-    //        Game_GetPlayer().ReloadModel();
-    //    }
-    //    
-    //}
-
-    //ImGui::End();
-
-
     ImGui::Begin("Camera");
-    // ====== Camera Debug ======
-
     if (ImGui::CollapsingHeader("Camera"))
     {
         extern float g_CameraMoveSpeed;
         ImGui::SliderFloat("Camera Speed", &g_CameraMoveSpeed, 1.0f, 20.0f);
-
     }
     ImGui::End();
 
     ImGui::SetNextWindowSizeConstraints(ImVec2(200, 300), ImVec2(500, 800));
     ImGui::Begin("Toon");
 
-
     if (ImGui::CollapsingHeader("Toon Lighting Debug"))
     {
-        // --- Directional Light (b2) ---
         static float azimuth = 45.0f;
         static float elevation = 45.0f;
         static float dirColor[3] = { 1.0f, 1.0f, 1.0f };
         static float dirIntensity = 1.0f;
-
-        // --- Ambient Light (b1) ---
         static float ambColor[3] = { 0.3f, 0.3f, 0.3f };
-
-        // --- Specular Light (b3) ---
         static float specColor[3] = { 1.0f, 1.0f, 1.0f };
         static float specPower = 20.0f;
 
@@ -792,8 +749,8 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
 
         ImGui::Separator();
         ImGui::Text("Ambient Light (b1)");
-        if (ImGui::ColorEdit3("Ambient Color", ambColor)) {
-            // Ambientは色が直接b1に行く
+        if (ImGui::ColorEdit3("Ambient Color", ambColor))
+        {
             Light_SetAmbient(XMFLOAT3(ambColor[0], ambColor[1], ambColor[2]));
         }
 
@@ -804,34 +761,32 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
 
         if (changed)
         {
-            // 方向光の更新 (b2)
-            float phi = XMConvertToRadians(azimuth);
-            float theta = XMConvertToRadians(elevation);
-            XMVECTOR toSun = XMVectorSet(cosf(theta) * sinf(phi), sinf(theta), cosf(theta) * cosf(phi), 0.0f);
+            const float phi = XMConvertToRadians(azimuth);
+            const float theta = XMConvertToRadians(elevation);
+            const XMVECTOR to_sun =
+                XMVectorSet(cosf(theta) * sinf(phi), sinf(theta), cosf(theta) * cosf(phi), 0.0f);
 
-            XMFLOAT4 finalDir;
-            XMStoreFloat4(&finalDir, -toSun);
-            XMFLOAT4 finalDirCol = { dirColor[0] * dirIntensity, dirColor[1] * dirIntensity, dirColor[2] * dirIntensity, 1.0f };
-            Light_SetDirectionalWorld(finalDir, finalDirCol);
+            XMFLOAT4 final_dir;
+            XMStoreFloat4(&final_dir, -to_sun);
+            const XMFLOAT4 final_dir_col = {
+                dirColor[0] * dirIntensity,
+                dirColor[1] * dirIntensity,
+                dirColor[2] * dirIntensity,
+                1.0f };
+            Light_SetDirectionalWorld(final_dir, final_dir_col);
 
-            // スペキュラの更新 (b3)
-            // カメラ位置は本来カメラクラスから取るべきですが、とりあえず現在の設定を更新
-            // 第1引数はカメラ位置(本来はextern等でカメラから持ってくる)
-            XMFLOAT3 camPos = Camera_GetPosition();
-            Light_SetSpecularWorld(camPos, specPower, XMFLOAT4(specColor[0], specColor[1], specColor[2], 1.0f));
+            const XMFLOAT3 cam_pos = Camera_GetPosition();
+            Light_SetSpecularWorld(
+                cam_pos,
+                specPower,
+                XMFLOAT4(specColor[0], specColor[1], specColor[2], 1.0f));
         }
     }
 
-    // ====== Toon Shader Debug  ======
     if (ImGui::CollapsingHeader("Toon Shader"))
     {
         extern int g_ToonStepCount;
-        //extern float g_ToonMinBrightness;
-        //extern DirectX::XMFLOAT4 g_ToonMaterialColor;
-
-        //ImGui::ColorEdit4("Material Color", (float*)&g_ToonMaterialColor);
         ImGui::SliderInt("Step Count", &g_ToonStepCount, 1, 30);
-        //ImGui::SliderFloat("Min Brightness", &g_ToonMinBrightness, 0.0f, 1.0f);
     }
     ImGui::End();
 
@@ -936,24 +891,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         }
     }
     ImGui::End();
-
-
-    //------Player Position----
-    /*ImGui::Begin("Player Position");
-
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    ImGui::Separator();
-
-    XMFLOAT3 pos = Game_GetPlayer().GetPosition();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Player Position:");
-    ImGui::Text("X: %.2f", pos.x);
-    ImGui::SameLine();
-    ImGui::Text("Y: %.2f", pos.y);
-    ImGui::SameLine();
-    ImGui::Text("Z: %.2f", pos.z);
-
-    ImGui::End();*/
-
 }
 
 void DebugMenu_End()

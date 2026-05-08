@@ -76,7 +76,6 @@ MapEditorController::MapEditorController(MapController& map_controller)
 
 enum GizmoTool {
   TOOL_MOVE,  // W
-  TOOL_SCALE, // E
   TOOL_ROTATE // R
 };
 static GizmoTool g_ActiveTool = TOOL_MOVE;
@@ -86,16 +85,11 @@ enum DragState {
   DRAG_TRANS_X,
   DRAG_TRANS_Y,
   DRAG_TRANS_Z,
-  DRAG_SCALE_X,
-  DRAG_SCALE_Y,
-  DRAG_SCALE_Z,
-  DRAG_SCALE_UNIFORM,
   DRAG_ROTATE_Y,
   DRAG_CENTER
 };
 static DragState g_DragState = DRAG_NONE;
 static XMFLOAT3 g_DragStartPos = {0, 0, 0};
-static XMFLOAT3 g_DragStartScale = {1, 1, 1};
 static XMFLOAT3 g_DragStartRot = {0.0f, 0.0f, 0.0f};
 
 void MapEditorController::Update() {
@@ -190,7 +184,7 @@ void MapEditorController::Update() {
       ImGui::EndListBox();
     }
   } else {
-    const char *toolNames[] = {"Move (W)", "Scale (E)", "Rotate (R)"};
+    const char *toolNames[] = {"Move (W)", "Rotate (R)"};
     ImGui::Text("Active Tool: %s", toolNames[g_ActiveTool]);
   }
   ImGui::End();
@@ -216,8 +210,6 @@ void MapEditorController::Update() {
         selInfo->Rotation.y = XMConvertToRadians(rotDeg.y);
         selInfo->Rotation.z = XMConvertToRadians(rotDeg.z);
       }
-
-      ImGui::DragFloat3("Scale", &selInfo->Scale.x, 0.05f, 0.1f, 50.0f);
       const char *shaderNames[] = {"Default", "Lit", "Toon", "Unlit"};
       int shaderType = static_cast<int>(selInfo->ShaderType);
       if (ImGui::Combo("Shader", &shaderType, shaderNames, IM_ARRAYSIZE(shaderNames))) {
@@ -310,13 +302,11 @@ void MapEditorController::Update() {
   ImGui::EndChild();
   ImGui::End();
 
-  // W/E/R key switching (only in Select mode & not typing in ImGui)
+  // W/R key switching (only in Select mode & not typing in ImGui)
   if (!ImGui::GetIO().WantCaptureKeyboard) {
     if (g_CurrentMode == MODE_SELECT) {
       if (GetAsyncKeyState('W') & 0x8000)
         g_ActiveTool = TOOL_MOVE;
-      if (GetAsyncKeyState('E') & 0x8000)
-        g_ActiveTool = TOOL_SCALE;
       if (GetAsyncKeyState('R') & 0x8000)
         g_ActiveTool = TOOL_ROTATE;
     }
@@ -598,8 +588,6 @@ void MapEditorController::Update() {
                 closestObjDist = hitX.distance;
                 if (g_ActiveTool == TOOL_MOVE)
                   g_DragState = DRAG_TRANS_X;
-                else if (g_ActiveTool == TOOL_SCALE)
-                  g_DragState = DRAG_SCALE_X;
                 else
                   g_DragState = DRAG_ROTATE_Y;
               }
@@ -609,8 +597,6 @@ void MapEditorController::Update() {
                 closestObjDist = hitY.distance;
                 if (g_ActiveTool == TOOL_MOVE)
                   g_DragState = DRAG_TRANS_Y;
-                else if (g_ActiveTool == TOOL_SCALE)
-                  g_DragState = DRAG_SCALE_Y;
                 else
                   g_DragState = DRAG_ROTATE_Y;
               }
@@ -620,8 +606,6 @@ void MapEditorController::Update() {
                 closestObjDist = hitZ.distance;
                 if (g_ActiveTool == TOOL_MOVE)
                   g_DragState = DRAG_TRANS_Z;
-                else if (g_ActiveTool == TOOL_SCALE)
-                  g_DragState = DRAG_SCALE_Z;
                 else
                   g_DragState = DRAG_ROTATE_Y;
               }
@@ -629,7 +613,6 @@ void MapEditorController::Update() {
               if (g_DragState != DRAG_NONE) {
                 m_map_controller.PushUndoState();
                 g_DragStartPos = selObj->Position;
-                g_DragStartScale = selObj->Scale;
                 g_DragStartRot = selObj->Rotation;
                 clickedIndex = g_SelectedIndex;
               }
@@ -709,23 +692,7 @@ void MapEditorController::Update() {
             int dy = ms.y - g_prevMouseY;
             float sensitivity = 0.01f;
 
-            if (g_DragState == DRAG_SCALE_X) {
-              selObj->Scale.x =
-                  std::max(0.1f, selObj->Scale.x + dx * sensitivity);
-            } else if (g_DragState == DRAG_SCALE_Y) {
-              selObj->Scale.y =
-                  std::max(0.1f, selObj->Scale.y - dy * sensitivity);
-            } else if (g_DragState == DRAG_SCALE_Z) {
-              selObj->Scale.z =
-                  std::max(0.1f, selObj->Scale.z + dx * sensitivity);
-            } else if (g_DragState == DRAG_SCALE_UNIFORM ||
-                       (g_DragState == DRAG_CENTER &&
-                        g_ActiveTool == TOOL_SCALE)) {
-              float uniScale = dx * sensitivity - dy * sensitivity;
-              selObj->Scale.x = std::max(0.1f, selObj->Scale.x + uniScale);
-              selObj->Scale.y = std::max(0.1f, selObj->Scale.y + uniScale);
-              selObj->Scale.z = std::max(0.1f, selObj->Scale.z + uniScale);
-            } else if (g_DragState == DRAG_TRANS_X) {
+            if (g_DragState == DRAG_TRANS_X) {
               XMFLOAT3 xDir(dx * sensitivity * 2.0f, 0, 0);
               XMVECTOR delta = XMVector3TransformNormal(
                   XMLoadFloat3(&xDir),

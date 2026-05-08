@@ -198,7 +198,9 @@ int Application::Run()
 
 void Application::Shutdown()
 {
+#if defined(DEBUG) || defined(_DEBUG)
 	m_debug_text.reset();
+#endif
 	m_scene_render_adapter.reset();
 	m_renderer.reset();
 

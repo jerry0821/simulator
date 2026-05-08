@@ -111,8 +111,10 @@ private:
   void DrawInstancedBirdDemo(bool use_instancing,
                              const class ViewFrustum& view_frustum,
                              std::vector<DirectX::XMFLOAT4X4> &batch) const;
-  void EnsureDebugGrassComputeSeeds(const RenderFrameContext& frame_context);
-  bool ShouldRefreshDebugGrassCoverage(const RenderFrameContext& frame_context);
+  void EnsureTerrainGrassComputeSeeds(const RenderFrameContext& frame_context);
+  bool ShouldRefreshTerrainGrassCoverage(const RenderFrameContext& frame_context);
+  DirectX::XMMATRIX BuildObjectWorldMatrix(const MapObject& object) const;
+  void DrawObjectShadow(const MapObject& object) const;
   void EnsureFloatingDustParticles(
       const DirectX::XMFLOAT3& camera_position,
       const DirectX::XMFLOAT3& camera_front,
@@ -146,16 +148,16 @@ private:
   Octree m_grass_demo_normal_octree;
   Octree m_grass_demo_stress_octree;
   bool m_grass_demo_cache_built = false;
-  ComputeGrassInstances m_debug_grass_instances{};
-  bool m_debug_grass_compute_seeded = false;
-  TerrainSettings m_debug_grass_seed_terrain_settings{};
-  ID3D11ShaderResourceView* m_debug_grass_seed_height_srv = nullptr;
-  ID3D11ShaderResourceView* m_debug_grass_seed_vegetation_suitability_srv = nullptr;
-  ID3D11Texture2D* m_debug_grass_vegetation_suitability_probe_texture = nullptr;
-  double m_debug_grass_last_update_time_seconds = -1.0;
-  double m_debug_grass_last_coverage_refresh_time_seconds = -1000.0;
-  double m_debug_grass_last_probe_time_seconds = -1000.0;
-  float m_debug_grass_last_vegetation_suitability_signature = -1.0f;
+  ComputeGrassInstances m_terrain_grass_instances{};
+  bool m_terrain_grass_compute_seeded = false;
+  TerrainSettings m_terrain_grass_seed_terrain_settings{};
+  ID3D11ShaderResourceView* m_terrain_grass_seed_height_srv = nullptr;
+  ID3D11ShaderResourceView* m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
+  ID3D11Texture2D* m_terrain_grass_vegetation_suitability_probe_texture = nullptr;
+  double m_terrain_grass_last_update_time_seconds = -1.0;
+  double m_terrain_grass_last_coverage_refresh_time_seconds = -1000.0;
+  double m_terrain_grass_last_probe_time_seconds = -1000.0;
+  float m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
   std::vector<FloatingDustParticle> m_floating_dust_particles;
   bool m_floating_dust_particles_initialized = false;
 };

@@ -92,20 +92,44 @@ VS_OUT main(VS_IN vi)
     const float sweepPhase = g_TimeSeconds * (0.18f + windStrength * 0.10f) - alongWind;
     const float waveWarp = sin(acrossWind + g_TimeSeconds * 0.04f) * 0.45f;
     const float sweepWave = sin(sweepPhase + waveWarp);
+    const float pushPulse = smoothstep(0.08f, 0.96f, 0.5f + 0.5f * sweepWave);
+    const float releasePulse = 0.5f + 0.5f * sin(sweepPhase * 0.72f + waveWarp * 0.35f - 1.1f);
 
     // Keep a smaller local flutter so neighboring clumps do not move identically.
     const float localPhase = g_TimeSeconds * 0.08f + dot(instanceOrigin.xz, float2(0.006f, 0.004f));
     const float localFlutter = sin(localPhase);
+    const float sideFlutter = sin(localPhase * 1.37f + alongWind * 0.65f);
 
     const float gustPhase = g_TimeSeconds * 0.02f + dot(instanceOrigin.xz, float2(0.0018f, 0.0023f));
     const float gust = 0.5f + 0.5f * sin(gustPhase);
-    const float staticLean = bendWeight * g_BendScale * windStrength * 0.060f;
-    const float dynamicWave = 0.70f * sweepWave + 0.30f * localFlutter;
-    const float dynamicBend = bendWeight * g_BendScale * (0.010f + windStrength * 0.035f + gust * 0.012f) * dynamicWave;
-    const float bendAmount = staticLean + dynamicBend;
+    const float staticLean = bendWeight * g_BendScale * windStrength * 0.082f;
+    const float pushBend =
+        bendWeight *
+        g_BendScale *
+        (0.012f + windStrength * 0.050f + gust * 0.020f) *
+        pushPulse;
+    const float releaseBend =
+        bendWeight *
+        g_BendScale *
+        (0.003f + windStrength * 0.010f) *
+        (1.0f - pushPulse) *
+        releasePulse;
+    const float microSway =
+        bendWeight *
+        g_BendScale *
+        (0.002f + windStrength * 0.008f) *
+        (0.55f * localFlutter + 0.45f * sweepWave);
+    const float bendAmount = staticLean + pushBend - releaseBend + microSway;
+    const float crossAmount =
+        bendWeight *
+        g_BendScale *
+        (0.0015f + windStrength * 0.005f + gust * 0.002f) *
+        sideFlutter;
 
     worldPos.x += windDir.x * bendAmount;
     worldPos.z += windDir.y * bendAmount;
+    worldPos.x += crossDir.x * crossAmount;
+    worldPos.z += crossDir.y * crossAmount;
 
     vo.posW = worldPos;
     vo.normalW = float4(worldNormal, 0.0f);

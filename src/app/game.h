@@ -9,7 +9,6 @@
 #define GAME_H
 
 #include "map.h"
-#include "map_editor.h"
 #include <DirectXMath.h>
 #include <vector>
 
@@ -35,7 +34,6 @@ private:
 	// Small runtime state for game-side rendering.
 	int m_test_texture = -1;
 	MapController m_map_controller{};
-	MapEditorController m_map_editor_controller{m_map_controller};
 };
 
 #endif // GAME_H

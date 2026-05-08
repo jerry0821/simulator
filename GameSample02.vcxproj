@@ -210,7 +210,6 @@
     </ClCompile>
     <ClCompile Include="src\render\passes\material_pass.cpp" />
     <ClCompile Include="src\scene\map.cpp" />
-    <ClCompile Include="src\scene\map_editor.cpp" />
     <ClCompile Include="src\scene\meshfield.cpp" />
     <ClCompile Include="src\scene\model.cpp" />
     <ClCompile Include="src\input\mouse.cpp" />
@@ -314,7 +313,6 @@
     <ClInclude Include="src\debug\key_logger.h" />
     <ClInclude Include="src\scene\light.h" />
     <ClInclude Include="src\scene\map.h" />
-    <ClInclude Include="src\scene\map_editor.h" />
     <ClInclude Include="src\render\passes\material_pass.h" />
     <ClInclude Include="material_type.h" />
     <ClInclude Include="src\scene\meshfield.h" />

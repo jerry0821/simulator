@@ -93,7 +93,7 @@ constexpr float kTerrainWorldHalfWidth = 256.0f;
 constexpr float kTerrainWorldHalfDepth = 256.0f;
 constexpr int kFloatingDustParticleCount = 96;
 constexpr bool kDrawMeteorographPanelDebug = false;
-constexpr bool kDrawGrassDebug = true;
+constexpr bool kDrawTerrainGrassCompute = true;
 constexpr double kGrassCoverageProbeIntervalSeconds = 0.75;
 constexpr float kGrassCoverageClassificationSignatureThreshold = 0.020f;
 ID3D11Buffer* g_tiled_vertex_buffer = nullptr;
@@ -739,6 +739,67 @@ int MapController::ResolveMapTexture(MapObject& obj)
   return obj.TextureId;
 }
 
+XMMATRIX MapController::BuildObjectWorldMatrix(const MapObject& object) const
+{
+  return XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
+         XMMatrixRotationRollPitchYaw(
+             object.Rotation.x,
+             object.Rotation.y,
+             object.Rotation.z) *
+         XMMatrixTranslation(
+             object.Position.x,
+             ResolveGroundedY(object),
+             object.Position.z);
+}
+
+void MapController::DrawObjectShadow(const MapObject& object) const
+{
+  switch (object.KindId)
+  {
+  case FIELD:
+    break;
+  case BLOCK:
+    Cube_DrawShadow(BuildObjectWorldMatrix(object));
+    break;
+  case GRASS:
+    if (DebugMenu_IsGrassGpuEnabled())
+    {
+      GrassPatch_DrawShadow(BuildObjectWorldMatrix(object));
+    }
+    break;
+  case SPHERE:
+    Sphere_DrawShadow(BuildObjectWorldMatrix(object));
+    break;
+  case CYLINDER:
+    Cylinder_DrawShadow(BuildObjectWorldMatrix(object));
+    break;
+  case CAPSULE:
+    Capsule_DrawShadow(BuildObjectWorldMatrix(object));
+    break;
+  case SLIME:
+    ModelDrawShadow(
+        m_slime01,
+        XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
+            XMMatrixTranslation(
+                object.Position.x,
+                ResolveGroundedY(object),
+                object.Position.z));
+    break;
+  case ROCK:
+    if (m_rock != nullptr)
+    {
+      ModelDrawShadow(
+          m_rock,
+          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
+              XMMatrixTranslation(
+                  object.Position.x,
+                  ResolveGroundedY(object),
+                  object.Position.z));
+    }
+    break;
+  }
+}
+
 bool MapController::ShouldCullAabb(const ViewFrustum& view_frustum,
                                    const Collision::AABB& aabb) const
 {
@@ -964,14 +1025,14 @@ void MapController::Initialize()
   m_redo_stack.clear();
   removeGrassObjects(m_map_objects);
   m_grass_demo_cache_built = false;
-  m_debug_grass_compute_seeded = false;
-  m_debug_grass_seed_terrain_settings = MeshFieldRenderer::GetTerrainSettings();
-  m_debug_grass_seed_height_srv = nullptr;
-  m_debug_grass_seed_vegetation_suitability_srv = nullptr;
-  m_debug_grass_last_probe_time_seconds = -1000.0;
-  m_debug_grass_last_vegetation_suitability_signature = -1.0f;
-  SafeReleaseMapResource(m_debug_grass_vegetation_suitability_probe_texture);
-  if (!m_debug_grass_instances.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
+  m_terrain_grass_compute_seeded = false;
+  m_terrain_grass_seed_terrain_settings = MeshFieldRenderer::GetTerrainSettings();
+  m_terrain_grass_seed_height_srv = nullptr;
+  m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
+  m_terrain_grass_last_probe_time_seconds = -1000.0;
+  m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
+  SafeReleaseMapResource(m_terrain_grass_vegetation_suitability_probe_texture);
+  if (!m_terrain_grass_instances.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
   {
     hal::dout << "MapController::Initialize(): compute grass instances disabled" << std::endl;
   }
@@ -979,43 +1040,43 @@ void MapController::Initialize()
 
 void MapController::Finalize()
 {
-  m_debug_grass_instances.Finalize();
-  m_debug_grass_compute_seeded = false;
-  m_debug_grass_seed_height_srv = nullptr;
-  m_debug_grass_seed_vegetation_suitability_srv = nullptr;
-  m_debug_grass_last_probe_time_seconds = -1000.0;
-  m_debug_grass_last_vegetation_suitability_signature = -1.0f;
-  SafeReleaseMapResource(m_debug_grass_vegetation_suitability_probe_texture);
+  m_terrain_grass_instances.Finalize();
+  m_terrain_grass_compute_seeded = false;
+  m_terrain_grass_seed_height_srv = nullptr;
+  m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
+  m_terrain_grass_last_probe_time_seconds = -1000.0;
+  m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
+  SafeReleaseMapResource(m_terrain_grass_vegetation_suitability_probe_texture);
 }
 
-void MapController::EnsureDebugGrassComputeSeeds(const RenderFrameContext& frame_context)
+void MapController::EnsureTerrainGrassComputeSeeds(const RenderFrameContext& frame_context)
 {
   const TerrainSettings& terrain_settings = MeshFieldRenderer::GetTerrainSettings();
   const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
-  if (m_debug_grass_seed_terrain_settings != terrain_settings)
+  if (m_terrain_grass_seed_terrain_settings != terrain_settings)
   {
-    m_debug_grass_compute_seeded = false;
-    m_debug_grass_seed_terrain_settings = terrain_settings;
+    m_terrain_grass_compute_seeded = false;
+    m_terrain_grass_seed_terrain_settings = terrain_settings;
   }
   ID3D11ShaderResourceView* terrain_height_srv =
       terrain_water.terrain_height.isValid()
           ? terrain_water.terrain_height.shaderResourceView()
           : TerrainDataModel::HeightSRV();
-  if (m_debug_grass_seed_height_srv != terrain_height_srv)
+  if (m_terrain_grass_seed_height_srv != terrain_height_srv)
   {
-    m_debug_grass_compute_seeded = false;
-    m_debug_grass_seed_height_srv = terrain_height_srv;
+    m_terrain_grass_compute_seeded = false;
+    m_terrain_grass_seed_height_srv = terrain_height_srv;
   }
   ID3D11ShaderResourceView* terrain_vegetation_suitability_srv =
       terrain_water.terrain_vegetation_suitability.isValid()
           ? terrain_water.terrain_vegetation_suitability.shaderResourceView()
           : nullptr;
-  if (m_debug_grass_seed_vegetation_suitability_srv != terrain_vegetation_suitability_srv)
+  if (m_terrain_grass_seed_vegetation_suitability_srv != terrain_vegetation_suitability_srv)
   {
-    m_debug_grass_compute_seeded = false;
-    m_debug_grass_seed_vegetation_suitability_srv = terrain_vegetation_suitability_srv;
-    m_debug_grass_last_vegetation_suitability_signature = -1.0f;
-    m_debug_grass_last_probe_time_seconds = -1000.0;
+    m_terrain_grass_compute_seeded = false;
+    m_terrain_grass_seed_vegetation_suitability_srv = terrain_vegetation_suitability_srv;
+    m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
+    m_terrain_grass_last_probe_time_seconds = -1000.0;
   }
 
   const float world_min_bound_x = -kTerrainWorldHalfWidth + kTerrainGrassMargin;
@@ -1023,7 +1084,7 @@ void MapController::EnsureDebugGrassComputeSeeds(const RenderFrameContext& frame
   const float world_min_bound_z = -kTerrainWorldHalfDepth + kTerrainGrassMargin;
   const float world_max_bound_z = kTerrainWorldHalfDepth - kTerrainGrassMargin;
 
-  if (m_debug_grass_compute_seeded || !m_debug_grass_instances.IsValid())
+  if (m_terrain_grass_compute_seeded || !m_terrain_grass_instances.IsValid())
   {
     return;
   }
@@ -1047,7 +1108,7 @@ void MapController::EnsureDebugGrassComputeSeeds(const RenderFrameContext& frame
   const unsigned int cols = static_cast<unsigned int>((max_x - min_x) / kTerrainGrassSpacing) + 1u;
   const unsigned int rows = static_cast<unsigned int>((max_z - min_z) / kTerrainGrassSpacing) + 1u;
 
-  m_debug_grass_compute_seeded = m_debug_grass_instances.ConfigureCoverage(
+  m_terrain_grass_compute_seeded = m_terrain_grass_instances.ConfigureCoverage(
       terrain_height_srv,
       terrain_vegetation_suitability_srv,
       terrain_water.terrain_classification.isValid()
@@ -1061,20 +1122,20 @@ void MapController::EnsureDebugGrassComputeSeeds(const RenderFrameContext& frame
       terrain_settings);
 }
 
-bool MapController::ShouldRefreshDebugGrassCoverage(const RenderFrameContext& frame_context)
+bool MapController::ShouldRefreshTerrainGrassCoverage(const RenderFrameContext& frame_context)
 {
-  if (!m_debug_grass_instances.HasSeeds())
+  if (!m_terrain_grass_instances.HasSeeds())
   {
     return false;
   }
 
-  if (frame_context.globals.time_seconds - m_debug_grass_last_probe_time_seconds <
+  if (frame_context.globals.time_seconds - m_terrain_grass_last_probe_time_seconds <
       kGrassCoverageProbeIntervalSeconds)
   {
     return false;
   }
 
-  m_debug_grass_last_probe_time_seconds = frame_context.globals.time_seconds;
+  m_terrain_grass_last_probe_time_seconds = frame_context.globals.time_seconds;
 
   float vegetation_suitability_signature = 0.0f;
   const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
@@ -1082,7 +1143,7 @@ bool MapController::ShouldRefreshDebugGrassCoverage(const RenderFrameContext& fr
       terrain_water.terrain_vegetation_suitability.isValid()
           ? terrain_water.terrain_vegetation_suitability.shaderResourceView()
           : nullptr,
-      m_debug_grass_vegetation_suitability_probe_texture,
+      m_terrain_grass_vegetation_suitability_probe_texture,
       0u,
       vegetation_suitability_signature);
 
@@ -1091,13 +1152,13 @@ bool MapController::ShouldRefreshDebugGrassCoverage(const RenderFrameContext& fr
     return false;
   }
 
-  const bool first_probe = m_debug_grass_last_vegetation_suitability_signature < 0.0f;
+  const bool first_probe = m_terrain_grass_last_vegetation_suitability_signature < 0.0f;
   const bool vegetation_suitability_changed =
       std::fabs(
-          vegetation_suitability_signature - m_debug_grass_last_vegetation_suitability_signature) >=
+          vegetation_suitability_signature - m_terrain_grass_last_vegetation_suitability_signature) >=
       kGrassCoverageClassificationSignatureThreshold;
 
-  m_debug_grass_last_vegetation_suitability_signature = vegetation_suitability_signature;
+  m_terrain_grass_last_vegetation_suitability_signature = vegetation_suitability_signature;
   return first_probe || vegetation_suitability_changed;
 }
 
@@ -1189,10 +1250,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       {
         break;
       }
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
+      world_matrix = BuildObjectWorldMatrix(object);
       if (InstancingDebug_IsEnabled() &&
           (object.ShaderType == MapShaderType::Default || object.ShaderType == MapShaderType::Lit) &&
           (resolved_texture == m_cube_tex_id || resolved_texture < 0))
@@ -1227,10 +1285,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
         {
           break;
         }
-        world_matrix =
-            XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-            XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-            XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
+        world_matrix = BuildObjectWorldMatrix(object);
         AppendInstanceMatrix(grass_patch_batch, world_matrix);
       }
       break;
@@ -1239,28 +1294,19 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       {
         break;
       }
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
+      world_matrix = BuildObjectWorldMatrix(object);
       Sphere_Draw(resolved_texture >= 0 ? resolved_texture : m_white_tex_id,
                   world_matrix,
                   resolveMaterialType(object.ShaderType));
       break;
     case CYLINDER:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
+      world_matrix = BuildObjectWorldMatrix(object);
       Cylinder_Draw(resolved_texture >= 0 ? resolved_texture : m_white_tex_id,
                     world_matrix,
                     resolveMaterialType(object.ShaderType));
       break;
     case CAPSULE:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
+      world_matrix = BuildObjectWorldMatrix(object);
       Capsule_Draw(resolved_texture >= 0 ? resolved_texture : m_white_tex_id,
                    world_matrix,
                    resolveMaterialType(object.ShaderType));
@@ -1359,7 +1405,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       frame_context.resources.compute_shared_registry->Reset(ComputeSharedResourceId::GrassIndirectArgs);
     }
 
-    if (kDrawGrassDebug)
+    if (kDrawTerrainGrassCompute)
     {
       if (!DebugMenu_IsGrassGpuEnabled())
       {
@@ -1367,60 +1413,60 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       }
       else
       {
-        EnsureDebugGrassComputeSeeds(frame_context);
+        EnsureTerrainGrassComputeSeeds(frame_context);
 
-        grass_compute_stats.gpu_ready = m_debug_grass_instances.HasSeeds();
-        grass_compute_stats.grid_cols = m_debug_grass_instances.GridCols();
-        grass_compute_stats.grid_rows = m_debug_grass_instances.GridRows();
-        grass_compute_stats.seed_count = m_debug_grass_instances.SeedCount();
-        grass_compute_stats.max_instance_capacity = m_debug_grass_instances.InstanceCount();
-        grass_compute_stats.coverage_dirty = m_debug_grass_instances.DispatchDirty();
-        grass_compute_stats.last_error = m_debug_grass_instances.LastError();
+        grass_compute_stats.gpu_ready = m_terrain_grass_instances.HasSeeds();
+        grass_compute_stats.grid_cols = m_terrain_grass_instances.GridCols();
+        grass_compute_stats.grid_rows = m_terrain_grass_instances.GridRows();
+        grass_compute_stats.seed_count = m_terrain_grass_instances.SeedCount();
+        grass_compute_stats.max_instance_capacity = m_terrain_grass_instances.InstanceCount();
+        grass_compute_stats.coverage_dirty = m_terrain_grass_instances.DispatchDirty();
+        grass_compute_stats.last_error = m_terrain_grass_instances.LastError();
 
         bool drew_compute_patch = false;
-        if (m_debug_grass_instances.HasSeeds())
+        if (m_terrain_grass_instances.HasSeeds())
         {
-          if (ShouldRefreshDebugGrassCoverage(frame_context))
+          if (ShouldRefreshTerrainGrassCoverage(frame_context))
           {
-            m_debug_grass_instances.MarkCoverageDirty();
-            m_debug_grass_last_coverage_refresh_time_seconds = frame_context.globals.time_seconds;
+            m_terrain_grass_instances.MarkCoverageDirty();
+            m_terrain_grass_last_coverage_refresh_time_seconds = frame_context.globals.time_seconds;
           }
-          if (m_debug_grass_last_update_time_seconds != frame_context.globals.time_seconds)
+          if (m_terrain_grass_last_update_time_seconds != frame_context.globals.time_seconds)
           {
-            m_debug_grass_instances.Update(
+            m_terrain_grass_instances.Update(
                 kDebugQuadScaleX,
                 kDebugQuadScaleY,
                 frame_context.globals.camera_position,
                 view,
                 proj,
                 static_cast<float>(frame_context.globals.time_seconds));
-            m_debug_grass_last_update_time_seconds = frame_context.globals.time_seconds;
+            m_terrain_grass_last_update_time_seconds = frame_context.globals.time_seconds;
           }
           if (frame_context.resources.compute_shared_registry != nullptr)
           {
             frame_context.resources.compute_shared_registry->PublishStructuredBuffer(
                 ComputeSharedResourceId::GrassInstances,
                 "GrassInstances",
-                m_debug_grass_instances.InstanceBuffer(),
-                m_debug_grass_instances.InstanceSRV(),
+                m_terrain_grass_instances.InstanceBuffer(),
+                m_terrain_grass_instances.InstanceSRV(),
                 nullptr,
-                m_debug_grass_instances.InstanceCount(),
-                m_debug_grass_instances.InstanceStride());
+                m_terrain_grass_instances.InstanceCount(),
+                m_terrain_grass_instances.InstanceStride());
             frame_context.resources.compute_shared_registry->PublishIndirectArgs(
                 ComputeSharedResourceId::GrassIndirectArgs,
                 "GrassIndirectArgs",
-                m_debug_grass_instances.ArgsBuffer());
+                m_terrain_grass_instances.ArgsBuffer());
           }
           Sprite3D_DrawCutoutInstancedIndirectBuffer(
               m_debug_billboard_tex_id,
-              m_debug_grass_instances.InstanceSRV(),
-              m_debug_grass_instances.ArgsBuffer(),
+              m_terrain_grass_instances.InstanceSRV(),
+              m_terrain_grass_instances.ArgsBuffer(),
               {1.0f, 1.0f, 1.0f, 1.0f});
           drew_compute_patch = true;
         }
 
         grass_compute_stats.gpu_path_used = drew_compute_patch;
-        grass_compute_stats.visible_instance_count = m_debug_grass_instances.LastVisibleInstanceCount();
+        grass_compute_stats.visible_instance_count = m_terrain_grass_instances.LastVisibleInstanceCount();
         grass_compute_stats.fallback_used = false;
       }
     }
@@ -1661,94 +1707,34 @@ void MapController::DrawDepthPrePass()
 
 void MapController::DrawShadow(const RenderFrameContext* frame_context)
 {
-  XMMATRIX world_matrix{};
-
-  for (MapObject& object : m_map_objects)
+  for (const MapObject& object : m_map_objects)
   {
-    switch (object.KindId)
-    {
-    case FIELD:
-      break;
-    case BLOCK:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      Cube_DrawShadow(world_matrix);
-      break;
-    case GRASS:
-      if (!DebugMenu_IsGrassGpuEnabled())
-      {
-        break;
-      }
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      GrassPatch_DrawShadow(world_matrix);
-      break;
-    case SPHERE:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      Sphere_DrawShadow(world_matrix);
-      break;
-    case CYLINDER:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      Cylinder_DrawShadow(world_matrix);
-      break;
-    case CAPSULE:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixRotationRollPitchYaw(object.Rotation.x, object.Rotation.y, object.Rotation.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      Capsule_DrawShadow(world_matrix);
-      break;
-    case SLIME:
-      world_matrix =
-          XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-          XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-      ModelDrawShadow(m_slime01, world_matrix);
-      break;
-    case ROCK:
-      if (m_rock != nullptr)
-      {
-        world_matrix =
-            XMMatrixScaling(object.Scale.x, object.Scale.y, object.Scale.z) *
-            XMMatrixTranslation(object.Position.x, ResolveGroundedY(object), object.Position.z);
-        ModelDrawShadow(m_rock, world_matrix);
-      }
-      break;
-    }
+    DrawObjectShadow(object);
   }
 
   if (frame_context != nullptr &&
-      kDrawGrassDebug &&
+      kDrawTerrainGrassCompute &&
       DebugMenu_IsGrassGpuEnabled() &&
       m_debug_billboard_tex_id >= 0 &&
-      m_debug_grass_instances.HasSeeds())
+      m_terrain_grass_instances.HasSeeds())
   {
     const XMMATRIX view = XMLoadFloat4x4(&frame_context->globals.view_matrix);
     const XMMATRIX proj = XMLoadFloat4x4(&frame_context->globals.projection_matrix);
-    if (ShouldRefreshDebugGrassCoverage(*frame_context))
+    if (ShouldRefreshTerrainGrassCoverage(*frame_context))
     {
-      m_debug_grass_instances.MarkCoverageDirty();
-      m_debug_grass_last_coverage_refresh_time_seconds = frame_context->globals.time_seconds;
+      m_terrain_grass_instances.MarkCoverageDirty();
+      m_terrain_grass_last_coverage_refresh_time_seconds = frame_context->globals.time_seconds;
     }
-    if (m_debug_grass_last_update_time_seconds != frame_context->globals.time_seconds)
+    if (m_terrain_grass_last_update_time_seconds != frame_context->globals.time_seconds)
     {
-      m_debug_grass_instances.Update(
+      m_terrain_grass_instances.Update(
           kDebugQuadScaleX,
           kDebugQuadScaleY,
           frame_context->globals.camera_position,
           view,
           proj,
           static_cast<float>(frame_context->globals.time_seconds));
-      m_debug_grass_last_update_time_seconds = frame_context->globals.time_seconds;
+      m_terrain_grass_last_update_time_seconds = frame_context->globals.time_seconds;
     }
 
     const auto& noise_settings = DebugMenu_GetComputeNoiseSettings();
@@ -1766,8 +1752,8 @@ void MapController::DrawShadow(const RenderFrameContext* frame_context)
     ShaderSprite3D_ShadowInstanced_SetWindField(frame_context->resources.wind_field.shaderResourceView());
     Sprite3D_DrawCutoutShadowInstancedIndirectBuffer(
         m_debug_billboard_tex_id,
-        m_debug_grass_instances.InstanceSRV(),
-        m_debug_grass_instances.ArgsBuffer());
+        m_terrain_grass_instances.InstanceSRV(),
+        m_terrain_grass_instances.ArgsBuffer());
   }
 }
 

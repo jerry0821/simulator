@@ -65,9 +65,6 @@
     <ClCompile Include="src\scene\map.cpp">
       <Filter>Source Files\Runtime</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\map_editor.cpp">
-      <Filter>Source Files\Runtime</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\sky.cpp">
       <Filter>Source Files\Runtime</Filter>
     </ClCompile>
@@ -353,9 +350,6 @@
       <Filter>Header Files\Runtime</Filter>
     </ClInclude>
     <ClInclude Include="src\scene\map.h">
-      <Filter>Header Files\Runtime</Filter>
-    </ClInclude>
-    <ClInclude Include="src\scene\map_editor.h">
       <Filter>Header Files\Runtime</Filter>
     </ClInclude>
     <ClInclude Include="src\scene\scene.h">
