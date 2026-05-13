@@ -87,7 +87,7 @@ const WaterSurfaceDesc& DebugMenu_GetWaterSurfaceSettings();
 const SurfaceWaterSimulationSettings& DebugMenu_GetSurfaceWaterSimulationSettings();
 const PostProcessSettings& DebugMenu_GetPostProcessSettings();
 bool DebugMenu_IsFinalTerrainHeightEnabled();
-bool DebugMenu_IsTerrainClassificationEnabled();
+bool DebugMenu_IsTerrainSurfacePresentationEnabled();
 bool DebugMenu_IsGrassGpuEnabled();
 bool DebugMenu_IsWaterSurfaceDeformationEnabled();
 void DebugMenu_Begin();

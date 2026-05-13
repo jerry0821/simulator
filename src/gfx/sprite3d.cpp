@@ -410,6 +410,7 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 						   ID3D11ShaderResourceView* water_surface_height_srv,
 						   ID3D11ShaderResourceView* surface_water_srv,
 						   ID3D11ShaderResourceView* flow_field_srv,
+						   ID3D11ShaderResourceView* water_interaction_srv,
 						   ID3D11ShaderResourceView* scene_depth_srv,
 						   const XMMATRIX& world_matrix,
 						   const XMFLOAT4& color,
@@ -447,6 +448,7 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 	ShaderWater_SetWaterSurfaceHeight(water_surface_height_srv);
 	ShaderWater_SetSurfaceWater(surface_water_srv);
 	ShaderWater_SetFlowField(flow_field_srv);
+	ShaderWater_SetWaterInteraction(water_interaction_srv);
 	ShaderWater_SetSceneDepth(scene_depth_srv);
 	ShaderWater_Begin();
 

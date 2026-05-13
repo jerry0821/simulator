@@ -54,17 +54,25 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         max(max(surface_left.g, surface_right.g), max(surface_up.g, surface_down.g));
     water_alpha = max(water_alpha, runoff_edge * 0.08f);
 
+    const float pooled_neighbor =
+        max(pooled_water, max(surface_left.b, max(surface_right.b, max(surface_up.b, surface_down.b))));
+
     float water_gradient =
         abs(surface_left.r - surface_right.r) +
         abs(surface_up.r - surface_down.r) +
         0.45f * (abs(surface_left.b - surface_right.b) + abs(surface_up.b - surface_down.b));
     float shore_mask = Smoothstep01(saturate(water_gradient / max(shore_band, 1.0e-4f)));
     shore_mask *= smoothstep(0.12f, 0.55f, max(water_alpha, neighbor_average));
-    shore_mask *= smoothstep(0.08f, 0.45f, max(pooled_water, max(surface_left.b, max(surface_right.b, max(surface_up.b, surface_down.b)))));
+    shore_mask *= smoothstep(0.08f, 0.45f, pooled_neighbor);
+
+    const float water_contact = saturate(max(water_alpha, runoff_hint * 0.22f));
+    const float shoreline_contact = saturate(shore_mask);
+    const float pooled_contact = saturate(pooled_neighbor);
+    const float composite_alpha = saturate(max(water_contact, shoreline_contact * 0.12f));
 
     g_WaterMask[dispatch_thread_id.xy] = float4(
-        1.0f,
-        1.0f,
-        1.0f,
-        saturate(max(water_alpha, shore_mask * 0.12f)));
+        water_contact,
+        shoreline_contact,
+        pooled_contact,
+        composite_alpha);
 }

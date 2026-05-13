@@ -27,13 +27,14 @@ void ShaderField_SetMaterialColor(const DirectX::XMFLOAT4& color);
 void ShaderField_Begin();
 
 void ShaderField_SetHeightMap(ID3D11ShaderResourceView* pSRV);
-void ShaderField_SetTerrainClassificationMap(ID3D11ShaderResourceView* pSRV);
+void ShaderField_SetTerrainNormalMap(ID3D11ShaderResourceView* pSRV);
+void ShaderField_SetTerrainSurfaceDataMap(ID3D11ShaderResourceView* pSRV);
 
 void ShaderField_SetLightViewProj(const DirectX::XMMATRIX& matrix); // 太陽の行列用
 void ShaderField_SetShadowMap(const Backend::RenderShadowMapResource& shadow_map_resource);
 void ShaderField_SetClimateMap(ID3D11ShaderResourceView* pSRV);
 void ShaderField_SetTerrainMaterialSettings(const TerrainMaterialSettings& settings);
-void ShaderField_SetTerrainClassificationEnabled(bool enabled);
+void ShaderField_SetTerrainSurfacePresentationEnabled(bool enabled);
 
 #endif // SHADER_Field_H
 

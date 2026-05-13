@@ -29,6 +29,14 @@ public:
 		return ComputeTaskDispatchMode::EveryFrame;
 	}
 
+	ResourceSpan ReadResources() const override
+	{
+		static constexpr ComputeSharedResourceId kReadResources[] = {
+			ComputeSharedResourceId::TerrainHeight
+		};
+		return kReadResources;
+	}
+
 	ResourceSpan WriteResources() const override
 	{
 		static constexpr ComputeSharedResourceId kWriteResources[] = {
@@ -40,7 +48,10 @@ public:
 	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
 	void Finalize() override;
 
-	void Update(float time_seconds, const ComputeNoiseSettings& settings) const;
+	void Update(
+		float time_seconds,
+		const ComputeNoiseSettings& settings,
+		ID3D11ShaderResourceView* terrain_height_srv) const;
 
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;

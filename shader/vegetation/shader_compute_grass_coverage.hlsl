@@ -21,12 +21,11 @@ cbuffer GRASS_INSTANCE_CONSTANT_BUFFER : register(b0)
 
 struct GrassSeed
 {
-    float4 data; // x = world_x, y = ground_y, z = world_z, w = valid
+    float4 data; // x = world_x, y = ground_y, z = world_z, w = scale_hint (<= 0 means invalid)
 };
 
 Texture2D g_TerrainHeight : register(t0);
-Texture2D g_TerrainVegetationSuitability : register(t1);
-Texture2D g_TerrainClassification : register(t2);
+Texture2D g_GrassData : register(t1);
 SamplerState g_HeightSampler : register(s0);
 RWStructuredBuffer<GrassSeed> g_Seeds : register(u0);
 
@@ -104,37 +103,14 @@ float GenerateSmoothedTerrainHeight(float2 world_xz)
     return SampleTerrainHeight(world_xz);
 }
 
-float SampleVegetationSuitability(float2 world_xz)
+float4 SampleGrassData(float2 world_xz)
 {
     const float field_width = 512.0f;
     const float field_depth = 512.0f;
     float2 uv = float2(
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
-    return g_TerrainVegetationSuitability.SampleLevel(g_HeightSampler, uv, 0.0f).r;
-}
-
-float4 SampleTerrainClassification(float2 world_xz)
-{
-    const float field_width = 512.0f;
-    const float field_depth = 512.0f;
-    float2 uv = float2(
-        saturate((world_xz.x + field_width * 0.5f) / field_width),
-        saturate((world_xz.y + field_depth * 0.5f) / field_depth));
-    return g_TerrainClassification.SampleLevel(g_HeightSampler, uv, 0.0f);
-}
-
-float EstimateNormalY(float2 world_xz)
-{
-    float left_height = GenerateSmoothedTerrainHeight(world_xz + float2(-sample_offset, 0.0f));
-    float right_height = GenerateSmoothedTerrainHeight(world_xz + float2(sample_offset, 0.0f));
-    float up_height = GenerateSmoothedTerrainHeight(world_xz + float2(0.0f, -sample_offset));
-    float down_height = GenerateSmoothedTerrainHeight(world_xz + float2(0.0f, sample_offset));
-
-    float3 tangent = float3(sample_offset * 2.0f, right_height - left_height, 0.0f);
-    float3 bitangent = float3(0.0f, down_height - up_height, sample_offset * 2.0f);
-    float3 normal = normalize(cross(bitangent, tangent));
-    return saturate(normal.y);
+    return g_GrassData.SampleLevel(g_HeightSampler, uv, 0.0f);
 }
 
 [numthreads(64, 1, 1)]
@@ -160,21 +136,15 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         world_min_z + (float)row * spacing) + jitter;
 
     float ground_y = GenerateSmoothedTerrainHeight(world_xz);
-    float vegetation_suitability = SampleVegetationSuitability(world_xz);
-    float4 classification = SampleTerrainClassification(world_xz);
-    float wetness = classification.g;
-    float erosion = classification.a;
-
-    float normal_y = EstimateNormalY(world_xz);
-    float geometric_confirmation = smoothstep(0.48f, 0.76f, normal_y);
-    float classified_coverage =
-        vegetation_suitability *
-        lerp(0.92f, 1.0f, geometric_confirmation) *
-        lerp(1.0f, 0.96f, smoothstep(0.86f, 0.99f, wetness)) *
-        lerp(1.0f, 0.97f, erosion);
-    bool valid = (wetness < 0.992f) && (classified_coverage > 0.024f);
+    float4 grass_data = SampleGrassData(world_xz);
+    float possibility = saturate(grass_data.r);
+    float density_hash = grass_data.g;
+    float scale_hint = max(grass_data.b, 0.0f);
+    bool valid =
+        (possibility > 0.006f) &&
+        (density_hash <= possibility);
 
     GrassSeed seed;
-    seed.data = valid ? float4(world_xz.x, ground_y, world_xz.y, 1.0f) : float4(0.0f, 0.0f, 0.0f, 0.0f);
+    seed.data = valid ? float4(world_xz.x, ground_y, world_xz.y, scale_hint) : float4(0.0f, 0.0f, 0.0f, 0.0f);
     g_Seeds[seed_index] = seed;
 }

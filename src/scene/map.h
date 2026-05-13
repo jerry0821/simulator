@@ -152,12 +152,12 @@ private:
   bool m_terrain_grass_compute_seeded = false;
   TerrainSettings m_terrain_grass_seed_terrain_settings{};
   ID3D11ShaderResourceView* m_terrain_grass_seed_height_srv = nullptr;
-  ID3D11ShaderResourceView* m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
-  ID3D11Texture2D* m_terrain_grass_vegetation_suitability_probe_texture = nullptr;
+  ID3D11ShaderResourceView* m_terrain_grass_seed_grass_data_srv = nullptr;
+  ID3D11Texture2D* m_terrain_grass_grass_data_probe_texture = nullptr;
   double m_terrain_grass_last_update_time_seconds = -1.0;
   double m_terrain_grass_last_coverage_refresh_time_seconds = -1000.0;
   double m_terrain_grass_last_probe_time_seconds = -1000.0;
-  float m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
+  float m_terrain_grass_last_grass_data_signature = -1.0f;
   std::vector<FloatingDustParticle> m_floating_dust_particles;
   bool m_floating_dust_particles_initialized = false;
 };

@@ -47,7 +47,7 @@ static bool g_SurfaceWaterInjectionRequested = false;
 static bool g_SurfaceWaterResetRequested = false;
 static bool g_ShowComputeResourcePreviews = false;
 static bool g_EnableFinalTerrainHeight = true;
-static bool g_EnableTerrainClassification = true;
+static bool g_EnableTerrainSurfacePresentation = true;
 static bool g_EnableGrassGpu = true;
 static bool g_EnableWaterSurfaceDeformation = true;
 static ComputeNoiseSettings g_ComputeNoiseSettings{};
@@ -56,6 +56,11 @@ static TerrainMaterialSettings g_TerrainMaterialSettings{};
 static WaterSurfaceDesc g_WaterSurfaceSettings{};
 static SurfaceWaterSimulationSettings g_SurfaceWaterSimulationSettings{};
 static PostProcessSettings g_PostProcessSettings{};
+static ID3D11Texture2D* g_WindFieldPreviewStagingTexture = nullptr;
+static bool g_UseAccurateWindPreviewArrows = false;
+static float g_WindFieldPreviewLastReadbackTime = -1000.0f;
+static bool g_WindFieldPreviewSamplesValid = false;
+static XMFLOAT3 g_WindFieldPreviewSamples[18 * 18]{};
 
 namespace
 {
@@ -137,10 +142,14 @@ const char* ToString(ComputeSharedResourceId id)
     {
     case ComputeSharedResourceId::TerrainHeight:
         return "TerrainHeight";
-    case ComputeSharedResourceId::TerrainClassification:
-        return "TerrainClassification";
+    case ComputeSharedResourceId::TerrainNormal:
+        return "TerrainNormal";
+    case ComputeSharedResourceId::TerrainSurfaceData:
+        return "TerrainSurfaceData";
     case ComputeSharedResourceId::TerrainVegetationSuitability:
         return "TerrainVegetationSuitability";
+    case ComputeSharedResourceId::GrassData:
+        return "GrassData";
     case ComputeSharedResourceId::RainMap:
         return "RainMap";
     case ComputeSharedResourceId::SurfaceWater:
@@ -155,6 +164,8 @@ const char* ToString(ComputeSharedResourceId id)
         return "VisibleWater";
     case ComputeSharedResourceId::WaterMask:
         return "WaterMask";
+    case ComputeSharedResourceId::WaterInteractionData:
+        return "WaterInteractionData";
     case ComputeSharedResourceId::SoilMoisture:
         return "SoilMoisture";
     case ComputeSharedResourceId::ErosionDelta:
@@ -190,9 +201,197 @@ void DrawResourceUsageChip(const RenderResourceUsage& usage)
     ImGui::TextDisabled("-> %s", ToString(usage.access));
 }
 
+bool MapWindFieldPreviewTexture(
+    ID3D11ShaderResourceView* wind_field_srv,
+    D3D11_TEXTURE2D_DESC& out_desc,
+    D3D11_MAPPED_SUBRESOURCE& out_mapped)
+{
+    if (wind_field_srv == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Resource* resource = nullptr;
+    wind_field_srv->GetResource(&resource);
+    if (resource == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Texture2D* source_texture = nullptr;
+    const HRESULT query_result = resource->QueryInterface(
+        __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(&source_texture));
+    resource->Release();
+    if (FAILED(query_result) || source_texture == nullptr)
+    {
+        return false;
+    }
+
+    source_texture->GetDesc(&out_desc);
+
+    bool needs_recreate = g_WindFieldPreviewStagingTexture == nullptr;
+    if (!needs_recreate)
+    {
+        D3D11_TEXTURE2D_DESC staging_desc{};
+        g_WindFieldPreviewStagingTexture->GetDesc(&staging_desc);
+        needs_recreate =
+            staging_desc.Width != out_desc.Width ||
+            staging_desc.Height != out_desc.Height ||
+            staging_desc.Format != out_desc.Format;
+    }
+
+    if (needs_recreate)
+    {
+        SAFE_RELEASE(g_WindFieldPreviewStagingTexture);
+
+        D3D11_TEXTURE2D_DESC staging_desc = out_desc;
+        staging_desc.BindFlags = 0;
+        staging_desc.MiscFlags = 0;
+        staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        staging_desc.Usage = D3D11_USAGE_STAGING;
+        staging_desc.MipLevels = 1;
+        staging_desc.ArraySize = 1;
+        if (FAILED(Direct3D_GetDevice()->CreateTexture2D(
+                &staging_desc,
+                nullptr,
+                &g_WindFieldPreviewStagingTexture)))
+        {
+            source_texture->Release();
+            return false;
+        }
+    }
+
+    Direct3D_GetContext()->CopyResource(g_WindFieldPreviewStagingTexture, source_texture);
+    source_texture->Release();
+    return SUCCEEDED(Direct3D_GetContext()->Map(
+        g_WindFieldPreviewStagingTexture,
+        0,
+        D3D11_MAP_READ,
+        0,
+        &out_mapped));
+}
+
+void UnmapWindFieldPreviewTexture()
+{
+    if (g_WindFieldPreviewStagingTexture != nullptr)
+    {
+        Direct3D_GetContext()->Unmap(g_WindFieldPreviewStagingTexture, 0);
+    }
+}
+
+bool DecodeWindFieldPixel(
+    const D3D11_TEXTURE2D_DESC& texture_desc,
+    const D3D11_MAPPED_SUBRESOURCE& mapped_resource,
+    unsigned int x,
+    unsigned int y,
+    XMFLOAT3& out_wind)
+{
+    out_wind = { 1.0f, 0.0f, 0.0f };
+    x = std::min(x, texture_desc.Width - 1u);
+    y = std::min(y, texture_desc.Height - 1u);
+
+    const unsigned char* row_ptr =
+        static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * y;
+    if (texture_desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM)
+    {
+        const unsigned char* pixel_ptr = row_ptr + x * 4u;
+        float dir_x = (static_cast<float>(pixel_ptr[0]) / 255.0f) * 2.0f - 1.0f;
+        float dir_y = (static_cast<float>(pixel_ptr[1]) / 255.0f) * 2.0f - 1.0f;
+        const float strength = static_cast<float>(pixel_ptr[2]) / 255.0f;
+        const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+        if (dir_length > 1.0e-6f)
+        {
+            dir_x /= dir_length;
+            dir_y /= dir_length;
+        }
+        else
+        {
+            dir_x = 1.0f;
+            dir_y = 0.0f;
+        }
+        out_wind = { dir_x, dir_y, strength };
+        return true;
+    }
+
+    if (texture_desc.Format == DXGI_FORMAT_R32G32B32A32_FLOAT)
+    {
+        const float* pixel_ptr = reinterpret_cast<const float*>(row_ptr) + x * 4u;
+        float dir_x = pixel_ptr[0] * 2.0f - 1.0f;
+        float dir_y = pixel_ptr[1] * 2.0f - 1.0f;
+        const float strength = pixel_ptr[2];
+        const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+        if (dir_length > 1.0e-6f)
+        {
+            dir_x /= dir_length;
+            dir_y /= dir_length;
+        }
+        else
+        {
+            dir_x = 1.0f;
+            dir_y = 0.0f;
+        }
+        out_wind = { dir_x, dir_y, strength };
+        return true;
+    }
+
+    return false;
+}
+
+bool RefreshWindFieldPreviewSamples(
+    ID3D11ShaderResourceView* wind_field_srv,
+    float time_seconds)
+{
+    if (!g_UseAccurateWindPreviewArrows)
+    {
+        return false;
+    }
+
+    if (g_WindFieldPreviewSamplesValid &&
+        (time_seconds - g_WindFieldPreviewLastReadbackTime) < 0.18f)
+    {
+        return true;
+    }
+
+    D3D11_TEXTURE2D_DESC preview_desc{};
+    D3D11_MAPPED_SUBRESOURCE preview_mapped{};
+    if (!MapWindFieldPreviewTexture(wind_field_srv, preview_desc, preview_mapped))
+    {
+        g_WindFieldPreviewSamplesValid = false;
+        return false;
+    }
+
+    for (int row = 0; row < kWindPreviewRows; ++row)
+    {
+        for (int col = 0; col < kWindPreviewCols; ++col)
+        {
+            const float u = (static_cast<float>(col) + 0.5f) / static_cast<float>(kWindPreviewCols);
+            const float v = (static_cast<float>(row) + 0.5f) / static_cast<float>(kWindPreviewRows);
+            const unsigned int sample_x = static_cast<unsigned int>(
+                std::clamp(u * static_cast<float>(preview_desc.Width), 0.0f, static_cast<float>(preview_desc.Width - 1u)));
+            const unsigned int sample_y = static_cast<unsigned int>(
+                std::clamp(v * static_cast<float>(preview_desc.Height), 0.0f, static_cast<float>(preview_desc.Height - 1u)));
+            XMFLOAT3 wind{};
+            DecodeWindFieldPixel(
+                preview_desc,
+                preview_mapped,
+                sample_x,
+                sample_y,
+                wind);
+            g_WindFieldPreviewSamples[row * kWindPreviewCols + col] = wind;
+        }
+    }
+
+    UnmapWindFieldPreviewTexture();
+    g_WindFieldPreviewLastReadbackTime = time_seconds;
+    g_WindFieldPreviewSamplesValid = true;
+    return true;
+}
+
 void DrawWindFieldOverlay(
     const ImVec2& top_left,
     const ImVec2& size,
+    ID3D11ShaderResourceView* wind_field_srv,
     float time_seconds,
     const ComputeNoiseSettings& settings)
 {
@@ -206,6 +405,9 @@ void DrawWindFieldOverlay(
     const float cell_height = size.y / static_cast<float>(kWindPreviewRows);
     const float world_range_x = kWindPreviewWorldMaxX - kWindPreviewWorldMinX;
     const float world_range_z = kWindPreviewWorldMaxZ - kWindPreviewWorldMinZ;
+    const bool using_gpu_preview = RefreshWindFieldPreviewSamples(
+        wind_field_srv,
+        time_seconds);
 
     for (int row = 0; row < kWindPreviewRows; ++row)
     {
@@ -213,17 +415,25 @@ void DrawWindFieldOverlay(
         {
             const float u = (static_cast<float>(col) + 0.5f) / static_cast<float>(kWindPreviewCols);
             const float v = (static_cast<float>(row) + 0.5f) / static_cast<float>(kWindPreviewRows);
-            const float world_x = kWindPreviewWorldMinX + u * world_range_x;
-            const float world_z = kWindPreviewWorldMinZ + v * world_range_z;
-            const XMFLOAT3 wind = WindFieldCpu_SampleWorld(
-                world_x,
-                world_z,
-                time_seconds,
-                settings,
-                kWindPreviewWorldMinX,
-                kWindPreviewWorldMaxX,
-                kWindPreviewWorldMinZ,
-                kWindPreviewWorldMaxZ);
+            XMFLOAT3 wind{};
+            if (using_gpu_preview)
+            {
+                wind = g_WindFieldPreviewSamples[row * kWindPreviewCols + col];
+            }
+            else
+            {
+                const float world_x = kWindPreviewWorldMinX + u * world_range_x;
+                const float world_z = kWindPreviewWorldMinZ + v * world_range_z;
+                wind = WindFieldCpu_SampleWorld(
+                    world_x,
+                    world_z,
+                    time_seconds,
+                    settings,
+                    kWindPreviewWorldMinX,
+                    kWindPreviewWorldMaxX,
+                    kWindPreviewWorldMinZ,
+                    kWindPreviewWorldMaxZ);
+            }
 
             const float center_x = top_left.x + u * size.x;
             const float center_y = top_left.y + v * size.y;
@@ -265,6 +475,7 @@ void DebugMenu_Initialize(ID3D11Device* device, ID3D11DeviceContext* context, HW
 
 void DebugMenu_Finalize()
 {
+    SAFE_RELEASE(g_WindFieldPreviewStagingTexture);
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -358,9 +569,9 @@ bool DebugMenu_IsFinalTerrainHeightEnabled()
     return g_EnableFinalTerrainHeight;
 }
 
-bool DebugMenu_IsTerrainClassificationEnabled()
+bool DebugMenu_IsTerrainSurfacePresentationEnabled()
 {
-    return g_EnableTerrainClassification;
+    return g_EnableTerrainSurfacePresentation;
 }
 
 bool DebugMenu_IsGrassGpuEnabled()
@@ -415,7 +626,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::Begin("Portfolio");
     ImGui::TextDisabled("Before / After showcase toggles");
     ImGui::Checkbox("Final Terrain Height", &g_EnableFinalTerrainHeight);
-    ImGui::Checkbox("Terrain Classification", &g_EnableTerrainClassification);
+    ImGui::Checkbox("Terrain Surface Shading", &g_EnableTerrainSurfacePresentation);
     ImGui::Checkbox("Grass GPU Instances", &g_EnableGrassGpu);
     ImGui::Checkbox("Water Surface Deformation", &g_EnableWaterSurfaceDeformation);
     ImGui::Separator();
@@ -448,6 +659,8 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::TextDisabled("Global wind controls");
     ImGui::SliderFloat("World Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
     ImGui::Text("Current: %.3f", g_ComputeNoiseSettings.wind_strength);
+    ImGui::Checkbox("Accurate GPU Arrows", &g_UseAccurateWindPreviewArrows);
+    ImGui::TextDisabled("Off = faster CPU preview. On = read back the GPU wind texture at a limited rate.");
     if (frame_context == nullptr || !frame_context->resources.wind_field.isValid())
     {
         ImGui::TextDisabled("WindField Preview: Missing");
@@ -465,6 +678,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         DrawWindFieldOverlay(
             preview_top_left,
             preview_size,
+            frame_context->resources.wind_field.shaderResourceView(),
             static_cast<float>(frame_context->globals.time_seconds),
             g_ComputeNoiseSettings);
     }
@@ -532,16 +746,19 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     else
     {
         ImGui::Text("TerrainHeight: %s", frame_context->resources.terrain_height.isValid() ? "Active" : "Missing");
-        ImGui::Text("TerrainClassification: %s", frame_context->resources.terrain_classification.isValid() ? "Active" : "Missing");
+        ImGui::Text("TerrainNormal: %s", frame_context->resources.terrain_normal.isValid() ? "Active" : "Missing");
+        ImGui::Text("TerrainSurfaceData: %s", frame_context->resources.terrain_surface_data.isValid() ? "Active" : "Missing");
         ImGui::Text(
             "TerrainVegetationSuitability: %s",
             frame_context->resources.terrain_vegetation_suitability.isValid() ? "Active" : "Missing");
+        ImGui::Text("GrassData: %s", frame_context->resources.grass_data.isValid() ? "Active" : "Missing");
         ImGui::Text("RainMap: %s", frame_context->resources.rain_map.isValid() ? "Active" : "Missing");
         ImGui::Text("SurfaceWater: %s", frame_context->resources.surface_water.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterSurfaceHeight: %s", frame_context->resources.water_surface_height.isValid() ? "Active" : "Missing");
         ImGui::Text("SurfaceWaterFlow: %s", frame_context->resources.surface_water_flow.isValid() ? "Active" : "Missing");
         ImGui::Text("VisibleWater: %s", frame_context->resources.visible_water.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterMask: %s", frame_context->resources.water_mask.isValid() ? "Active" : "Missing");
+        ImGui::Text("WaterInteractionData: %s", frame_context->resources.water_interaction_data.isValid() ? "Active" : "Missing");
         ImGui::Text("SoilMoisture: %s", frame_context->resources.soil_moisture.isValid() ? "Active" : "Missing");
         ImGui::Text("ErosionDelta: %s", frame_context->resources.erosion_delta.isValid() ? "Active" : "Missing");
         ImGui::Checkbox("Show Resource Previews", &g_ShowComputeResourcePreviews);
@@ -563,6 +780,16 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             ImGui::TextWrapped("R = authoritative water depth. B = standing-water helper used by WaterMask. G/A remain preview helpers.");
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.surface_water.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.terrain_normal.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("TerrainNormal Preview");
+            ImGui::TextWrapped("RGB = world normal, A = normal.y slope helper. This is the shared terrain-normal field used by terrain and grass.");
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_normal.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 
@@ -610,9 +837,19 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         {
             ImGui::Separator();
             ImGui::TextDisabled("WaterMask Preview");
-            ImGui::TextWrapped("White areas are the softened visible-water result used by the stable world water surface.");
+            ImGui::TextWrapped("R = water contact, G = shoreline band, B = pooled-water support, A = render coverage.");
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_mask.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.water_interaction_data.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("WaterInteractionData Preview");
+            ImGui::TextWrapped("R = surface interaction, G = shoreline influence, B = pooled-water interaction, A = retained wetness. This is the consumer-facing water field.");
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_interaction_data.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 
@@ -636,13 +873,13 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
                 ImVec2(192.0f, 192.0f));
         }
 
-        if (g_ShowComputeResourcePreviews && frame_context->resources.terrain_classification.isValid())
+        if (g_ShowComputeResourcePreviews && frame_context->resources.terrain_surface_data.isValid())
         {
             ImGui::Separator();
-            ImGui::TextDisabled("TerrainClassification Preview");
-            ImGui::TextWrapped("R = surface grass coverage, G = wetness, B = rock mask, A = erosion mask.");
+            ImGui::TextDisabled("TerrainSurfaceData Preview");
+            ImGui::TextWrapped("R = slope, G = beach / shoreline, B = humidity, A = roughness. This is the core terrain surface field.");
             ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_classification.shaderResourceView())),
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_surface_data.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 
@@ -653,6 +890,16 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             ImGui::TextWrapped("White = grass-friendly terrain. This is the dedicated vegetation signal used by grass seeding.");
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_vegetation_suitability.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.grass_data.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("GrassData Preview");
+            ImGui::TextWrapped("R = grass possibility, G = stable distribution hash, B = scale hint. This is the consumer-facing grass field.");
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.grass_data.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
     }

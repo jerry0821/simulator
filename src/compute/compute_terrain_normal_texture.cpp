@@ -1,11 +1,10 @@
-#include "compute_wind_field_texture.h"
+#include "compute_terrain_normal_texture.h"
 
+#include <d3d11.h>
 #include <fstream>
 #include <vector>
-#include <cmath>
 
 #include "debug_ostream.h"
-#include "direct3d.h"
 #include "sampler.h"
 
 namespace
@@ -21,7 +20,7 @@ void SafeRelease(T*& resource)
 }
 }
 
-bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+bool ComputeTerrainNormalTexture::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	Finalize();
 
@@ -32,10 +31,10 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 		return false;
 	}
 
-	std::ifstream shader_stream("resource/shader/shader_compute_wind_field.cso", std::ios::binary);
+	std::ifstream shader_stream("resource/shader/shader_compute_terrain_normal.cso", std::ios::binary);
 	if (!shader_stream)
 	{
-		hal::dout << "ComputeWindFieldTexture::Initialize(): failed to open shader_compute_wind_field.cso" << std::endl;
+		hal::dout << "ComputeTerrainNormalTexture::Initialize(): failed to open shader_compute_terrain_normal.cso" << std::endl;
 		return false;
 	}
 
@@ -48,7 +47,7 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 
 	if (FAILED(m_device->CreateComputeShader(shader_bytes.data(), shader_bytes.size(), nullptr, &m_compute_shader)))
 	{
-		hal::dout << "ComputeWindFieldTexture::Initialize(): CreateComputeShader failed" << std::endl;
+		hal::dout << "ComputeTerrainNormalTexture::Initialize(): CreateComputeShader failed" << std::endl;
 		Finalize();
 		return false;
 	}
@@ -58,7 +57,7 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 	texture_desc.Height = kTextureHeight;
 	texture_desc.MipLevels = 1;
 	texture_desc.ArraySize = 1;
-	texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texture_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	texture_desc.SampleDesc.Count = 1;
 	texture_desc.Usage = D3D11_USAGE_DEFAULT;
 	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -82,13 +81,12 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 	}
 
 	D3D11_BUFFER_DESC buffer_desc{};
-	buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
-	buffer_desc.ByteWidth = sizeof(WindConstants);
+	buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+	buffer_desc.ByteWidth = sizeof(TerrainNormalConstants);
 	buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
 	if (FAILED(m_device->CreateBuffer(&buffer_desc, nullptr, &m_constant_buffer)))
 	{
+		hal::dout << "ComputeTerrainNormalTexture::Initialize(): CreateBuffer(constant) failed" << std::endl;
 		Finalize();
 		return false;
 	}
@@ -96,7 +94,7 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 	return true;
 }
 
-void ComputeWindFieldTexture::Finalize()
+void ComputeTerrainNormalTexture::Finalize()
 {
 	SafeRelease(m_constant_buffer);
 	SafeRelease(m_uav);
@@ -107,71 +105,49 @@ void ComputeWindFieldTexture::Finalize()
 	m_context = nullptr;
 }
 
-void ComputeWindFieldTexture::Update(
-	float time_seconds,
-	const ComputeNoiseSettings& settings,
-	ID3D11ShaderResourceView* terrain_height_srv) const
+void ComputeTerrainNormalTexture::Update(ID3D11ShaderResourceView* terrain_height_srv)
 {
 	if (!IsValid() || terrain_height_srv == nullptr)
 	{
 		return;
 	}
 
-	float wind_dir_x = settings.wind_direction_x;
-	float wind_dir_y = settings.wind_direction_y;
-	const float wind_length = std::sqrt(wind_dir_x * wind_dir_x + wind_dir_y * wind_dir_y);
-	if (wind_length > 0.0001f)
-	{
-		wind_dir_x /= wind_length;
-		wind_dir_y /= wind_length;
-	}
-	else
-	{
-		wind_dir_x = 1.0f;
-		wind_dir_y = 0.0f;
-	}
+	const TerrainNormalConstants constants = {
+		512.0f,
+		512.0f,
+		kTextureWidth,
+		kTextureHeight
+	};
 
-	D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-	if (SUCCEEDED(m_context->Map(m_constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource)))
-	{
-		auto* constants = static_cast<WindConstants*>(mapped_resource.pData);
-		*constants = WindConstants{
-			time_seconds,
-			wind_dir_x,
-			wind_dir_y,
-			settings.wind_strength,
-			settings.wind_cross_influence,
-			settings.noise_scale,
-			0.0f,
-			0.0f,
-			kTextureWidth,
-			kTextureHeight,
-			0u,
-			0u };
-		m_context->Unmap(m_constant_buffer, 0);
-	}
+	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);
+
+	ID3D11ShaderResourceView* srvs[] = { terrain_height_srv };
+	ID3D11UnorderedAccessView* uavs[] = { m_uav };
+	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
+	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
-	m_context->CSSetConstantBuffers(0, 1, &m_constant_buffer);
-	ID3D11ShaderResourceView* srvs[] = { terrain_height_srv };
-	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
+	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
 	m_context->CSSetShaderResources(0, 1, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 1, &m_uav, nullptr);
-	m_context->Dispatch(kTextureWidth / kThreadGroupSize, kTextureHeight / kThreadGroupSize, 1);
+	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+	m_context->Dispatch(
+		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
+		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
+		1);
 
-	ID3D11UnorderedAccessView* null_uav = nullptr;
-	ID3D11Buffer* null_constant_buffer = nullptr;
 	ID3D11ShaderResourceView* null_srv = nullptr;
+	ID3D11UnorderedAccessView* null_uav = nullptr;
+	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
-	m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
 	m_context->CSSetShaderResources(0, 1, &null_srv);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
+	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 }
 
-bool ComputeWindFieldTexture::IsValid() const
+bool ComputeTerrainNormalTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
 		   m_texture != nullptr &&
@@ -180,7 +156,7 @@ bool ComputeWindFieldTexture::IsValid() const
 		   m_constant_buffer != nullptr;
 }
 
-Backend::RenderShaderResource ComputeWindFieldTexture::Resource() const
+Backend::RenderShaderResource ComputeTerrainNormalTexture::Resource() const
 {
 	return Backend::RenderShaderResource(m_srv);
 }

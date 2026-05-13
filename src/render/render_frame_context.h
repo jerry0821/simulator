@@ -30,8 +30,10 @@ struct RenderFrameResources
 	Backend::RenderShadowMapResource shadow_map{};
 	TerrainWaterFrameState terrain_water{};
 	Backend::RenderShaderResource terrain_height{};
-	Backend::RenderShaderResource terrain_classification{};
+	Backend::RenderShaderResource terrain_normal{};
+	Backend::RenderShaderResource terrain_surface_data{};
 	Backend::RenderShaderResource terrain_vegetation_suitability{};
+	Backend::RenderShaderResource grass_data{};
 	Backend::RenderShaderResource rain_map{};
 	Backend::RenderShaderResource surface_water{};
 	Backend::RenderShaderResource water_surface_height{};
@@ -39,6 +41,7 @@ struct RenderFrameResources
 	Backend::RenderShaderResource surface_water_flow_preview{};
 	Backend::RenderShaderResource visible_water{};
 	Backend::RenderShaderResource water_mask{};
+	Backend::RenderShaderResource water_interaction_data{};
 	Backend::RenderShaderResource soil_moisture{};
 	Backend::RenderShaderResource erosion_delta{};
 	Backend::RenderShaderResource compute_noise{};

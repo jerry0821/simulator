@@ -230,7 +230,15 @@ void ShaderField_SetHeightMap(ID3D11ShaderResourceView* pSRV)
 	}
 }
 
-void ShaderField_SetTerrainClassificationMap(ID3D11ShaderResourceView* pSRV)
+void ShaderField_SetTerrainNormalMap(ID3D11ShaderResourceView* pSRV)
+{
+	if (g_pContext)
+	{
+		g_pContext->VSSetShaderResources(1, 1, &pSRV);
+	}
+}
+
+void ShaderField_SetTerrainSurfaceDataMap(ID3D11ShaderResourceView* pSRV)
 {
 	if (g_pContext)
 	{
@@ -268,7 +276,7 @@ void ShaderField_SetClimateMap(ID3D11ShaderResourceView* pSRV)
 		return;
 	}
 
-	g_pContext->VSSetShaderResources(1, 1, &pSRV);
+	g_pContext->VSSetShaderResources(2, 1, &pSRV);
 	g_pContext->PSSetShaderResources(4, 1, &pSRV);
 }
 
@@ -282,7 +290,7 @@ void ShaderField_SetTerrainMaterialSettings(const TerrainMaterialSettings& setti
 	g_pContext->UpdateSubresource(g_pPSConstantBuffer4, 0, nullptr, &settings, 0, 0);
 }
 
-void ShaderField_SetTerrainClassificationEnabled(bool enabled)
+void ShaderField_SetTerrainSurfacePresentationEnabled(bool enabled)
 {
 	if (!g_pContext || !g_pPSConstantBuffer5)
 	{

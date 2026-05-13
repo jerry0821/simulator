@@ -27,12 +27,12 @@ cbuffer TERRAIN_CLASSIFICATION_CONSTANT_BUFFER : register(b0)
 };
 
 Texture2D g_TerrainHeight : register(t0);
-Texture2D g_WaterMask : register(t1);
-Texture2D g_SoilMoisture : register(t2);
+Texture2D g_TerrainNormal : register(t1);
+Texture2D g_WaterInteractionData : register(t2);
 Texture2D g_ErosionDelta : register(t3);
 Texture2D g_ClimateField : register(t4);
 SamplerState g_ClassificationSampler : register(s0);
-RWTexture2D<float4> g_TerrainClassification : register(u0);
+RWTexture2D<float4> g_TerrainSurfaceData : register(u0);
 RWTexture2D<float> g_TerrainVegetationSuitability : register(u1);
 
 float Hash21(float2 p)
@@ -87,14 +87,9 @@ float SampleTerrainHeight(float2 world_xz)
     return g_TerrainHeight.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).r;
 }
 
-float SampleWaterMask(float2 world_xz)
+float4 SampleWaterInteraction(float2 world_xz)
 {
-    return g_WaterMask.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).r;
-}
-
-float SampleSoilMoisture(float2 world_xz)
-{
-    return g_SoilMoisture.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).r;
+    return g_WaterInteractionData.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
 }
 
 float4 SampleErosionDelta(float2 world_xz)
@@ -107,17 +102,10 @@ float3 SampleClimate(float2 world_xz)
     return g_ClimateField.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).rgb;
 }
 
-float EstimateNormalY(float2 world_xz)
+float SampleNormalY(float2 world_xz)
 {
-    float left_height = SampleTerrainHeight(world_xz + float2(-sample_offset, 0.0f));
-    float right_height = SampleTerrainHeight(world_xz + float2(sample_offset, 0.0f));
-    float up_height = SampleTerrainHeight(world_xz + float2(0.0f, -sample_offset));
-    float down_height = SampleTerrainHeight(world_xz + float2(0.0f, sample_offset));
-
-    float3 tangent = float3(sample_offset * 2.0f, right_height - left_height, 0.0f);
-    float3 bitangent = float3(0.0f, down_height - up_height, sample_offset * 2.0f);
-    float3 normal = normalize(cross(bitangent, tangent));
-    return saturate(normal.y);
+    float4 normal_sample = g_TerrainNormal.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
+    return saturate(normal_sample.w);
 }
 
 [numthreads(8, 8, 1)]
@@ -134,11 +122,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         uv.y * field_depth - field_depth * 0.5f);
 
     float terrain_height = SampleTerrainHeight(world_xz);
-    float water_mask = SampleWaterMask(world_xz);
-    float soil_moisture = SampleSoilMoisture(world_xz);
+    float4 water_interaction = SampleWaterInteraction(world_xz);
     float4 erosion_delta = SampleErosionDelta(world_xz);
     float3 climate = SampleClimate(world_xz);
-    float normal_y = EstimateNormalY(world_xz);
+    float normal_y = SampleNormalY(world_xz);
+    float surface_wetness = water_interaction.r;
+    float shoreline_wetness = water_interaction.g;
+    float pooled_wetness = water_interaction.b;
+    float retained_moisture = water_interaction.a;
 
     float grass_flatness = saturate((normal_y - grass_slope_min) / max(grass_slope_max - grass_slope_min, 1.0e-5f));
     float lowland = 1.0f - smoothstep(lowland_height_end, lowland_height_end + 30.0f, terrain_height);
@@ -160,11 +151,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         0.72f,
         patch_noise * 0.7f + detail_noise * 0.3f + (macro_noise - 0.5f) * grass_noise_strength);
 
-    float flood_penalty = 1.0f - smoothstep(0.76f, 0.98f, water_mask);
+    float flood_penalty = 1.0f - smoothstep(0.76f, 0.98f, max(surface_wetness, pooled_wetness * 0.92f));
     float erosion_mask = saturate(erosion_delta.r * 1.85f + max(-erosion_delta.b, 0.0f) * 0.65f);
     float wetness = saturate(
-        max(shoreline * (0.68f + soil_moisture * 0.32f), soil_moisture * 0.78f) * wetness_gain +
-        water_mask * 0.30f +
+        max(shoreline * (0.60f + shoreline_wetness * 0.40f), retained_moisture * 0.82f) * wetness_gain +
+        surface_wetness * 0.24f +
+        pooled_wetness * 0.18f +
         climate.g * 0.10f);
     float surface_grass_coverage =
         grass_flatness *
@@ -173,10 +165,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         lerp(0.42f, 1.0f, macro_mask) *
         patch_mask *
         flood_penalty *
-        lerp(0.88f, 1.12f, soil_moisture) *
+        lerp(0.88f, 1.12f, retained_moisture) *
         lerp(1.0f, 0.78f, erosion_mask);
     float vegetation_noise = smoothstep(0.22f, 0.70f, macro_noise * 0.65f + patch_noise * 0.35f);
-    float moisture_support = lerp(0.92f, 1.0f, saturate(soil_moisture * 0.82f + climate.g * 0.18f));
+    float moisture_support = lerp(0.92f, 1.0f, saturate(retained_moisture * 0.82f + climate.g * 0.18f));
     float vegetation_suitability =
         grass_flatness *
         above_water *
@@ -192,6 +184,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     rock_mask *= lerp(1.06f, 0.88f, climate.g);
     rock_mask = saturate(pow(rock_mask, 1.8f));
 
-    g_TerrainClassification[dispatch_thread_id.xy] = float4(surface_grass_coverage, wetness, rock_mask, erosion_mask);
+    float slope_amount = saturate(1.0f - normal_y);
+    float surface_slope = smoothstep(1.0f - rock_slope_end, 1.0f - rock_slope_start, slope_amount);
+    float beach_mask = saturate(max(shoreline_wetness, shoreline * (1.0f - pooled_wetness * 0.25f)));
+    float humidity = saturate(retained_moisture * 0.72f + wetness * 0.18f + climate.g * 0.10f);
+    float roughness = saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
+
+    g_TerrainSurfaceData[dispatch_thread_id.xy] = float4(surface_slope, beach_mask, humidity, roughness);
     g_TerrainVegetationSuitability[dispatch_thread_id.xy] = vegetation_suitability;
 }

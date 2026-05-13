@@ -291,9 +291,11 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 		water_desc_ptr = &water_desc;
 	}
 	ID3D11ShaderResourceView* water_presence_srv =
-		terrain_water.visible_water.isValid()
-			? terrain_water.visible_water.shaderResourceView()
-			: nullptr;
+		terrain_water.water_interaction_data.isValid()
+			? terrain_water.water_interaction_data.shaderResourceView()
+			: (terrain_water.visible_water.isValid()
+				? terrain_water.visible_water.shaderResourceView()
+				: nullptr);
 	const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&frame_context.globals.view_matrix);
 	const DirectX::XMMATRIX proj = DirectX::XMLoadFloat4x4(&frame_context.globals.projection_matrix);
 	DirectX::XMFLOAT4X4 inverse_view_projection{};

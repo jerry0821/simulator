@@ -22,6 +22,7 @@ void ShaderWater_SetSurfaceSettings(float fresnel_power,
 void ShaderWater_SetWaterSurfaceHeight(ID3D11ShaderResourceView* water_surface_height_srv);
 void ShaderWater_SetSurfaceWater(ID3D11ShaderResourceView* surface_water_srv);
 void ShaderWater_SetFlowField(ID3D11ShaderResourceView* flow_field_srv);
+void ShaderWater_SetWaterInteraction(ID3D11ShaderResourceView* water_interaction_srv);
 void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv);
 void ShaderWater_Begin();
 void ShaderWater_End();

@@ -21,7 +21,7 @@ cbuffer GRASS_INSTANCE_CONSTANT_BUFFER : register(b0)
 
 struct GrassSeed
 {
-    float4 data; // x = world_x, y = ground_y, z = world_z, w = valid
+    float4 data; // x = world_x, y = ground_y, z = world_z, w = scale_hint (<= 0 means invalid)
 };
 
 struct GrassInstance
@@ -59,13 +59,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     }
 
     const GrassSeed seed = g_Seeds[seed_index];
-    if (seed.data.w < 0.5f)
+    if (seed.data.w <= 0.0f)
     {
         return;
     }
 
     const float2 world_xz = float2(seed.data.x, seed.data.z);
     const float ground_y = seed.data.y;
+    const float scale_hint = max(seed.data.w, 0.001f);
 
     float2 camera_xz = float2(camera_x, camera_z);
     float distance_to_camera = distance(world_xz, camera_xz);
@@ -102,8 +103,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float lod_scale = use_billboard_lod ? lerp(0.92f, 0.52f, lod1_t) : 1.0f;
     const float yaw_offset = Hash21(grid_pos + float2(29.0f, 31.0f)) * 3.14159265f;
 
-    const float sx = quad_scale_x * scale_jitter * lod_scale;
-    const float sy = quad_scale_y * scale_jitter * lod_scale;
+    const float sx = quad_scale_x * scale_jitter * lod_scale * scale_hint;
+    const float sy = quad_scale_y * scale_jitter * lod_scale * scale_hint;
 
     const float tx = world_xz.x;
     // Temporary grounding override for tuning: push the whole grass clump downward.

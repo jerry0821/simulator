@@ -71,6 +71,7 @@ ID3D11ShaderResourceView* g_authored_height_texture_srv = nullptr;
 ID3D11Texture2D* g_flat_height_texture = nullptr;
 ID3D11ShaderResourceView* g_flat_height_texture_srv = nullptr;
 ID3D11ShaderResourceView* g_render_height_override_srv = nullptr;
+ID3D11ShaderResourceView* g_render_normal_override_srv = nullptr;
 TerrainSettings g_terrain_settings{};
 size_t g_height_map_width = 0;
 size_t g_height_map_height = 0;
@@ -976,6 +977,7 @@ void MeshFieldRenderer::Finalize()
 	SAFE_RELEASE(g_height_texture);
 	SAFE_RELEASE(g_height_compute_shader);
 	g_render_height_override_srv = nullptr;
+	g_render_normal_override_srv = nullptr;
 }
 
 void MeshFieldRenderer::Draw()
@@ -983,6 +985,7 @@ void MeshFieldRenderer::Draw()
 	ShaderField_Begin();
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 	ShaderField_SetHeightMap(g_render_height_override_srv != nullptr ? g_render_height_override_srv : HeightSRV());
+	ShaderField_SetTerrainNormalMap(g_render_normal_override_srv);
 
 	TextureManager::SetTexture(g_field_texture_id0, 0);
 	TextureManager::SetTexture(g_field_texture_id1, 1);
@@ -1001,7 +1004,8 @@ void MeshFieldRenderer::Draw()
 
 	g_context->DrawIndexed(static_cast<UINT>(g_mesh_indices.size()), 0, 0);
 	ShaderField_SetHeightMap(nullptr);
-	ShaderField_SetTerrainClassificationMap(nullptr);
+	ShaderField_SetTerrainNormalMap(nullptr);
+	ShaderField_SetTerrainSurfaceDataMap(nullptr);
 }
 
 void MeshFieldRenderer::DrawMeshOnly()
@@ -1104,6 +1108,11 @@ ID3D11ShaderResourceView* MeshFieldRenderer::HeightSRV()
 void MeshFieldRenderer::SetRenderHeightSRV(ID3D11ShaderResourceView* srv)
 {
 	g_render_height_override_srv = srv;
+}
+
+void MeshFieldRenderer::SetRenderNormalSRV(ID3D11ShaderResourceView* srv)
+{
+	g_render_normal_override_srv = srv;
 }
 
 void MeshField_Initialize(ID3D11Device* pDevice, ID3D11DeviceContext* pContext)

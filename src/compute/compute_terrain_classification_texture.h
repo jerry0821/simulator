@@ -19,8 +19,8 @@ public:
 	void Finalize();
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* water_mask_srv,
-		ID3D11ShaderResourceView* soil_moisture_srv,
+		ID3D11ShaderResourceView* terrain_normal_srv,
+		ID3D11ShaderResourceView* water_interaction_srv,
 		ID3D11ShaderResourceView* erosion_delta_srv,
 		ID3D11ShaderResourceView* climate_srv,
 		const TerrainMaterialSettings& material_settings);

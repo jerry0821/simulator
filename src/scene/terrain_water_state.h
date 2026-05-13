@@ -9,20 +9,26 @@ struct TerrainWaterFrameState
 	float water_surface_level = 0.0f;
 	WaterSurfaceDesc water_surface_desc{};
 	Backend::RenderShaderResource terrain_height{};
-	Backend::RenderShaderResource terrain_classification{};
+	Backend::RenderShaderResource terrain_normal{};
+	Backend::RenderShaderResource terrain_surface_data{};
 	Backend::RenderShaderResource terrain_vegetation_suitability{};
+	Backend::RenderShaderResource grass_data{};
 	Backend::RenderShaderResource surface_water{};
 	Backend::RenderShaderResource water_surface_height_texture{};
 	Backend::RenderShaderResource surface_water_flow{};
 	Backend::RenderShaderResource surface_water_flow_preview{};
 	Backend::RenderShaderResource visible_water{};
 	Backend::RenderShaderResource water_mask{};
+	Backend::RenderShaderResource water_interaction_data{};
 	Backend::RenderShaderResource soil_moisture{};
 	Backend::RenderShaderResource erosion_delta{};
 
 	bool HasHydrologyData() const
 	{
-		return surface_water.isValid() || water_mask.isValid() || visible_water.isValid();
+		return surface_water.isValid() ||
+			water_mask.isValid() ||
+			water_interaction_data.isValid() ||
+			visible_water.isValid();
 	}
 
 	bool HasWaterSurfaceHeight() const
@@ -37,12 +43,15 @@ struct TerrainWaterFrameState
 
 	bool HasSurfaceMaterialData() const
 	{
-		return terrain_classification.isValid() || soil_moisture.isValid() || erosion_delta.isValid();
+		return terrain_surface_data.isValid() ||
+			water_interaction_data.isValid() ||
+			soil_moisture.isValid() ||
+			erosion_delta.isValid();
 	}
 
 	bool HasVegetationData() const
 	{
-		return terrain_vegetation_suitability.isValid();
+		return terrain_vegetation_suitability.isValid() || grass_data.isValid();
 	}
 };
 
@@ -58,28 +67,34 @@ public:
 		float water_surface_height,
 		const WaterSurfaceDesc& water_surface_desc,
 		Backend::RenderShaderResource terrain_height,
-		Backend::RenderShaderResource terrain_classification,
+		Backend::RenderShaderResource terrain_normal,
+		Backend::RenderShaderResource terrain_surface_data,
 		Backend::RenderShaderResource terrain_vegetation_suitability,
+		Backend::RenderShaderResource grass_data,
 		Backend::RenderShaderResource surface_water,
 		Backend::RenderShaderResource water_surface_height_texture,
 		Backend::RenderShaderResource surface_water_flow,
 		Backend::RenderShaderResource surface_water_flow_preview,
 		Backend::RenderShaderResource visible_water,
 		Backend::RenderShaderResource water_mask,
+		Backend::RenderShaderResource water_interaction_data,
 		Backend::RenderShaderResource soil_moisture,
 		Backend::RenderShaderResource erosion_delta)
 	{
 		frame_state_.water_surface_level = water_surface_height;
 		frame_state_.water_surface_desc = water_surface_desc;
 		frame_state_.terrain_height = terrain_height;
-		frame_state_.terrain_classification = terrain_classification;
+		frame_state_.terrain_normal = terrain_normal;
+		frame_state_.terrain_surface_data = terrain_surface_data;
 		frame_state_.terrain_vegetation_suitability = terrain_vegetation_suitability;
+		frame_state_.grass_data = grass_data;
 		frame_state_.surface_water = surface_water;
 		frame_state_.water_surface_height_texture = water_surface_height_texture;
 		frame_state_.surface_water_flow = surface_water_flow;
 		frame_state_.surface_water_flow_preview = surface_water_flow_preview;
 		frame_state_.visible_water = visible_water;
 		frame_state_.water_mask = water_mask;
+		frame_state_.water_interaction_data = water_interaction_data;
 		frame_state_.soil_moisture = soil_moisture;
 		frame_state_.erosion_delta = erosion_delta;
 	}
@@ -96,13 +111,21 @@ public:
 			"TerrainHeight",
 			frame_state_.terrain_height);
 		registry.PublishShaderResource(
-			ComputeSharedResourceId::TerrainClassification,
-			"TerrainClassification",
-			frame_state_.terrain_classification);
+			ComputeSharedResourceId::TerrainNormal,
+			"TerrainNormal",
+			frame_state_.terrain_normal);
+		registry.PublishShaderResource(
+			ComputeSharedResourceId::TerrainSurfaceData,
+			"TerrainSurfaceData",
+			frame_state_.terrain_surface_data);
 		registry.PublishShaderResource(
 			ComputeSharedResourceId::TerrainVegetationSuitability,
 			"TerrainVegetationSuitability",
 			frame_state_.terrain_vegetation_suitability);
+		registry.PublishShaderResource(
+			ComputeSharedResourceId::GrassData,
+			"GrassData",
+			frame_state_.grass_data);
 		registry.PublishShaderResource(
 			ComputeSharedResourceId::SurfaceWater,
 			"SurfaceWater",
@@ -127,6 +150,10 @@ public:
 			ComputeSharedResourceId::WaterMask,
 			"WaterMask",
 			frame_state_.water_mask);
+		registry.PublishShaderResource(
+			ComputeSharedResourceId::WaterInteractionData,
+			"WaterInteractionData",
+			frame_state_.water_interaction_data);
 		registry.PublishShaderResource(
 			ComputeSharedResourceId::SoilMoisture,
 			"SoilMoisture",

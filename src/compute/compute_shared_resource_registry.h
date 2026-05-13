@@ -13,8 +13,10 @@ struct ID3D11UnorderedAccessView;
 enum class ComputeSharedResourceId
 {
 	TerrainHeight,
-	TerrainClassification,
+	TerrainNormal,
+	TerrainSurfaceData,
 	TerrainVegetationSuitability,
+	GrassData,
 	RainMap,
 	SurfaceWater,
 	WaterSurfaceHeight,
@@ -22,6 +24,7 @@ enum class ComputeSharedResourceId
 	SurfaceWaterFlowPreview,
 	VisibleWater,
 	WaterMask,
+	WaterInteractionData,
 	SoilMoisture,
 	ErosionDelta,
 	ComputeNoise,

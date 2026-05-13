@@ -98,8 +98,17 @@ XMFLOAT3 sampleWindFieldCpu(
     float uv_x,
     float uv_y,
     float time_seconds,
-    const ComputeNoiseSettings& settings)
+    const ComputeNoiseSettings& settings,
+    float world_min_x,
+    float world_max_x,
+    float world_min_z,
+    float world_max_z)
 {
+    (void)world_min_x;
+    (void)world_max_x;
+    (void)world_min_z;
+    (void)world_max_z;
+
     float wind_x = settings.wind_direction_x;
     float wind_y = settings.wind_direction_y;
     const XMFLOAT2 base_wind = safeNormalize2(wind_x, wind_y);
@@ -167,6 +176,7 @@ XMFLOAT3 sampleWindFieldCpu(
     const float strength = std::clamp(
         0.08f + settings.wind_strength * 1.45f + vortex_strength * 0.24f
             + std::sqrt(curl_flow_x * curl_flow_x + curl_flow_y * curl_flow_y) * 0.08f
+            + std::max(std::max(jet_band_north, jet_band_mid), jet_band_south) * 0.08f
             + (strength_noise - 0.5f) * 0.06f,
         0.0f,
         1.0f);
@@ -188,5 +198,13 @@ XMFLOAT3 WindFieldCpu_SampleWorld(
     const float range_z = std::max(world_max_z - world_min_z, 1.0e-4f);
     const float uv_x = std::clamp((world_x - world_min_x) / range_x, 0.0f, 1.0f);
     const float uv_y = std::clamp((world_z - world_min_z) / range_z, 0.0f, 1.0f);
-    return sampleWindFieldCpu(uv_x, uv_y, time_seconds, settings);
+    return sampleWindFieldCpu(
+        uv_x,
+        uv_y,
+        time_seconds,
+        settings,
+        world_min_x,
+        world_max_x,
+        world_min_z,
+        world_max_z);
 }

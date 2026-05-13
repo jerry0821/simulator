@@ -1,3 +1,5 @@
+Texture2D g_TerrainHeight : register(t0);
+SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_Output : register(u0);
 
 cbuffer CS_WIND_FIELD : register(b0)
@@ -65,6 +67,60 @@ float2 SafeNormalize(float2 v)
     return result;
 }
 
+float SampleTerrainHeight(float2 uv)
+{
+    return g_TerrainHeight.SampleLevel(g_SurfaceSampler, saturate(uv), 0.0f).r;
+}
+
+struct TerrainFlowState
+{
+    float2 slope_dir;
+    float2 contour_dir;
+    float slope_amount;
+    float ridge_mask;
+    float valley_mask;
+    float channel_mask;
+};
+
+TerrainFlowState ComputeTerrainFlow(float2 uv, float2 reference_dir)
+{
+    TerrainFlowState state = (TerrainFlowState)0;
+
+    uint terrain_width = 0u;
+    uint terrain_height = 0u;
+    g_TerrainHeight.GetDimensions(terrain_width, terrain_height);
+    float2 texel = float2(
+        1.0f / max(float(terrain_width), 1.0f),
+        1.0f / max(float(terrain_height), 1.0f));
+
+    float height_center = SampleTerrainHeight(uv);
+    float height_x_pos = SampleTerrainHeight(uv + float2(texel.x, 0.0f));
+    float height_x_neg = SampleTerrainHeight(uv - float2(texel.x, 0.0f));
+    float height_y_pos = SampleTerrainHeight(uv + float2(0.0f, texel.y));
+    float height_y_neg = SampleTerrainHeight(uv - float2(0.0f, texel.y));
+
+    float2 height_gradient = float2(
+        height_x_pos - height_x_neg,
+        height_y_pos - height_y_neg);
+    float relief = max(max(height_x_pos, height_x_neg), max(height_y_pos, height_y_neg)) -
+        min(min(height_x_pos, height_x_neg), min(height_y_pos, height_y_neg));
+    float laplacian =
+        (height_x_pos + height_x_neg + height_y_pos + height_y_neg) -
+        height_center * 4.0f;
+
+    state.slope_amount = saturate(length(height_gradient) * 0.22f + relief * 0.08f);
+    state.ridge_mask = saturate((-laplacian) * 0.18f + relief * 0.05f);
+    state.valley_mask = saturate(laplacian * 0.14f + relief * 0.04f);
+    state.slope_dir = SafeNormalize(-height_gradient);
+    state.contour_dir = float2(-state.slope_dir.y, state.slope_dir.x);
+    if (dot(state.contour_dir, reference_dir) < 0.0f)
+    {
+        state.contour_dir *= -1.0f;
+    }
+    state.channel_mask = saturate(state.slope_amount * 0.55f + state.valley_mask * 0.65f);
+    return state;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 {
@@ -109,7 +165,13 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float2 curl_flow = float2(dphi_dy, -dphi_dx);
 
     // Keep the global wind as the dominant direction and use curl only as a gentle perturbation.
-    float2 combined_flow = bias_flow * 1.35 + curl_flow * 0.28;
+    TerrainFlowState terrain_flow = ComputeTerrainFlow(uv, bias_flow);
+    float wind_against_slope = saturate(dot(wind_dir, -terrain_flow.slope_dir));
+    float wind_along_channel = saturate(abs(dot(wind_dir, terrain_flow.contour_dir)));
+    float2 terrain_guidance =
+        terrain_flow.contour_dir * terrain_flow.channel_mask * (0.16f + g_WindCrossInfluence * 0.20f) +
+        terrain_flow.slope_dir * terrain_flow.ridge_mask * 0.05f;
+    float2 combined_flow = bias_flow * 1.35 + curl_flow * 0.28 + terrain_guidance * 0.70f;
     float2 local_dir = SafeNormalize(combined_flow);
 
     float strength_noise = FBM(flow_uv * 1.4 + float2(9.6, -6.4));
@@ -117,6 +179,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         0.08 +
         g_WindStrength * 1.35 +
         length(curl_flow) * 0.06 +
+        terrain_flow.ridge_mask * (0.08f + wind_along_channel * 0.06f) +
+        terrain_flow.channel_mask * wind_along_channel * 0.04f -
+        terrain_flow.valley_mask * (0.05f + wind_against_slope * 0.08f) -
+        terrain_flow.slope_amount * wind_against_slope * 0.04f +
         max(max(jet_band_north, jet_band_mid), jet_band_south) * 0.10 +
         (strength_noise - 0.5) * 0.06);
     float2 encoded_dir = local_dir * 0.5 + 0.5;

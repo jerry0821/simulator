@@ -28,8 +28,7 @@ public:
 
 	bool ConfigureCoverage(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* terrain_vegetation_suitability_srv,
-		ID3D11ShaderResourceView* terrain_classification_srv,
+		ID3D11ShaderResourceView* grass_data_srv,
 		unsigned int grid_cols,
 		unsigned int grid_rows,
 		float world_min_x,
@@ -63,7 +62,7 @@ public:
 private:
 	struct GrassSeedData
 	{
-		DirectX::XMFLOAT4 data{};
+		DirectX::XMFLOAT4 data{}; // x = world_x, y = ground_y, z = world_z, w = scale_hint (<= 0 means invalid)
 	};
 
 	struct GrassInstanceConstants
@@ -95,8 +94,7 @@ private:
 	ID3D11ComputeShader* m_coverage_compute_shader = nullptr;
 	ID3D11ComputeShader* m_cull_compute_shader = nullptr;
 	ID3D11ShaderResourceView* m_terrain_height_srv = nullptr;
-	ID3D11ShaderResourceView* m_terrain_vegetation_suitability_srv = nullptr;
-	ID3D11ShaderResourceView* m_terrain_classification_srv = nullptr;
+	ID3D11ShaderResourceView* m_grass_data_srv = nullptr;
 	ID3D11Buffer* m_seed_buffer = nullptr;
 	ID3D11ShaderResourceView* m_seed_srv = nullptr;
 	ID3D11UnorderedAccessView* m_seed_uav = nullptr;

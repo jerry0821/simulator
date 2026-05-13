@@ -10,6 +10,7 @@
 #include "compute_erosion_delta_texture.h"
 #include "compute_final_terrain_height_texture.h"
 #include "compute_floating_light_points.h"
+#include "compute_grass_data_texture.h"
 #include "compute_meteorograph_texture.h"
 #include "compute_noise_texture.h"
 #include "compute_rain_map_texture.h"
@@ -18,6 +19,8 @@
 #include "compute_surface_water_texture.h"
 #include "compute_task_runner.h"
 #include "compute_terrain_classification_texture.h"
+#include "compute_terrain_normal_texture.h"
+#include "compute_water_interaction_texture.h"
 #include "compute_visible_water_texture.h"
 #include "compute_water_surface_height_texture.h"
 #include "compute_water_mask_texture.h"
@@ -47,6 +50,7 @@ private:
 	void ResetFrameState();
 	void BeginFrame(double current_time, double elapsed_time);
 	Backend::RenderShaderResource ActiveTerrainHeightResource() const;
+	Backend::RenderShaderResource ActiveTerrainNormalResource() const;
 	WaterSurfaceDesc ResolveActiveWaterSurfaceDesc() const;
 	float ResolveActiveWaterSurfaceHeight() const;
 	void PublishSharedComputeResources();
@@ -67,6 +71,7 @@ private:
 	ComputeErosionDeltaTexture m_compute_erosion_delta_texture{};
 	ComputeFinalTerrainHeightTexture m_compute_final_terrain_height_texture{};
 	ComputeFloatingLightPoints m_compute_floating_light_points{};
+	ComputeGrassDataTexture m_compute_grass_data_texture{};
 	ComputeMeteorographTexture m_compute_meteorograph_texture{};
 	ComputeNoiseTexture m_compute_noise_texture{};
 	ComputeRainMapTexture m_compute_rain_map_texture{};
@@ -74,6 +79,8 @@ private:
 	ComputeSoilMoistureTexture m_compute_soil_moisture_texture{};
 	ComputeSurfaceWaterTexture m_compute_surface_water_texture{};
 	ComputeTerrainClassificationTexture m_compute_terrain_classification_texture{};
+	ComputeTerrainNormalTexture m_compute_terrain_normal_texture{};
+	ComputeWaterInteractionTexture m_compute_water_interaction_texture{};
 	ComputeVisibleWaterTexture m_compute_visible_water_texture{};
 	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
 	ComputeWaterMaskTexture m_compute_water_mask_texture{};

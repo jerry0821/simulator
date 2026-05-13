@@ -27,6 +27,7 @@ struct PS_INPUT
 Texture2D surface_water_tex;
 Texture2D flow_field_tex : register(t1);
 Texture2D scene_depth_tex : register(t2);
+Texture2D water_interaction_tex : register(t3);
 SamplerState samp;
 
 struct WaterMaskState
@@ -39,6 +40,8 @@ struct WaterMaskState
     float shoreline;
     float shore_gradient;
     float2 shore_normal;
+    float pooled_interaction;
+    float retained_wetness;
 };
 
 struct WaterWaveState
@@ -105,9 +108,14 @@ float2 Rotate2D(float2 v, float angle_radians)
     return float2(v.x * c - v.y * s, v.x * s + v.y * c);
 }
 
-float SampleCoverage(float2 uv)
+float SampleSurfacePresenceFallback(float2 uv)
 {
-    return surface_water_tex.Sample(samp, saturate(uv)).a;
+    return surface_water_tex.Sample(samp, saturate(uv)).r;
+}
+
+float4 SampleWaterInteraction(float2 uv)
+{
+    return water_interaction_tex.Sample(samp, saturate(uv));
 }
 
 float2 SurfaceTexelStep()
@@ -173,27 +181,48 @@ float ComputeWaveHeight(
 WaterMaskState ComputeMaskState(PS_INPUT ps_in)
 {
     WaterMaskState state = (WaterMaskState)0;
-    state.coverage = SampleCoverage(ps_in.uv);
+    float4 water_interaction = SampleWaterInteraction(ps_in.uv);
     float2 shore_step = SurfaceTexelStep();
-    float coverage_x_pos = SampleCoverage(ps_in.uv + float2(shore_step.x, 0.0f));
-    float coverage_x_neg = SampleCoverage(ps_in.uv - float2(shore_step.x, 0.0f));
-    float coverage_y_pos = SampleCoverage(ps_in.uv + float2(0.0f, shore_step.y));
-    float coverage_y_neg = SampleCoverage(ps_in.uv - float2(0.0f, shore_step.y));
-    float2 coverage_gradient = float2(
+    float4 interaction_x_pos = SampleWaterInteraction(ps_in.uv + float2(shore_step.x, 0.0f));
+    float4 interaction_x_neg = SampleWaterInteraction(ps_in.uv - float2(shore_step.x, 0.0f));
+    float4 interaction_y_pos = SampleWaterInteraction(ps_in.uv + float2(0.0f, shore_step.y));
+    float4 interaction_y_neg = SampleWaterInteraction(ps_in.uv - float2(0.0f, shore_step.y));
+
+    float fallback_presence = SampleSurfacePresenceFallback(ps_in.uv);
+    state.coverage = max(fallback_presence, water_interaction.r);
+    float coverage_x_pos = SampleSurfacePresenceFallback(ps_in.uv + float2(shore_step.x, 0.0f));
+    float coverage_x_neg = SampleSurfacePresenceFallback(ps_in.uv - float2(shore_step.x, 0.0f));
+    float coverage_y_pos = SampleSurfacePresenceFallback(ps_in.uv + float2(0.0f, shore_step.y));
+    float coverage_y_neg = SampleSurfacePresenceFallback(ps_in.uv - float2(0.0f, shore_step.y));
+    float2 fallback_gradient = float2(
         coverage_x_pos - coverage_x_neg,
         coverage_y_pos - coverage_y_neg);
+    float2 interaction_gradient = float2(
+        (interaction_x_pos.r + interaction_x_pos.g * 0.65f) - (interaction_x_neg.r + interaction_x_neg.g * 0.65f),
+        (interaction_y_pos.r + interaction_y_pos.g * 0.65f) - (interaction_y_neg.r + interaction_y_neg.g * 0.65f));
+    float2 coverage_gradient = interaction_gradient * 0.72f + fallback_gradient * 0.28f;
 
-    state.shore_gradient = saturate(length(coverage_gradient) * 4.8f);
+    state.shore_gradient = saturate(
+        length(coverage_gradient) * 4.8f +
+        water_interaction.g * 0.55f +
+        water_interaction.b * 0.18f +
+        water_interaction.a * 0.10f);
     state.shore_normal = SafeNormalize(coverage_gradient);
     float scene_depth = SampleSceneDepth(ps_in.posH);
     float pixel_depth = saturate(ps_in.posH.z);
     state.depth_gap = scene_depth - pixel_depth;
     state.depth_fade = saturate(pow(max(state.depth_gap, 0.0f) * 38.0f, 0.54f));
-    state.absorption = saturate(pow(max(state.depth_gap, 0.0f) * 14.0f, 0.78f));
-    state.extinction = saturate(1.0f - exp2(-max(state.depth_gap, 0.0f) * 18.0f));
+    state.absorption = saturate(pow(max(state.depth_gap, 0.0f) * 14.0f, 0.78f) + water_interaction.a * 0.12f);
+    state.extinction = saturate(1.0f - exp2(-max(state.depth_gap, 0.0f) * 18.0f) + water_interaction.b * 0.08f);
     float edge_shallow = 1.0f - smoothstep(0.0025f, 0.020f, max(state.depth_gap, 0.0f));
     float edge_coverage = 1.0f - smoothstep(0.18f, 0.72f, state.coverage);
-    state.shoreline = saturate(max(edge_shallow, state.shore_gradient * edge_coverage));
+    float interaction_shore_band = saturate(
+        water_interaction.g * 0.78f +
+        water_interaction.b * 0.16f +
+        water_interaction.a * 0.08f);
+    state.shoreline = saturate(max(max(edge_shallow, state.shore_gradient * edge_coverage), interaction_shore_band));
+    state.pooled_interaction = water_interaction.b;
+    state.retained_wetness = water_interaction.a;
     return state;
 }
 
@@ -296,7 +325,7 @@ WaterOpticalState ComputeOpticalState(
     state.shoreline_tint = lerp(
         float3(0.72f, 0.82f, 0.88f),
         float3(0.98f, 0.99f, 1.0f),
-        saturate(wave_state.wind_strength * 0.55f + state.windward_shore * 1.20f));
+        saturate(wave_state.wind_strength * 0.55f + state.windward_shore * 1.20f + mask_state.pooled_interaction * 0.18f + mask_state.retained_wetness * 0.08f));
     state.alpha = ComputeWaterAlpha(mask_state, state);
     return state;
 }

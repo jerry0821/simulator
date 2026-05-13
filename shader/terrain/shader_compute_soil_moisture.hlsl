@@ -48,12 +48,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float rain_amount = rain_sample.r;
     float rain_wet_hint = rain_sample.g;
     float surface_amount = surface_sample.r;
-    float water_coverage = mask_sample.a;
+    float water_coverage = mask_sample.r;
+    float shoreline_contact = mask_sample.g;
+    float pooled_contact = mask_sample.b;
     float standing_water = smoothstep(0.04f, 0.16f, surface_amount);
 
     float rain_gain = rain_amount * rain_absorption;
     float seep_gain = standing_water * (wetness_absorption * 1.10f) + surface_amount * 0.28f;
-    float bank_gain = water_coverage * (shoreline_absorption * 1.25f);
+    float bank_gain = max(water_coverage * shoreline_absorption, shoreline_contact * (shoreline_absorption * 1.20f));
     float evaporation = evaporation_rate * (1.0f - saturate(rain_amount * 0.80f + water_coverage * 0.55f));
     float saturation_loss = max(previous - 0.82f, 0.0f) * (saturation_decay * 0.65f);
 
@@ -61,9 +63,9 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     moisture = lerp(moisture, neighbor_average, diffusion_rate);
     moisture = saturate(moisture + rain_wet_hint * 0.06f);
 
-    float shoreline_band = saturate(water_coverage * 0.85f + standing_water * 0.50f);
+    float shoreline_band = saturate(max(shoreline_contact, water_coverage * 0.75f + standing_water * 0.50f));
     float rainfall_memory = saturate(rain_amount * 0.65f + rain_wet_hint * 0.35f);
-    float saturation = saturate(max(surface_amount * 1.10f, moisture));
+    float saturation = saturate(max(max(surface_amount * 1.10f, moisture), pooled_contact));
 
     g_SoilMoisture[dispatch_thread_id.xy] = float4(moisture, shoreline_band, rainfall_memory, saturation);
 }

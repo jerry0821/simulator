@@ -20,6 +20,11 @@
 
 using namespace DirectX;
 
+namespace
+{
+constexpr bool kEnableWaterSurfaceRender = true;
+}
+
 WaterPass::WaterPass(RenderBackendDX11& backend)
 	: backend_(backend)
 {
@@ -81,6 +86,11 @@ std::span<const RenderResourceUsage> WaterPass::resources() const
 
 void WaterPass::execute(const RenderFrameContext& frame_context)
 {
+	if (!kEnableWaterSurfaceRender)
+	{
+		return;
+	}
+
 	// Water is rendered after opaque geometry.
 	backend_.bindScenePass();
 
@@ -117,6 +127,10 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 	ID3D11ShaderResourceView* water_surface_height_srv =
 		DebugMenu_IsWaterSurfaceDeformationEnabled() && terrain_water.water_surface_height_texture.isValid()
 			? terrain_water.water_surface_height_texture.shaderResourceView()
+			: nullptr;
+	ID3D11ShaderResourceView* water_interaction_srv =
+		terrain_water.water_interaction_data.isValid()
+			? terrain_water.water_interaction_data.shaderResourceView()
 			: nullptr;
 	ID3D11ShaderResourceView* surface_water_srv =
 		terrain_water.surface_water.isValid()
@@ -177,6 +191,7 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		water_surface_height_srv,
 		surface_water_srv,
 		wind_field_srv,
+		water_interaction_srv,
 		scene_depth_srv,
 		highlight_world,
 		flow_color,
@@ -195,6 +210,7 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 	(void)highlight_color;
 	(void)surface_flow_srv;
 	(void)flow_field_srv;
+	(void)water_interaction_srv;
 	(void)wind_field_srv;
 	(void)scene_depth_srv;
 }

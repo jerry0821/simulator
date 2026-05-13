@@ -144,16 +144,16 @@ void ComputeTerrainClassificationTexture::Finalize()
 
 void ComputeTerrainClassificationTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* water_mask_srv,
-	ID3D11ShaderResourceView* soil_moisture_srv,
+	ID3D11ShaderResourceView* terrain_normal_srv,
+	ID3D11ShaderResourceView* water_interaction_srv,
 	ID3D11ShaderResourceView* erosion_delta_srv,
 	ID3D11ShaderResourceView* climate_srv,
 	const TerrainMaterialSettings& material_settings)
 {
 	if (!IsValid() ||
 		terrain_height_srv == nullptr ||
-		water_mask_srv == nullptr ||
-		soil_moisture_srv == nullptr ||
+		terrain_normal_srv == nullptr ||
+		water_interaction_srv == nullptr ||
 		erosion_delta_srv == nullptr ||
 		climate_srv == nullptr)
 	{
@@ -191,8 +191,8 @@ void ComputeTerrainClassificationTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
-		water_mask_srv,
-		soil_moisture_srv,
+		terrain_normal_srv,
+		water_interaction_srv,
 		erosion_delta_srv,
 		climate_srv
 	};

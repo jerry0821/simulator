@@ -19,7 +19,8 @@ cbuffer CB_Light : register(b3)
 };
 
 Texture2D g_HeightMap : register(t0);
-Texture2D g_ClimateMap : register(t1);
+Texture2D g_TerrainNormalMap : register(t1);
+Texture2D g_ClimateMap : register(t2);
 SamplerState g_Sampler : register(s0);
 
 float Hash21(float2 p)
@@ -87,32 +88,18 @@ float SampleTerrainHeight(float2 uv)
     return g_HeightMap.SampleLevel(g_Sampler, saturate(uv), 0.0f).r;
 }
 
-float3 CalculateTerrainNormal(float2 uv)
-{
-    uint heightWidth = 0;
-    uint heightHeight = 0;
-    g_HeightMap.GetDimensions(heightWidth, heightHeight);
-    heightWidth = max(heightWidth, 2u);
-    heightHeight = max(heightHeight, 2u);
-
-    float2 texel = 1.0f / float2(heightWidth - 1u, heightHeight - 1u);
-    float leftHeight = SampleTerrainHeight(uv + float2(-texel.x, 0.0f));
-    float rightHeight = SampleTerrainHeight(uv + float2(texel.x, 0.0f));
-    float upHeight = SampleTerrainHeight(uv + float2(0.0f, -texel.y));
-    float downHeight = SampleTerrainHeight(uv + float2(0.0f, texel.y));
-
-    float3 tangentX = float3(2.0f, rightHeight - leftHeight, 0.0f);
-    float3 tangentZ = float3(0.0f, downHeight - upHeight, 2.0f);
-    return normalize(cross(tangentZ, tangentX));
-}
-
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
 
     float4 displacedPosL = vi.posL;
     displacedPosL.y = SampleTerrainHeight(vi.uv);
-    float3 displacedNormalL = CalculateTerrainNormal(vi.uv);
+    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, saturate(vi.uv), 0.0f);
+    float3 displacedNormalL = normalize(encodedNormal.xyz);
+    if (dot(displacedNormalL, displacedNormalL) < 1.0e-4f)
+    {
+        displacedNormalL = float3(0.0f, 1.0f, 0.0f);
+    }
 
     float4x4 mtxWV = mul(world, view);
     float4x4 mtxWVP = mul(mtxWV, proj);

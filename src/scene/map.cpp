@@ -93,7 +93,9 @@ constexpr float kTerrainWorldHalfWidth = 256.0f;
 constexpr float kTerrainWorldHalfDepth = 256.0f;
 constexpr int kFloatingDustParticleCount = 96;
 constexpr bool kDrawMeteorographPanelDebug = false;
+constexpr bool kDrawGrass = true;
 constexpr bool kDrawTerrainGrassCompute = true;
+constexpr bool kDrawFloatingDustParticles = false;
 constexpr double kGrassCoverageProbeIntervalSeconds = 0.75;
 constexpr float kGrassCoverageClassificationSignatureThreshold = 0.020f;
 ID3D11Buffer* g_tiled_vertex_buffer = nullptr;
@@ -1028,10 +1030,10 @@ void MapController::Initialize()
   m_terrain_grass_compute_seeded = false;
   m_terrain_grass_seed_terrain_settings = MeshFieldRenderer::GetTerrainSettings();
   m_terrain_grass_seed_height_srv = nullptr;
-  m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
+  m_terrain_grass_seed_grass_data_srv = nullptr;
   m_terrain_grass_last_probe_time_seconds = -1000.0;
-  m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
-  SafeReleaseMapResource(m_terrain_grass_vegetation_suitability_probe_texture);
+  m_terrain_grass_last_grass_data_signature = -1.0f;
+  SafeReleaseMapResource(m_terrain_grass_grass_data_probe_texture);
   if (!m_terrain_grass_instances.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
   {
     hal::dout << "MapController::Initialize(): compute grass instances disabled" << std::endl;
@@ -1043,10 +1045,10 @@ void MapController::Finalize()
   m_terrain_grass_instances.Finalize();
   m_terrain_grass_compute_seeded = false;
   m_terrain_grass_seed_height_srv = nullptr;
-  m_terrain_grass_seed_vegetation_suitability_srv = nullptr;
+  m_terrain_grass_seed_grass_data_srv = nullptr;
   m_terrain_grass_last_probe_time_seconds = -1000.0;
-  m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
-  SafeReleaseMapResource(m_terrain_grass_vegetation_suitability_probe_texture);
+  m_terrain_grass_last_grass_data_signature = -1.0f;
+  SafeReleaseMapResource(m_terrain_grass_grass_data_probe_texture);
 }
 
 void MapController::EnsureTerrainGrassComputeSeeds(const RenderFrameContext& frame_context)
@@ -1067,15 +1069,15 @@ void MapController::EnsureTerrainGrassComputeSeeds(const RenderFrameContext& fra
     m_terrain_grass_compute_seeded = false;
     m_terrain_grass_seed_height_srv = terrain_height_srv;
   }
-  ID3D11ShaderResourceView* terrain_vegetation_suitability_srv =
-      terrain_water.terrain_vegetation_suitability.isValid()
-          ? terrain_water.terrain_vegetation_suitability.shaderResourceView()
+  ID3D11ShaderResourceView* grass_data_srv =
+      frame_context.resources.grass_data.isValid()
+          ? frame_context.resources.grass_data.shaderResourceView()
           : nullptr;
-  if (m_terrain_grass_seed_vegetation_suitability_srv != terrain_vegetation_suitability_srv)
+  if (m_terrain_grass_seed_grass_data_srv != grass_data_srv)
   {
     m_terrain_grass_compute_seeded = false;
-    m_terrain_grass_seed_vegetation_suitability_srv = terrain_vegetation_suitability_srv;
-    m_terrain_grass_last_vegetation_suitability_signature = -1.0f;
+    m_terrain_grass_seed_grass_data_srv = grass_data_srv;
+    m_terrain_grass_last_grass_data_signature = -1.0f;
     m_terrain_grass_last_probe_time_seconds = -1000.0;
   }
 
@@ -1110,10 +1112,7 @@ void MapController::EnsureTerrainGrassComputeSeeds(const RenderFrameContext& fra
 
   m_terrain_grass_compute_seeded = m_terrain_grass_instances.ConfigureCoverage(
       terrain_height_srv,
-      terrain_vegetation_suitability_srv,
-      terrain_water.terrain_classification.isValid()
-          ? terrain_water.terrain_classification.shaderResourceView()
-          : nullptr,
+      grass_data_srv,
       cols,
       rows,
       min_x,
@@ -1137,29 +1136,28 @@ bool MapController::ShouldRefreshTerrainGrassCoverage(const RenderFrameContext& 
 
   m_terrain_grass_last_probe_time_seconds = frame_context.globals.time_seconds;
 
-  float vegetation_suitability_signature = 0.0f;
-  const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
-  const bool sampled_vegetation_suitability = SampleTextureSignature(
-      terrain_water.terrain_vegetation_suitability.isValid()
-          ? terrain_water.terrain_vegetation_suitability.shaderResourceView()
+  float grass_data_signature = 0.0f;
+  const bool sampled_grass_data = SampleTextureSignature(
+      frame_context.resources.grass_data.isValid()
+          ? frame_context.resources.grass_data.shaderResourceView()
           : nullptr,
-      m_terrain_grass_vegetation_suitability_probe_texture,
+      m_terrain_grass_grass_data_probe_texture,
       0u,
-      vegetation_suitability_signature);
+      grass_data_signature);
 
-  if (!sampled_vegetation_suitability)
+  if (!sampled_grass_data)
   {
     return false;
   }
 
-  const bool first_probe = m_terrain_grass_last_vegetation_suitability_signature < 0.0f;
-  const bool vegetation_suitability_changed =
+  const bool first_probe = m_terrain_grass_last_grass_data_signature < 0.0f;
+  const bool grass_data_changed =
       std::fabs(
-          vegetation_suitability_signature - m_terrain_grass_last_vegetation_suitability_signature) >=
+          grass_data_signature - m_terrain_grass_last_grass_data_signature) >=
       kGrassCoverageClassificationSignatureThreshold;
 
-  m_terrain_grass_last_vegetation_suitability_signature = vegetation_suitability_signature;
-  return first_probe || vegetation_suitability_changed;
+  m_terrain_grass_last_grass_data_signature = grass_data_signature;
+  return first_probe || grass_data_changed;
 }
 
 void MapController::Draw(const RenderFrameContext& frame_context)
@@ -1186,10 +1184,10 @@ void MapController::Draw(const RenderFrameContext& frame_context)
   ShaderField_SetProjectionMatrix(proj);
   ShaderField_SetShadowMap(frame_context.resources.shadow_map);
   ShaderField_SetClimateMap(frame_context.resources.climate_field.shaderResourceView());
-  ShaderField_SetTerrainClassificationEnabled(DebugMenu_IsTerrainClassificationEnabled());
-  ShaderField_SetTerrainClassificationMap(
-      DebugMenu_IsTerrainClassificationEnabled() && terrain_water.terrain_classification.isValid()
-          ? terrain_water.terrain_classification.shaderResourceView()
+  ShaderField_SetTerrainSurfacePresentationEnabled(DebugMenu_IsTerrainSurfacePresentationEnabled());
+  ShaderField_SetTerrainSurfaceDataMap(
+      terrain_water.terrain_surface_data.isValid()
+          ? terrain_water.terrain_surface_data.shaderResourceView()
           : nullptr);
 
   Shader3D_SetViewMatrix(view);
@@ -1368,7 +1366,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
                        RenderState{DepthMode::ReadWrite, BlendMode::Opaque, CullMode::Back});
   }
 
-  if (DebugMenu_IsGrassGpuEnabled() && !grass_patch_batch.empty())
+  if (kDrawGrass && DebugMenu_IsGrassGpuEnabled() && !grass_patch_batch.empty())
   {
     InstancingDebug_AddBatch(static_cast<int>(grass_patch_batch.size()));
     GrassPatch_DrawInstanced(
@@ -1405,7 +1403,11 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       frame_context.resources.compute_shared_registry->Reset(ComputeSharedResourceId::GrassIndirectArgs);
     }
 
-    if (kDrawTerrainGrassCompute)
+    if (!kDrawGrass)
+    {
+      grass_compute_stats.last_error = "Disabled for profiling";
+    }
+    else if (m_terrain_visible && kDrawTerrainGrassCompute)
     {
       if (!DebugMenu_IsGrassGpuEnabled())
       {
@@ -1590,6 +1592,11 @@ void MapController::DrawTransparency(const RenderFrameContext& frame_context)
 
 void MapController::DrawParticles(const RenderFrameContext& frame_context)
 {
+  if (!kDrawFloatingDustParticles)
+  {
+    return;
+  }
+
   if (m_floating_light_tex_id < 0)
   {
     return;
@@ -1712,7 +1719,9 @@ void MapController::DrawShadow(const RenderFrameContext* frame_context)
     DrawObjectShadow(object);
   }
 
-  if (frame_context != nullptr &&
+  if (m_terrain_visible &&
+      frame_context != nullptr &&
+      kDrawGrass &&
       kDrawTerrainGrassCompute &&
       DebugMenu_IsGrassGpuEnabled() &&
       m_debug_billboard_tex_id >= 0 &&

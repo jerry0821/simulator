@@ -122,8 +122,7 @@ void ComputeGrassInstances::Finalize()
 	m_world_min_z = -256.0f;
 	m_spacing = 6.5f;
 	m_terrain_height_srv = nullptr;
-	m_terrain_vegetation_suitability_srv = nullptr;
-	m_terrain_classification_srv = nullptr;
+	m_grass_data_srv = nullptr;
 	m_terrain_settings = TerrainSettings{};
 	m_dispatch_dirty = true;
 
@@ -145,8 +144,7 @@ void ComputeGrassInstances::Finalize()
 
 bool ComputeGrassInstances::ConfigureCoverage(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* terrain_vegetation_suitability_srv,
-	ID3D11ShaderResourceView* terrain_classification_srv,
+	ID3D11ShaderResourceView* grass_data_srv,
 	unsigned int grid_cols,
 	unsigned int grid_rows,
 	float world_min_x,
@@ -171,16 +169,14 @@ bool ComputeGrassInstances::ConfigureCoverage(
 	m_world_min_z = world_min_z;
 	m_spacing = spacing;
 	m_terrain_height_srv = terrain_height_srv;
-	m_terrain_vegetation_suitability_srv = terrain_vegetation_suitability_srv;
-	m_terrain_classification_srv = terrain_classification_srv;
+	m_grass_data_srv = grass_data_srv;
 	m_terrain_settings = terrain_settings;
 	m_dispatch_dirty = true;
 	m_last_error = "Configuring coverage";
 
 	if (!IsValid() ||
 		m_terrain_height_srv == nullptr ||
-		m_terrain_vegetation_suitability_srv == nullptr ||
-		m_terrain_classification_srv == nullptr ||
+		m_grass_data_srv == nullptr ||
 		grid_cols == 0 ||
 		grid_rows == 0)
 	{
@@ -192,13 +188,9 @@ bool ComputeGrassInstances::ConfigureCoverage(
 		{
 			m_last_error = "Terrain height SRV is null";
 		}
-		else if (m_terrain_vegetation_suitability_srv == nullptr)
+		else if (m_grass_data_srv == nullptr)
 		{
-			m_last_error = "Terrain vegetation suitability SRV is null";
-		}
-		else if (m_terrain_classification_srv == nullptr)
-		{
-			m_last_error = "Terrain classification SRV is null";
+			m_last_error = "Grass data SRV is null";
 		}
 		else
 		{
@@ -390,22 +382,21 @@ void ComputeGrassInstances::Update(
 	{
 		ID3D11ShaderResourceView* coverage_srvs[] = {
 			m_terrain_height_srv,
-			m_terrain_vegetation_suitability_srv,
-			m_terrain_classification_srv
+			m_grass_data_srv
 		};
 		m_context->CSSetShader(m_coverage_compute_shader, nullptr, 0);
 		m_context->CSSetConstantBuffers(0, 1, &m_constant_buffer);
-		m_context->CSSetShaderResources(0, 3, coverage_srvs);
+		m_context->CSSetShaderResources(0, 2, coverage_srvs);
 		ID3D11SamplerState* sampler_state = Backend::DX11::Sampler::GetState();
 		m_context->CSSetSamplers(0, 1, &sampler_state);
 		m_context->CSSetUnorderedAccessViews(0, 1, &m_seed_uav, nullptr);
 		m_context->Dispatch((candidate_count + kThreadGroupSize - 1) / kThreadGroupSize, 1, 1);
 
-		ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
+		ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
 		ID3D11UnorderedAccessView* null_uav = nullptr;
 		ID3D11Buffer* null_constant_buffer = nullptr;
 		ID3D11SamplerState* null_sampler = nullptr;
-		m_context->CSSetShaderResources(0, 3, null_srvs);
+		m_context->CSSetShaderResources(0, 2, null_srvs);
 		m_context->CSSetSamplers(0, 1, &null_sampler);
 		m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 		m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
@@ -462,8 +453,7 @@ bool ComputeGrassInstances::HasSeeds() const
 {
 	return IsValid() &&
 		   m_terrain_height_srv != nullptr &&
-		   m_terrain_vegetation_suitability_srv != nullptr &&
-		   m_terrain_classification_srv != nullptr &&
+		   m_grass_data_srv != nullptr &&
 		   m_seed_buffer != nullptr &&
 		   m_seed_srv != nullptr &&
 		   m_seed_uav != nullptr &&

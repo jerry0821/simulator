@@ -65,6 +65,7 @@ public:
 	static Backend::RenderShaderResource HeightResource();
 	static ID3D11ShaderResourceView* HeightSRV();
 	static void SetRenderHeightSRV(ID3D11ShaderResourceView* srv);
+	static void SetRenderNormalSRV(ID3D11ShaderResourceView* srv);
 };
 
 void MeshField_Initialize(ID3D11Device* pDevice, ID3D11DeviceContext* pContext);

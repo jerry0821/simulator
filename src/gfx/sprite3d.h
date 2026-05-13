@@ -36,6 +36,7 @@ void Sprite3D_DrawWaterSRV(
 	ID3D11ShaderResourceView* water_surface_height_srv,
 	ID3D11ShaderResourceView* surface_water_srv,
 	ID3D11ShaderResourceView* flow_field_srv,
+	ID3D11ShaderResourceView* water_interaction_srv,
 	ID3D11ShaderResourceView* scene_depth_srv,
 	const DirectX::XMMATRIX& world_matrix,
 	const DirectX::XMFLOAT4& color,

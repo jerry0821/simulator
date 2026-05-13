@@ -1,5 +1,5 @@
 Texture2D MainTex : register(t0);
-Texture2D WaterPresenceTex : register(t1);
+Texture2D WaterInteractionTex : register(t1);
 Texture2D BloomTex : register(t2);
 Texture2D SceneDepthTex : register(t3);
 SamplerState Sampler : register(s0);
@@ -51,8 +51,10 @@ float SampleWaterPresence(float2 world_xz)
     float2 water_uv = ComputeWaterUV(world_xz);
     if (!any(water_uv < 0.0f) && !any(water_uv > 1.0f))
     {
-        float4 water_presence_sample = WaterPresenceTex.SampleLevel(Sampler, saturate(water_uv), 0);
-        water_presence = max(water_presence_sample.r, water_presence_sample.b * 0.82f);
+        float4 water_interaction_sample = WaterInteractionTex.SampleLevel(Sampler, saturate(water_uv), 0);
+        float surface_interaction = water_interaction_sample.r;
+        float pooled_interaction = water_interaction_sample.b;
+        water_presence = max(surface_interaction, pooled_interaction * 0.90f);
         water_presence = smoothstep(0.015f, 0.09f, water_presence);
     }
 
