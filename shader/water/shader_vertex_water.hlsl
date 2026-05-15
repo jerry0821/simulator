@@ -35,17 +35,9 @@ struct VS_OUT
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
-    float water_surface_height = water_surface_height_tex.SampleLevel(samp, saturate(vi.uv), 0.0f).r;
-    float4 surface_water = surface_water_tex.SampleLevel(samp, saturate(vi.uv), 0.0f);
-    float water_depth = surface_water.r;
-    float standing_water = surface_water.b;
-    float pooled_weight = smoothstep(0.10f, 0.58f, standing_water);
-    float depth_weight = smoothstep(0.03f, 0.16f, water_depth);
-    float displacement_weight = saturate(pooled_weight * 0.82f + depth_weight * 0.34f);
-    float4 displaced_posL = vi.posL;
-    float4 posW = mul(displaced_posL, world);
-    float displacement_delta = clamp(water_surface_height - posW.y, -0.06f, 0.82f);
-    posW.y += displacement_delta * displacement_weight;
+    float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, saturate(vi.uv), 0.0f).rg;
+    float4 posW = mul(vi.posL, world);
+    posW.y = terrain_water_height.y;
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

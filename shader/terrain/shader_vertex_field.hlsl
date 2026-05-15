@@ -18,7 +18,7 @@ cbuffer CB_Light : register(b3)
     float4x4 lightViewProj;
 };
 
-Texture2D g_HeightMap : register(t0);
+Texture2D<float> g_HeightMap : register(t0);
 Texture2D g_TerrainNormalMap : register(t1);
 Texture2D g_ClimateMap : register(t2);
 SamplerState g_Sampler : register(s0);
@@ -85,7 +85,9 @@ struct VS_OUT
 
 float SampleTerrainHeight(float2 uv)
 {
-    return g_HeightMap.SampleLevel(g_Sampler, saturate(uv), 0.0f).r;
+    static const float2 kHeightFieldResolution = float2(257.0f, 257.0f);
+    int2 coord = int2(saturate(uv) * (kHeightFieldResolution - 1.0f) + 0.5f);
+    return g_HeightMap.Load(int3(coord, 0));
 }
 
 VS_OUT main(VS_IN vi)

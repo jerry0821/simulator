@@ -146,21 +146,28 @@ void ComputeErosionDeltaTexture::Finalize()
 void ComputeErosionDeltaTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* surface_water_srv,
-	ID3D11ShaderResourceView* surface_water_flow_srv)
+	ID3D11ShaderResourceView* water_velocity_srv,
+	ID3D11ShaderResourceView* water_sediment_srv)
 {
-	if (!IsValid() || terrain_height_srv == nullptr || surface_water_srv == nullptr || surface_water_flow_srv == nullptr)
+	if (!IsValid() ||
+		terrain_height_srv == nullptr ||
+		surface_water_srv == nullptr ||
+		water_velocity_srv == nullptr ||
+		water_sediment_srv == nullptr)
 	{
 		return;
 	}
 
 	const unsigned int next_index = (m_current_index + 1u) % 2u;
 	const ErosionDeltaConstants constants = {
-		0.012f,
-		0.008f,
+		0.028f,
+		0.018f,
+		0.045f,
+		0.006f,
 		0.12f,
-		0.010f,
-		0.45f,
-		0.25f,
+		0.09f,
+		0.42f,
+		0.56f,
 		kTextureWidth,
 		kTextureHeight
 	};
@@ -170,7 +177,8 @@ void ComputeErosionDeltaTexture::Update(
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
 		surface_water_srv,
-		surface_water_flow_srv,
+		water_velocity_srv,
+		water_sediment_srv,
 		m_srvs[m_current_index]
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uavs[next_index] };
@@ -179,7 +187,7 @@ void ComputeErosionDeltaTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 4, srvs);
+	m_context->CSSetShaderResources(0, 5, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -187,11 +195,11 @@ void ComputeErosionDeltaTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 4, null_srvs);
+	m_context->CSSetShaderResources(0, 5, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

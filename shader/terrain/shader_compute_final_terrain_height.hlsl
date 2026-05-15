@@ -10,9 +10,8 @@ cbuffer FINAL_TERRAIN_HEIGHT_CONSTANT_BUFFER : register(b0)
     uint height;
 };
 
-Texture2D g_BaseTerrainHeight : register(t0);
+Texture2D<float2> g_BaseTerrainHeight : register(t0);
 Texture2D g_ErosionDelta : register(t1);
-SamplerState g_TerrainSampler : register(s0);
 RWTexture2D<float> g_FinalTerrainHeight : register(u0);
 
 [numthreads(8, 8, 1)]
@@ -23,15 +22,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         return;
     }
 
-    float2 uv = (float2(dispatch_thread_id.xy) + 0.5f) / float2(width, height);
-    float base_height = g_BaseTerrainHeight.SampleLevel(g_TerrainSampler, saturate(uv), 0.0f).r;
-    float4 erosion = g_ErosionDelta.SampleLevel(g_TerrainSampler, saturate(uv), 0.0f);
-
-    float signed_delta = -erosion.r * erosion_strength + erosion.g * deposition_strength;
-    signed_delta = clamp(signed_delta, min_delta, max_delta);
-
-    float final_height = base_height + signed_delta;
-    final_height = clamp(final_height, min_height, max_height);
+    float base_height = g_BaseTerrainHeight.Load(int3(dispatch_thread_id.xy, 0)).r;
+    float final_height = clamp(base_height, min_height, max_height);
 
     g_FinalTerrainHeight[dispatch_thread_id.xy] = final_height;
 }

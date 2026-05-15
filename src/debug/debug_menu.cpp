@@ -140,8 +140,12 @@ const char* ToString(ComputeSharedResourceId id)
 {
     switch (id)
     {
+    case ComputeSharedResourceId::BaseTerrainHeight:
+        return "BaseTerrainHeight";
     case ComputeSharedResourceId::TerrainHeight:
         return "TerrainHeight";
+    case ComputeSharedResourceId::FinalTerrainHeight:
+        return "FinalTerrainHeight";
     case ComputeSharedResourceId::TerrainNormal:
         return "TerrainNormal";
     case ComputeSharedResourceId::TerrainSurfaceData:
@@ -160,6 +164,10 @@ const char* ToString(ComputeSharedResourceId id)
         return "SurfaceWaterFlow";
     case ComputeSharedResourceId::SurfaceWaterFlowPreview:
         return "SurfaceWaterFlowPreview";
+    case ComputeSharedResourceId::WaterVelocity:
+        return "WaterVelocity";
+    case ComputeSharedResourceId::WaterSediment:
+        return "WaterSediment";
     case ComputeSharedResourceId::VisibleWater:
         return "VisibleWater";
     case ComputeSharedResourceId::WaterMask:
@@ -745,7 +753,13 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     }
     else
     {
+        ImGui::Text(
+            "BaseTerrainHeight: %s",
+            frame_context->resources.base_terrain_height.isValid() ? "Active" : "Missing");
         ImGui::Text("TerrainHeight: %s", frame_context->resources.terrain_height.isValid() ? "Active" : "Missing");
+        ImGui::Text(
+            "FinalTerrainHeight: %s",
+            frame_context->resources.final_terrain_height.isValid() ? "Active" : "Missing");
         ImGui::Text("TerrainNormal: %s", frame_context->resources.terrain_normal.isValid() ? "Active" : "Missing");
         ImGui::Text("TerrainSurfaceData: %s", frame_context->resources.terrain_surface_data.isValid() ? "Active" : "Missing");
         ImGui::Text(
@@ -755,13 +769,88 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         ImGui::Text("RainMap: %s", frame_context->resources.rain_map.isValid() ? "Active" : "Missing");
         ImGui::Text("SurfaceWater: %s", frame_context->resources.surface_water.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterSurfaceHeight: %s", frame_context->resources.water_surface_height.isValid() ? "Active" : "Missing");
+        if (frame_context->resources.has_terrain_heightfield_range)
+        {
+            ImGui::Text(
+                "  TerrainHeight.xy.R Range: %.2f .. %.2f",
+                frame_context->resources.terrain_heightfield_min_height,
+                frame_context->resources.terrain_heightfield_max_height);
+        }
+        else
+        {
+            ImGui::TextDisabled("  TerrainHeight.xy.R Range: unavailable");
+        }
+        if (frame_context->resources.has_water_heightfield_range)
+        {
+            ImGui::Text(
+                "  TerrainHeight.xy.G Range: %.2f .. %.2f",
+                frame_context->resources.water_heightfield_min_height,
+                frame_context->resources.water_heightfield_max_height);
+        }
+        else
+        {
+            ImGui::TextDisabled("  TerrainHeight.xy.G Range: unavailable");
+        }
         ImGui::Text("SurfaceWaterFlow: %s", frame_context->resources.surface_water_flow.isValid() ? "Active" : "Missing");
+        ImGui::Text("WaterVelocity: %s", frame_context->resources.water_velocity.isValid() ? "Active" : "Missing");
+        ImGui::Text("WaterSediment: %s", frame_context->resources.water_sediment.isValid() ? "Active" : "Missing");
         ImGui::Text("VisibleWater: %s", frame_context->resources.visible_water.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterMask: %s", frame_context->resources.water_mask.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterInteractionData: %s", frame_context->resources.water_interaction_data.isValid() ? "Active" : "Missing");
         ImGui::Text("SoilMoisture: %s", frame_context->resources.soil_moisture.isValid() ? "Active" : "Missing");
         ImGui::Text("ErosionDelta: %s", frame_context->resources.erosion_delta.isValid() ? "Active" : "Missing");
         ImGui::Checkbox("Show Resource Previews", &g_ShowComputeResourcePreviews);
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.base_terrain_height.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("BaseTerrainHeight Preview");
+            ImGui::TextWrapped("Greyscale = procedural terrain height before final erosion/deposition is applied. Compare this directly against FinalTerrainHeight.");
+            if (frame_context->resources.has_base_terrain_range)
+            {
+                ImGui::Text(
+                    "Height Range: %.2f .. %.2f",
+                    frame_context->resources.base_terrain_min_height,
+                    frame_context->resources.base_terrain_max_height);
+            }
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.base_terrain_height.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.terrain_height.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("Active TerrainHeight Preview");
+            ImGui::TextWrapped("Greyscale = terrain height currently used by consumers. If Final Terrain Height is enabled, this should match FinalTerrainHeight.");
+            if (frame_context->resources.has_active_terrain_range)
+            {
+                ImGui::Text(
+                    "Height Range: %.2f .. %.2f",
+                    frame_context->resources.active_terrain_min_height,
+                    frame_context->resources.active_terrain_max_height);
+            }
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_height.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.final_terrain_height.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("FinalTerrainHeight Preview");
+            ImGui::TextWrapped("Greyscale = terrain height after ErosionDelta is applied. If this is flatter than BaseTerrainHeight, the terrain deformation pass is the culprit.");
+            if (frame_context->resources.has_final_terrain_range)
+            {
+                ImGui::Text(
+                    "Height Range: %.2f .. %.2f",
+                    frame_context->resources.final_terrain_min_height,
+                    frame_context->resources.final_terrain_max_height);
+            }
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.final_terrain_height.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
 
         if (g_ShowComputeResourcePreviews && frame_context->resources.rain_map.isValid())
         {
@@ -797,7 +886,21 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         {
             ImGui::Separator();
             ImGui::TextDisabled("WaterSurfaceHeight Preview");
-            ImGui::TextWrapped("Greyscale = resolved simulated water surface height used by the water mesh deformation pass.");
+            ImGui::TextWrapped("R = terrain height, G = water height. This is the shared TerrainHeight.xy field used by the water path, and later will become the main terrain/water height source.");
+            if (frame_context->resources.has_terrain_heightfield_range)
+            {
+                ImGui::Text(
+                    "Terrain Range: %.2f .. %.2f",
+                    frame_context->resources.terrain_heightfield_min_height,
+                    frame_context->resources.terrain_heightfield_max_height);
+            }
+            if (frame_context->resources.has_water_heightfield_range)
+            {
+                ImGui::Text(
+                    "Water Range: %.2f .. %.2f",
+                    frame_context->resources.water_heightfield_min_height,
+                    frame_context->resources.water_heightfield_max_height);
+            }
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_surface_height.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
@@ -820,6 +923,26 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             ImGui::TextWrapped("This is the lightweight visual overlay drawn on the safe water surface path.");
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.surface_water_flow_preview.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.water_velocity.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("WaterVelocity Preview");
+            ImGui::TextWrapped("R/G = velocity XY, B = speed, A = transport energy. This is the raw hydrology velocity field.");
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_velocity.shaderResourceView())),
+                ImVec2(192.0f, 192.0f));
+        }
+
+        if (g_ShowComputeResourcePreviews && frame_context->resources.water_sediment.isValid())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("WaterSediment Preview");
+            ImGui::TextWrapped("R = suspended sediment, G = deposition tendency, B = erosion tendency, A = sediment capacity.");
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_sediment.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 
@@ -867,7 +990,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         {
             ImGui::Separator();
             ImGui::TextDisabled("ErosionDelta Preview");
-            ImGui::TextWrapped("R = erosion accumulation, G = deposition accumulation, B = signed delta preview, A = transport energy.");
+            ImGui::TextWrapped("R = erosion accumulation, G = deposition accumulation, B = signed delta, A = hydraulic transport energy.");
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.erosion_delta.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));

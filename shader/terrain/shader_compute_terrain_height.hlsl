@@ -124,17 +124,6 @@ float2 DomainWarp(float2 p, float frequency, float amplitude, float2 offset)
     return float2(warpX, warpZ) * amplitude;
 }
 
-float SampleAuthoredHeight(float2 worldXZ)
-{
-    if (g_HasAuthoredHeightMap == 0u)
-    {
-        return 0.0f;
-    }
-
-    float2 uv = saturate((worldXZ + float2(g_FieldWidth, g_FieldDepth) * 0.5f) / float2(g_FieldWidth, g_FieldDepth));
-    return g_AuthoredHeightMap.SampleLevel(g_TerrainSampler, uv, 0.0f).r;
-}
-
 float GenerateTerrainHeight(float2 worldXZ)
 {
     float nx = worldXZ.x * g_BaseFrequency;
@@ -177,24 +166,10 @@ float GenerateTerrainHeight(float2 worldXZ)
             (worldXZ.x - rangeCenterB.x) / 268.0f,
             (worldXZ.y - rangeCenterB.y) / 214.0f)));
     float globalTrend = max(pow(rangeA, 2.35f), pow(rangeB, 2.85f));
-    float authoredMacro = 0.0f;
-
-    if (g_HasAuthoredHeightMap != 0u)
-    {
-        authoredMacro = pow(saturate(SampleAuthoredHeight(worldXZ)), 1.35f);
-        globalTrend = max(globalTrend, authoredMacro);
-    }
-
-    float authoredFoothills = Smoothstep01(RemapClamped(authoredMacro, 0.24f, 0.78f));
-    float authoredSummit = pow(RemapClamped(authoredMacro, 0.58f, 1.0f), 1.45f);
-    float massifMacro = max(globalTrend, authoredFoothills * 0.92f);
+    float massifMacro = globalTrend;
 
     float rollingBase = Fbm(worldXZ * 0.0045f + float2(7.0f, -5.0f), 4);
     float macroWarpDetail = Fbm(worldXZ * 0.010f + float2(-9.0f, 14.0f), 3) - 0.5f;
-
-    float basinX = worldXZ.x / max(g_LakeRadiusX, 1.0f);
-    float basinZ = (worldXZ.y - g_LakeCenterZ) / max(g_LakeRadiusZ, 1.0f);
-    float lakeBasin = saturate(1.0f - length(float2(basinX, basinZ)));
 
     const float2 heroPeak = float2(46.0f, 118.0f);
     const float2 spineStart = float2(-68.0f, 48.0f);
@@ -226,7 +201,7 @@ float GenerateTerrainHeight(float2 worldXZ)
     float summitCluster = max(max(heroPeakMask, heroPeakCore), mountainSpineMask);
 
     float massifBody = pow(saturate(dissolvedMass * massifMacro), 1.18f);
-    float massifPeak = pow(saturate(dissolvedMass * max(massifMacro, authoredSummit * 0.85f)), 5.45f);
+    float massifPeak = pow(saturate(dissolvedMass * massifMacro), 5.45f);
     float shoulderNoise =
         (fractalSimplex - 0.5f) *
         lerp(0.04f, 0.62f, massifMacro) *
@@ -236,6 +211,28 @@ float GenerateTerrainHeight(float2 worldXZ)
     float ridgeFocus = pow(massifMacro, 1.30f);
     float alpineUplift = pow(saturate(massifMacro), 2.55f);
     float heroUplift = pow(max(heroPeakCore, summitCluster * 0.82f), 1.10f);
+
+    const float2 valleyAxisDir = normalize(float2(0.86f, 0.51f));
+    const float2 valleyAxisNormal = float2(-valleyAxisDir.y, valleyAxisDir.x);
+    float valleyWarpPrimary =
+        (Fbm(worldXZ * 0.0055f + float2(-17.0f, 29.0f), 4) - 0.5f) * 96.0f;
+    float valleyWarpSecondary =
+        (Fbm(worldXZ * 0.0115f + float2(21.0f, -41.0f), 3) - 0.5f) * 34.0f;
+    float trunkValleyDistance = abs(dot(worldXZ, valleyAxisNormal) + valleyWarpPrimary + valleyWarpSecondary);
+    float trunkValleyWidth = lerp(148.0f, 62.0f, saturate(massifMacro));
+    float trunkValley = pow(saturate(1.0f - trunkValleyDistance / trunkValleyWidth), 2.15f);
+
+    const float2 branchAxisDir = normalize(float2(-0.38f, 0.92f));
+    const float2 branchAxisNormal = float2(-branchAxisDir.y, branchAxisDir.x);
+    float branchWave =
+        sin(dot(worldXZ, branchAxisDir) * 0.014f + 1.7f) * 36.0f +
+        (Fbm(worldXZ * 0.0095f + float2(43.0f, -9.0f), 3) - 0.5f) * 42.0f;
+    float branchValleyDistance = abs(dot(worldXZ - float2(14.0f, 22.0f), branchAxisNormal) + branchWave);
+    float branchValley = pow(saturate(1.0f - branchValleyDistance / 96.0f), 2.45f);
+
+    float lowlandNoise = Fbm(worldXZ * 0.0068f + float2(-33.0f, 15.0f), 4) - 0.5f;
+    float valleyCarveMask = saturate(max(trunkValley, branchValley * 0.62f) * (1.0f - saturate(heroPeakCore * 0.85f + ridgeMask * 0.28f)));
+    float wetlandMask = saturate((1.0f - massifMacro) * 0.95f + trunkValley * 0.38f - ridgeMask * 0.24f);
 
     float height = (rollingBase - 0.5f) * (g_BaseHeight * 0.10f);
     height += macroWarpDetail * g_DetailHeight * 0.18f;
@@ -252,7 +249,9 @@ float GenerateTerrainHeight(float2 worldXZ)
     height += heroUplift * ridgeMask * (g_RidgeHeight * 1.05f);
     height += shoulderNoise * g_DetailHeight * 0.72f;
     height += summitVariation * g_DetailHeight * 0.68f;
-    height -= lakeBasin * g_LakeDepth;
+    height -= valleyCarveMask * (g_BaseHeight * 0.88f + g_ContinentHeight * 0.56f);
+    height += lowlandNoise * g_DetailHeight * 0.32f * wetlandMask;
+    height -= wetlandMask * (g_BaseHeight * 0.10f);
     height += massifMacro * g_ContinentHeight * 0.90f;
 
     return height;

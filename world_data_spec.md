@@ -38,6 +38,8 @@ These fields store source-of-truth physical or environmental state.
 - `SurfaceWater`
 - `SurfaceWaterFlow`
 - `SurfaceWaterFlowPreview`
+- `WaterVelocity`
+- `WaterSediment`
 - `WaterMask`
 - `SoilMoisture`
 - `ErosionDelta`
@@ -196,7 +198,35 @@ This means:
 - Current consumers:
   water render, debug UI.
 
-### 10. `VisibleWater`
+### 10. `WaterVelocity`
+
+- Meaning: raw per-cell water velocity and transport energy derived from local flow.
+- Stored channels:
+  `R = velocity x`
+  `G = velocity y`
+  `B = speed`
+  `A = transport energy`
+- Type: texture field.
+- Current producer:
+  [compute_surface_water_texture.cpp](/C:/Users/a3877/OneDrive/桌面/就職活動/simulator/src/compute/compute_surface_water_texture.cpp)
+- Current consumers:
+  debug UI today, future erosion, water shading, and gameplay traversal interpretation.
+
+### 11. `WaterSediment`
+
+- Meaning: raw per-cell suspended sediment and transport/deposition tendency.
+- Stored channels:
+  `R = suspended sediment`
+  `G = deposition tendency`
+  `B = erosion tendency`
+  `A = sediment capacity`
+- Type: texture field.
+- Current producer:
+  [compute_surface_water_texture.cpp](/C:/Users/a3877/OneDrive/桌面/就職活動/simulator/src/compute/compute_surface_water_texture.cpp)
+- Current consumers:
+  debug UI today, future erosion coupling, water coloration, and terrain feedback.
+
+### 12. `VisibleWater`
 
 - Meaning: render-oriented split between pooled water and runoff-like thin water.
 - Stored channels:
@@ -210,7 +240,7 @@ This means:
 - Current consumers:
   water mask, post-process, debug UI.
 
-### 11. `WaterMask`
+### 13. `WaterMask`
 
 - Meaning: immediate wet / water-contact mask at the surface.
 - Stored channels:
@@ -226,7 +256,7 @@ This means:
 - Notes:
   `WaterMask` is closer to hydrology output than ecology output.
 
-### 12. `WaterInteractionData`
+### 14. `WaterInteractionData`
 
 - Meaning: consumer-facing water/surface interaction field derived from hydrology state.
 - Stored channels:
@@ -245,7 +275,7 @@ This means:
   consumer-facing interpretation field second
   terrain/gameplay systems consume the interpretation field instead of recomputing from raw water state.
 
-### 13. `SoilMoisture`
+### 15. `SoilMoisture`
 
 - Meaning: retained ground wetness after rain, seepage, and standing water.
 - Type: texture field.
@@ -254,21 +284,23 @@ This means:
 - Current consumers:
   terrain surface generation, future gameplay movement penalties, vegetation logic.
 
-### 14. `ErosionDelta`
+### 16. `ErosionDelta`
 
-- Meaning: erosion / deposition accumulation and transport energy.
+- Meaning: erosion / deposition accumulation driven by hydraulic transport and sediment support.
 - Stored channels:
   `R = erosion accumulation`
   `G = deposition accumulation`
-  `B = signed preview`
-  `A = transport energy`
+  `B = signed delta`
+  `A = hydraulic transport energy`
 - Type: texture field.
 - Current producer:
   [compute_erosion_delta_texture.cpp](/C:/Users/a3877/OneDrive/桌面/就職活動/simulator/src/compute/compute_erosion_delta_texture.cpp)
 - Current consumers:
   final terrain height, terrain surface generation, future terrain gameplay feedback.
+- Notes:
+  This field is now driven by `WaterVelocity` and `WaterSediment`, which moves it closer to Afterglow's hydraulic + sediment-based erosion loop.
 
-### 15. `WindField`
+### 17. `WindField`
 
 - Meaning: local wind direction and strength.
 - Type: texture field.
@@ -277,7 +309,7 @@ This means:
 - Current consumers:
   grass, water, floating light points, UI preview, meteorograph.
 
-### 16. `ClimateField`
+### 18. `ClimateField`
 
 - Meaning: broad climate state used as a shared environment layer.
 - Type: texture field.
@@ -286,7 +318,7 @@ This means:
 - Current consumers:
   rain map, terrain surface generation, terrain shader, meteorograph.
 
-### 17. `MeteorographField`
+### 19. `MeteorographField`
 
 - Meaning: localized weather/environment interpretation layer derived from climate and wind.
 - Type: texture field.
@@ -335,6 +367,16 @@ Use these meanings consistently:
   `G = shoreline band`
   `B = pooled-water support`
   `A = render coverage`
+- `WaterVelocity`: raw hydrology velocity field.
+  `R = velocity x`
+  `G = velocity y`
+  `B = speed`
+  `A = transport energy`
+- `WaterSediment`: raw hydrology sediment field.
+  `R = suspended sediment`
+  `G = deposition tendency`
+  `B = erosion tendency`
+  `A = sediment capacity`
 - `WaterInteractionData`: consumer-facing water interpretation field.
   `R = surface interaction`
   `G = shoreline influence`

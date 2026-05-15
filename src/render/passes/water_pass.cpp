@@ -18,6 +18,7 @@
 #include "shader3d_unlit.h"
 #include "sprite3d.h"
 
+
 using namespace DirectX;
 
 namespace
@@ -125,7 +126,7 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 			? terrain_water.water_mask.shaderResourceView()
 			: nullptr;
 	ID3D11ShaderResourceView* water_surface_height_srv =
-		DebugMenu_IsWaterSurfaceDeformationEnabled() && terrain_water.water_surface_height_texture.isValid()
+		terrain_water.water_surface_height_texture.isValid()
 			? terrain_water.water_surface_height_texture.shaderResourceView()
 			: nullptr;
 	ID3D11ShaderResourceView* water_interaction_srv =
@@ -184,7 +185,6 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		water_desc.base_color.w * 0.42f
 	};
 
-	drawSurfacePlaneLayer(water_mask_srv, water_world, base_color);
 	Direct3D_SetSceneColorOnlyRenderTarget();
 	Sprite3D_DrawWaterSRV(
 		water_mask_srv,
@@ -206,6 +206,8 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 
 	(void)water_surface_height_srv;
 	(void)surface_water_srv;
+	(void)water_world;
+	(void)base_color;
 	(void)highlight_world;
 	(void)highlight_color;
 	(void)surface_flow_srv;

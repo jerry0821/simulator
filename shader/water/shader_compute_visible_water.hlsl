@@ -67,14 +67,11 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         Smoothstep01(saturate((standing_water - standing_water_min) / 0.42f));
     const float depth_core =
         Smoothstep01(saturate((water_depth - visible_depth_min) / 0.28f));
-    const float lake_depth =
-        Smoothstep01(saturate((water_depth - (visible_depth_min + 0.10f)) / 0.48f));
-
     float visible_water =
         max(
             pooled_core * lerp(0.45f, 1.0f, slope_keep),
             depth_core * slope_keep * (1.0f - flow_strength * flow_visibility_suppress * 0.35f));
-    visible_water = saturate(max(visible_water, lake_depth * 0.85f));
+    visible_water = saturate(visible_water);
 
     float runoff_hint =
         Smoothstep01(saturate((water_depth - runoff_depth_min) / max(visible_depth_min - runoff_depth_min, 1.0e-4f))) *
@@ -83,7 +80,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         flow_runoff_scale;
     runoff_hint *= lerp(0.45f, 1.0f, 1.0f - slope_keep);
 
-    const float pooled_preview = saturate(max(pooled_core, lake_depth));
+    const float pooled_preview = saturate(pooled_core);
     const float preview_alpha = saturate(max(visible_water, runoff_hint * 0.75f));
 
     g_VisibleWater[dispatch_thread_id.xy] = float4(

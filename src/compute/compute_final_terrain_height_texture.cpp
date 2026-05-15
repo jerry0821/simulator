@@ -135,18 +135,18 @@ void ComputeFinalTerrainHeightTexture::Update(
 	ID3D11ShaderResourceView* base_terrain_height_srv,
 	ID3D11ShaderResourceView* erosion_delta_srv)
 {
-	if (!IsValid() || base_terrain_height_srv == nullptr || erosion_delta_srv == nullptr)
+	if (!IsValid() || base_terrain_height_srv == nullptr)
 	{
 		return;
 	}
 
 	const FinalTerrainHeightConstants constants = {
-		0.18f,
-		0.10f,
+		0.045f,
+		0.030f,
 		-32.0f,
 		96.0f,
-		-0.80f,
-		0.45f,
+		-0.18f,
+		0.14f,
 		kTextureWidth,
 		kTextureHeight
 	};
@@ -156,12 +156,9 @@ void ComputeFinalTerrainHeightTexture::Update(
 	ID3D11ShaderResourceView* srvs[] = { base_terrain_height_srv, erosion_delta_srv };
 	ID3D11UnorderedAccessView* uavs[] = { m_uav };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
-	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
-
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
 	m_context->CSSetShaderResources(0, 2, srvs);
-	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
 		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
@@ -171,9 +168,7 @@ void ComputeFinalTerrainHeightTexture::Update(
 	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
-	ID3D11SamplerState* null_sampler = nullptr;
 	m_context->CSSetShaderResources(0, 2, null_srvs);
-	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
@@ -226,6 +221,24 @@ bool ComputeFinalTerrainHeightTexture::HasCpuHeightData() const
 {
 	return m_cpu_height_data_ready &&
 		m_height_samples.size() == static_cast<size_t>(kTextureWidth) * static_cast<size_t>(kTextureHeight);
+}
+
+bool ComputeFinalTerrainHeightTexture::ComputeHeightRange(float& out_min_height, float& out_max_height) const
+{
+	if (!HasCpuHeightData())
+	{
+		return false;
+	}
+
+	auto [min_it, max_it] = std::minmax_element(m_height_samples.begin(), m_height_samples.end());
+	if (min_it == m_height_samples.end() || max_it == m_height_samples.end())
+	{
+		return false;
+	}
+
+	out_min_height = *min_it;
+	out_max_height = *max_it;
+	return true;
 }
 
 float ComputeFinalTerrainHeightTexture::SampleHeightWorld(

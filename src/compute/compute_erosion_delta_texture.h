@@ -38,7 +38,8 @@ public:
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
 			ComputeSharedResourceId::SurfaceWater,
-			ComputeSharedResourceId::SurfaceWaterFlow
+			ComputeSharedResourceId::WaterVelocity,
+			ComputeSharedResourceId::WaterSediment
 		};
 		return kReadResources;
 	}
@@ -56,25 +57,28 @@ public:
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* surface_water_srv,
-		ID3D11ShaderResourceView* surface_water_flow_srv);
+		ID3D11ShaderResourceView* water_velocity_srv,
+		ID3D11ShaderResourceView* water_sediment_srv);
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;
 
 private:
 	struct ErosionDeltaConstants
 	{
-		float erosion_rate = 0.012f;
-		float deposition_rate = 0.008f;
-		float smoothing_rate = 0.12f;
-		float relaxation_rate = 0.010f;
-		float max_erosion = 0.45f;
-		float max_deposition = 0.25f;
+		float erosion_rate = 0.028f;
+		float deposition_rate = 0.018f;
+		float thermal_rate = 0.045f;
+		float relaxation_rate = 0.006f;
+		float max_erosion = 0.12f;
+		float max_deposition = 0.09f;
+		float thermal_threshold = 0.42f;
+		float hydraulic_bias = 0.56f;
 		unsigned int width = 0;
 		unsigned int height = 0;
 	};
 
-	static constexpr unsigned int kTextureWidth = 128;
-	static constexpr unsigned int kTextureHeight = 128;
+	static constexpr unsigned int kTextureWidth = 257;
+	static constexpr unsigned int kTextureHeight = 257;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

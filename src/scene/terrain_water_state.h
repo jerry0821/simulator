@@ -17,6 +17,8 @@ struct TerrainWaterFrameState
 	Backend::RenderShaderResource water_surface_height_texture{};
 	Backend::RenderShaderResource surface_water_flow{};
 	Backend::RenderShaderResource surface_water_flow_preview{};
+	Backend::RenderShaderResource water_velocity{};
+	Backend::RenderShaderResource water_sediment{};
 	Backend::RenderShaderResource visible_water{};
 	Backend::RenderShaderResource water_mask{};
 	Backend::RenderShaderResource water_interaction_data{};
@@ -26,6 +28,8 @@ struct TerrainWaterFrameState
 	bool HasHydrologyData() const
 	{
 		return surface_water.isValid() ||
+			water_velocity.isValid() ||
+			water_sediment.isValid() ||
 			water_mask.isValid() ||
 			water_interaction_data.isValid() ||
 			visible_water.isValid();
@@ -75,6 +79,8 @@ public:
 		Backend::RenderShaderResource water_surface_height_texture,
 		Backend::RenderShaderResource surface_water_flow,
 		Backend::RenderShaderResource surface_water_flow_preview,
+		Backend::RenderShaderResource water_velocity,
+		Backend::RenderShaderResource water_sediment,
 		Backend::RenderShaderResource visible_water,
 		Backend::RenderShaderResource water_mask,
 		Backend::RenderShaderResource water_interaction_data,
@@ -92,6 +98,8 @@ public:
 		frame_state_.water_surface_height_texture = water_surface_height_texture;
 		frame_state_.surface_water_flow = surface_water_flow;
 		frame_state_.surface_water_flow_preview = surface_water_flow_preview;
+		frame_state_.water_velocity = water_velocity;
+		frame_state_.water_sediment = water_sediment;
 		frame_state_.visible_water = visible_water;
 		frame_state_.water_mask = water_mask;
 		frame_state_.water_interaction_data = water_interaction_data;
@@ -142,6 +150,14 @@ public:
 			ComputeSharedResourceId::SurfaceWaterFlowPreview,
 			"SurfaceWaterFlowPreview",
 			frame_state_.surface_water_flow_preview);
+		registry.PublishShaderResource(
+			ComputeSharedResourceId::WaterVelocity,
+			"WaterVelocity",
+			frame_state_.water_velocity);
+		registry.PublishShaderResource(
+			ComputeSharedResourceId::WaterSediment,
+			"WaterSediment",
+			frame_state_.water_sediment);
 		registry.PublishShaderResource(
 			ComputeSharedResourceId::VisibleWater,
 			"VisibleWater",

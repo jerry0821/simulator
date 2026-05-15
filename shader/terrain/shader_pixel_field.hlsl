@@ -79,6 +79,21 @@ float4 SampleTerrainSurfaceData(float2 world_xz)
     return g_TerrainSurfaceData.SampleLevel(samp, uv, 0.0f);
 }
 
+float3 ApplySurfaceVariant(float3 srcColor, float beachMask, float humidity, float temperature)
+{
+    float3 color = srcColor;
+    float beachLuminance = dot(color, float3(0.299f, 0.587f, 0.114f));
+    float3 beachColor = beachLuminance.xxx * float3(1.10f, 1.02f, 0.76f);
+    color = lerp(color, beachColor, beachMask);
+
+    float3 humidColor = color * float3(0.78f, 0.86f, 0.72f);
+    color = lerp(color, humidColor, humidity);
+
+    float coldMask = saturate((0.35f - temperature) * 1.6f);
+    color = lerp(color, float3(0.74f, 0.74f, 0.78f), coldMask * (0.12f + beachMask * 0.08f));
+    return color;
+}
+
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
     float3 N = normalize(ps_in.normalW.xyz);
@@ -88,39 +103,32 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     float humidity = saturate(surface_data.b);
     float roughness = saturate(surface_data.a);
 
-    float grassMask =
-        saturate((1.0f - slopeMask) * lerp(0.82f, 1.0f, humidity) * lerp(1.0f, 0.78f, beachMask));
-    float cliffMask = slopeMask;
-    float erosionMask = roughness;
-
-    cliffMask = saturate(cliffMask);
-    float surfaceGrass = saturate(grassMask * (1.0f - cliffMask));
-
-    float2 uv_offset = (ps_in.macroData - 0.5f) * 0.18f;
-    float2 grass_uv = ps_in.posW.xz * 0.035f + uv_offset;
-    float2 stone_uv = ps_in.posW.xz * 0.045f - uv_offset * 0.5f;
-    float2 rock_uv = ps_in.posW.xz * 0.028f + uv_offset.yx * 0.35f;
-
-    float3 grassColor = texGrass.Sample(samp, grass_uv).rgb;
-    float3 stoneColor = texStone.Sample(samp, stone_uv).rgb;
-    float3 rockColor = texRock.Sample(samp, rock_uv).rgb;
-
     float climateHumidity = saturate(ps_in.climateData.g);
     float temperature = saturate(ps_in.climateData.r);
-    float shorelineWetness = saturate(max(beachMask, humidity));
+    float humidityMask = saturate(max(humidity, climateHumidity * 0.55f));
+    float slopeBlend = smoothstep(0.06f, 0.72f, slopeMask);
+    float beachBlend = saturate(beachMask * (1.0f - slopeBlend * 0.55f));
 
-    grassColor *= lerp(float3(0.90f, 0.88f, 0.82f), float3(0.72f, 0.96f, 0.78f), climateHumidity);
-    grassColor *= lerp(float3(0.96f, 0.98f, 1.02f), float3(1.04f, 0.98f, 0.92f), temperature * 0.30f);
-    grassColor *= lerp(1.0f.xxx, float3(0.84f, 0.88f, 0.80f), roughness * 0.10f);
+    float2 terrainTexCoord = ps_in.posW.xz * 0.05f;
+    float2 uv_offset = (ps_in.macroData - 0.5f) * 0.16f;
+    float2 grass_uv = terrainTexCoord + uv_offset * 0.35f;
+    float2 beach_uv = terrainTexCoord * 0.92f - uv_offset * 0.18f;
+    float2 slope_uv = terrainTexCoord * 1.08f + uv_offset.yx * 0.22f;
 
-    stoneColor *= lerp(1.0f.xxx, float3(0.74f, 0.79f, 0.86f), shorelineWetness * 0.38f);
-    stoneColor *= lerp(1.0f.xxx, float3(0.90f, 0.86f, 0.78f), roughness * 0.18f);
+    float3 grassColor = texGrass.Sample(samp, grass_uv).rgb * 1.35f;
+    float3 beachColor = texStone.Sample(samp, beach_uv).rgb * 0.92f;
+    float3 slopeColor = texRock.Sample(samp, slope_uv).rgb * 0.82f;
 
-    rockColor *= lerp(float3(0.92f, 0.92f, 0.92f), float3(1.04f, 1.00f, 0.96f), temperature * 0.18f);
-    rockColor *= lerp(1.0f.xxx, float3(0.84f, 0.88f, 0.92f), shorelineWetness * 0.16f);
+    grassColor = ApplySurfaceVariant(grassColor, beachBlend, humidityMask, temperature);
+    beachColor = ApplySurfaceVariant(beachColor * float3(0.96f, 0.92f, 0.82f), 1.0f, humidityMask * 0.45f, temperature);
+    slopeColor = lerp(
+        slopeColor,
+        slopeColor * float3(0.74f, 0.78f, 0.82f),
+        saturate(humidityMask * 0.35f + roughness * 0.18f));
 
-    float3 material_color = lerp(grassColor, stoneColor, beachMask);
-    material_color = lerp(material_color, rockColor, cliffMask);
+    float3 material_color = grassColor;
+    material_color = lerp(material_color, beachColor, beachBlend);
+    material_color = lerp(material_color, slopeColor, slopeBlend);
     material_color *= diffuse_color.rgb;
 
     float shadowFactor = 1.0f;
@@ -138,10 +146,20 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     }
 
     float3 lightVec = normalize(-directional_world_vector.xyz);
-    float dl = (dot(lightVec, N) + 1.0f) * 0.5f;
-    float3 diffuse = material_color * directional_color.rgb * dl * shadowFactor;
+    float3 viewVec = normalize(eye_posW - ps_in.posW.xyz);
+    float3 halfVec = normalize(lightVec + viewVec);
+    float NdotL = saturate(dot(lightVec, N));
+    float NdotH = saturate(dot(N, halfVec));
+    float diffuseWrap = saturate(NdotL * 0.82f + 0.18f);
+    float specularExponent = lerp(30.0f, 8.0f, roughness);
+    float specularStrength = lerp(0.12f, 0.03f, roughness);
+    float shorelineSheen = beachBlend * (0.04f + humidityMask * 0.08f);
+    float specularTerm = pow(NdotH, specularExponent) * (specularStrength + shorelineSheen);
+
+    float3 diffuse = material_color * directional_color.rgb * diffuseWrap * shadowFactor;
     float3 ambient = ambient_color.rgb * material_color;
-    float3 shaded_color = ambient + diffuse;
+    float3 specular = directional_color.rgb * specular_color.rgb * specularTerm * shadowFactor;
+    float3 shaded_color = ambient + diffuse + specular;
 
     float3 surface_preview =
         float3(

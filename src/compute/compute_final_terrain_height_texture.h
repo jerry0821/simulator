@@ -38,6 +38,7 @@ public:
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;
 	bool HasCpuHeightData() const;
+	bool ComputeHeightRange(float& out_min_height, float& out_max_height) const;
 	float SampleHeightWorld(float world_x, float world_z, float field_width, float field_depth) const;
 
 private:

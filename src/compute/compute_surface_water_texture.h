@@ -44,7 +44,9 @@ public:
 		static constexpr ComputeSharedResourceId kWriteResources[] = {
 			ComputeSharedResourceId::SurfaceWater,
 			ComputeSharedResourceId::SurfaceWaterFlow,
-			ComputeSharedResourceId::SurfaceWaterFlowPreview
+			ComputeSharedResourceId::SurfaceWaterFlowPreview,
+			ComputeSharedResourceId::WaterVelocity,
+			ComputeSharedResourceId::WaterSediment
 		};
 		return kWriteResources;
 	}
@@ -56,6 +58,7 @@ public:
 		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* rain_map_srv,
 		ID3D11ShaderResourceView* wind_field_srv,
+		ID3D11ShaderResourceView* previous_terrain_water_height_srv,
 		float water_height,
 		const SurfaceWaterSimulationSettings& settings,
 		bool inject_water_pulse,
@@ -64,18 +67,20 @@ public:
 	Backend::RenderShaderResource Resource() const;
 	Backend::RenderShaderResource FlowResource() const;
 	Backend::RenderShaderResource FlowPreviewResource() const;
+	Backend::RenderShaderResource VelocityResource() const;
+	Backend::RenderShaderResource SedimentResource() const;
 
 private:
 	struct SurfaceWaterConstants
 	{
 		float water_height = 0.0f;
-		float accumulation_rate = 0.060f;
-		float evaporation_rate = 0.006f;
-		float seepage_rate = 0.006f;
+		float accumulation_rate = 0.040f;
+		float evaporation_rate = 0.0065f;
+		float seepage_rate = 0.0040f;
 		float basin_fade = 7.0f;
-		float downhill_flow_rate = 0.28f;
-		float flow_damping = 0.92f;
-		float max_outflow_fraction = 0.72f;
+		float downhill_flow_rate = 0.48f;
+		float flow_damping = 0.70f;
+		float max_outflow_fraction = 0.68f;
 		float field_width = 512.0f;
 		float field_depth = 512.0f;
 		float injection_center_x = 46.0f;
@@ -85,13 +90,13 @@ private:
 		float time_seconds = 0.0f;
 		unsigned int width = 0;
 		unsigned int height = 0;
+		unsigned int presentation_only = 0u;
 		unsigned int injection_enabled = 0u;
 		unsigned int padding0 = 0u;
-		unsigned int padding1 = 0u;
 	};
 
-	static constexpr unsigned int kTextureWidth = 128;
-	static constexpr unsigned int kTextureHeight = 128;
+	static constexpr unsigned int kTextureWidth = 257;
+	static constexpr unsigned int kTextureHeight = 257;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;
@@ -106,6 +111,12 @@ private:
 	ID3D11Texture2D* m_flow_preview_texture = nullptr;
 	ID3D11ShaderResourceView* m_flow_preview_srv = nullptr;
 	ID3D11UnorderedAccessView* m_flow_preview_uav = nullptr;
+	ID3D11Texture2D* m_velocity_texture = nullptr;
+	ID3D11ShaderResourceView* m_velocity_srv = nullptr;
+	ID3D11UnorderedAccessView* m_velocity_uav = nullptr;
+	ID3D11Texture2D* m_sediment_texture = nullptr;
+	ID3D11ShaderResourceView* m_sediment_srv = nullptr;
+	ID3D11UnorderedAccessView* m_sediment_uav = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	unsigned int m_current_index = 0;
 };

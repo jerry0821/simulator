@@ -47,12 +47,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     const float neighbor_average = 0.25f * (visible_left + visible_right + visible_up + visible_down);
     const float edge_soften =
-        saturate(lerp(neighbor_average * 0.35f, neighbor_average * 0.80f, water_alpha));
-    water_alpha = max(water_alpha, edge_soften);
+        saturate(lerp(neighbor_average * 0.10f, neighbor_average * 0.32f, water_alpha));
+    water_alpha = max(water_alpha, edge_soften * smoothstep(0.10f, 0.42f, water_alpha));
 
     const float runoff_edge =
         max(max(surface_left.g, surface_right.g), max(surface_up.g, surface_down.g));
-    water_alpha = max(water_alpha, runoff_edge * 0.08f);
+    water_alpha = max(water_alpha, runoff_edge * 0.02f);
 
     const float pooled_neighbor =
         max(pooled_water, max(surface_left.b, max(surface_right.b, max(surface_up.b, surface_down.b))));
@@ -68,7 +68,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float water_contact = saturate(max(water_alpha, runoff_hint * 0.22f));
     const float shoreline_contact = saturate(shore_mask);
     const float pooled_contact = saturate(pooled_neighbor);
-    const float composite_alpha = saturate(max(water_contact, shoreline_contact * 0.12f));
+    const float composite_alpha = saturate(max(water_contact, shoreline_contact * 0.04f));
 
     g_WaterMask[dispatch_thread_id.xy] = float4(
         water_contact,

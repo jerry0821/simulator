@@ -49,8 +49,12 @@ private:
 	void InitializeDebugTools();
 	void ResetFrameState();
 	void BeginFrame(double current_time, double elapsed_time);
+	Backend::RenderShaderResource BaseTerrainHeightResource() const;
+	Backend::RenderShaderResource SimulationTerrainHeightResource() const;
 	Backend::RenderShaderResource ActiveTerrainHeightResource() const;
+	Backend::RenderShaderResource FinalTerrainHeightResource() const;
 	Backend::RenderShaderResource ActiveTerrainNormalResource() const;
+	bool UsingSharedTerrainWaterHeightfield() const;
 	WaterSurfaceDesc ResolveActiveWaterSurfaceDesc() const;
 	float ResolveActiveWaterSurfaceHeight() const;
 	void PublishSharedComputeResources();
@@ -101,6 +105,7 @@ private:
 	float m_glitch_amount = 0.0f;
 	TerrainMaterialSettings m_last_terrain_material_settings{};
 	bool m_has_last_terrain_material_settings = false;
+	bool m_use_shared_terrain_water_heightfield = true;
 };
 
 #endif // APPLICATION_H

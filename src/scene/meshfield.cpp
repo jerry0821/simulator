@@ -681,25 +681,11 @@ float GenerateTerrainHeight(float world_x, float world_z)
 		1.0f - std::clamp(std::sqrt(
 			std::pow((world_x - kRangeCenterBX) / 268.0f, 2.0f) +
 			std::pow((world_z - kRangeCenterBZ) / 214.0f, 2.0f)), 0.0f, 1.0f);
-	float global_trend = std::max(std::pow(range_a, 2.35f), std::pow(range_b, 2.85f));
-	float authored_macro = 0.0f;
-
-	if (g_has_height_map)
-	{
-		authored_macro = std::pow(std::clamp(SampleHeightMap01(world_x, world_z), 0.0f, 1.0f), 1.35f);
-		global_trend = std::max(global_trend, authored_macro);
-	}
-	const float authored_foothills = Smoothstep(RemapClamped(authored_macro, 0.24f, 0.78f));
-	const float authored_summit = std::pow(RemapClamped(authored_macro, 0.58f, 1.0f), 1.45f);
-	const float massif_macro = std::max(global_trend, authored_foothills * 0.92f);
+	const float global_trend = std::max(std::pow(range_a, 2.35f), std::pow(range_b, 2.85f));
+	const float massif_macro = global_trend;
 
 	const float rolling_base = Fbm(world_x * 0.0045f + 7.0f, world_z * 0.0045f - 5.0f, 4);
 	const float macro_warp_detail = Fbm(world_x * 0.010f - 9.0f, world_z * 0.010f + 14.0f, 3) - 0.5f;
-
-	const float basin_x = world_x / g_terrain_settings.lake_radius_x;
-	const float basin_z = (world_z - g_terrain_settings.lake_center_z) / g_terrain_settings.lake_radius_z;
-	const float basin_distance = std::sqrt(basin_x * basin_x + basin_z * basin_z);
-	const float lake_basin = std::clamp(1.0f - basin_distance, 0.0f, 1.0f);
 
 	constexpr float kHeroPeakX = 46.0f;
 	constexpr float kHeroPeakZ = 118.0f;
@@ -749,7 +735,7 @@ float GenerateTerrainHeight(float world_x, float world_z)
 
 	const float massif_body = std::pow(std::clamp(dissolved_mass * massif_macro, 0.0f, 1.0f), 1.18f);
 	const float massif_peak = std::pow(
-		std::clamp(dissolved_mass * std::max(massif_macro, authored_summit * 0.85f), 0.0f, 1.0f),
+		std::clamp(dissolved_mass * massif_macro, 0.0f, 1.0f),
 		5.45f);
 	const float shoulder_noise =
 		(fractal_simplex - 0.5f) *
@@ -759,6 +745,38 @@ float GenerateTerrainHeight(float world_x, float world_z)
 	const float ridge_focus = std::pow(massif_macro, 1.30f);
 	const float alpine_uplift = std::pow(std::clamp(massif_macro, 0.0f, 1.0f), 2.55f);
 	const float hero_uplift = std::pow(std::max(hero_peak_core, summit_cluster * 0.82f), 1.10f);
+	constexpr XMFLOAT2 kValleyAxisDirRaw = { 0.86f, 0.51f };
+	const float valley_axis_length = std::sqrt(kValleyAxisDirRaw.x * kValleyAxisDirRaw.x + kValleyAxisDirRaw.y * kValleyAxisDirRaw.y);
+	const XMFLOAT2 normalized_valley_axis = { kValleyAxisDirRaw.x / valley_axis_length, kValleyAxisDirRaw.y / valley_axis_length };
+	const XMFLOAT2 valley_axis_normal = { -normalized_valley_axis.y, normalized_valley_axis.x };
+	const float valley_warp_primary =
+		(Fbm(world_x * 0.0055f - 17.0f, world_z * 0.0055f + 29.0f, 4) - 0.5f) * 96.0f;
+	const float valley_warp_secondary =
+		(Fbm(world_x * 0.0115f + 21.0f, world_z * 0.0115f - 41.0f, 3) - 0.5f) * 34.0f;
+	const float trunk_valley_distance =
+		std::fabs(world_x * valley_axis_normal.x + world_z * valley_axis_normal.y + valley_warp_primary + valley_warp_secondary);
+	const float trunk_valley_width = std::lerp(148.0f, 62.0f, std::clamp(massif_macro, 0.0f, 1.0f));
+	const float trunk_valley = std::pow(std::clamp(1.0f - trunk_valley_distance / trunk_valley_width, 0.0f, 1.0f), 2.15f);
+
+	constexpr XMFLOAT2 kBranchAxisDirRaw = { -0.38f, 0.92f };
+	const float branch_axis_length = std::sqrt(kBranchAxisDirRaw.x * kBranchAxisDirRaw.x + kBranchAxisDirRaw.y * kBranchAxisDirRaw.y);
+	const XMFLOAT2 branch_axis_dir = { kBranchAxisDirRaw.x / branch_axis_length, kBranchAxisDirRaw.y / branch_axis_length };
+	const XMFLOAT2 branch_axis_normal = { -branch_axis_dir.y, branch_axis_dir.x };
+	const float branch_wave =
+		std::sin((world_x * branch_axis_dir.x + world_z * branch_axis_dir.y) * 0.014f + 1.7f) * 36.0f +
+		(Fbm(world_x * 0.0095f + 43.0f, world_z * 0.0095f - 9.0f, 3) - 0.5f) * 42.0f;
+	const float branch_valley_distance =
+		std::fabs((world_x - 14.0f) * branch_axis_normal.x + (world_z - 22.0f) * branch_axis_normal.y + branch_wave);
+	const float branch_valley = std::pow(std::clamp(1.0f - branch_valley_distance / 96.0f, 0.0f, 1.0f), 2.45f);
+	const float lowland_noise = Fbm(world_x * 0.0068f - 33.0f, world_z * 0.0068f + 15.0f, 4) - 0.5f;
+	const float valley_carve_mask =
+		std::clamp(
+			std::max(trunk_valley, branch_valley * 0.62f) *
+			(1.0f - std::clamp(hero_peak_core * 0.85f + ridge_mask * 0.28f, 0.0f, 1.0f)),
+			0.0f,
+			1.0f);
+	const float wetland_mask =
+		std::clamp((1.0f - massif_macro) * 0.95f + trunk_valley * 0.38f - ridge_mask * 0.24f, 0.0f, 1.0f);
 
 	float height = (rolling_base - 0.5f) * (g_terrain_settings.base_height * 0.10f);
 	height += macro_warp_detail * g_terrain_settings.detail_height * 0.18f;
@@ -775,7 +793,9 @@ float GenerateTerrainHeight(float world_x, float world_z)
 	height += hero_uplift * ridge_mask * (g_terrain_settings.ridge_height * 1.05f);
 	height += shoulder_noise * g_terrain_settings.detail_height * 0.72f;
 	height += summit_variation * g_terrain_settings.detail_height * 0.68f;
-	height -= lake_basin * g_terrain_settings.lake_depth;
+	height -= valley_carve_mask * (g_terrain_settings.base_height * 0.88f + g_terrain_settings.continent_height * 0.56f);
+	height += lowland_noise * g_terrain_settings.detail_height * 0.32f * wetland_mask;
+	height -= wetland_mask * (g_terrain_settings.base_height * 0.10f);
 	height += massif_macro * g_terrain_settings.continent_height * 0.90f;
 
 	return height;
@@ -1077,7 +1097,7 @@ const TerrainSettings& MeshFieldRenderer::GetTerrainSettings()
 
 float MeshFieldRenderer::GetSuggestedWaterHeight()
 {
-	return std::max(0.0f, g_terrain_settings.base_height - g_terrain_settings.lake_depth - 2.4f);
+	return std::max(0.0f, g_terrain_settings.base_height * 0.18f + g_terrain_settings.continent_height * 0.08f - 0.8f);
 }
 
 float MeshFieldRenderer::FieldWidth()
