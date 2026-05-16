@@ -37,10 +37,6 @@ struct RenderFrameResources
 	float active_terrain_min_height = 0.0f;
 	float active_terrain_max_height = 0.0f;
 	bool has_active_terrain_range = false;
-	Backend::RenderShaderResource final_terrain_height{};
-	float final_terrain_min_height = 0.0f;
-	float final_terrain_max_height = 0.0f;
-	bool has_final_terrain_range = false;
 	Backend::RenderShaderResource terrain_normal{};
 	Backend::RenderShaderResource terrain_surface_data{};
 	Backend::RenderShaderResource terrain_vegetation_suitability{};
@@ -51,9 +47,11 @@ struct RenderFrameResources
 	float terrain_heightfield_min_height = 0.0f;
 	float terrain_heightfield_max_height = 0.0f;
 	bool has_terrain_heightfield_range = false;
+	bool terrain_heightfield_range_is_fallback = false;
 	float water_heightfield_min_height = 0.0f;
 	float water_heightfield_max_height = 0.0f;
 	bool has_water_heightfield_range = false;
+	bool water_heightfield_range_is_fallback = false;
 	Backend::RenderShaderResource surface_water_flow{};
 	Backend::RenderShaderResource surface_water_flow_preview{};
 	Backend::RenderShaderResource water_velocity{};

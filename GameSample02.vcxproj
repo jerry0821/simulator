@@ -161,7 +161,6 @@
     <ClCompile Include="src\debug\collision_debug.cpp" />
     <ClCompile Include="src\compute\compute_climate_texture.cpp" />
     <ClCompile Include="src\compute\compute_erosion_delta_texture.cpp" />
-    <ClCompile Include="src\compute\compute_final_terrain_height_texture.cpp" />
     <ClCompile Include="src\compute\compute_floating_light_points.cpp" />
     <ClCompile Include="src\compute\compute_grass_data_texture.cpp" />
     <ClCompile Include="src\compute\compute_grass_instances.cpp" />
@@ -269,7 +268,6 @@
     <ClInclude Include="src\geometry\collision_internal.h" />
     <ClInclude Include="src\compute\compute_climate_texture.h" />
     <ClInclude Include="src\compute\compute_erosion_delta_texture.h" />
-    <ClInclude Include="src\compute\compute_final_terrain_height_texture.h" />
     <ClInclude Include="src\compute\compute_floating_light_points.h" />
     <ClInclude Include="src\compute\compute_grass_data_texture.h" />
     <ClInclude Include="src\compute\compute_grass_instances.h" />
@@ -519,12 +517,6 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="shader\terrain\shader_compute_erosion_delta.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\terrain\shader_compute_final_terrain_height.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>

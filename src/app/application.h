@@ -8,7 +8,6 @@
 #include "debug_text.h"
 #include "compute_climate_texture.h"
 #include "compute_erosion_delta_texture.h"
-#include "compute_final_terrain_height_texture.h"
 #include "compute_floating_light_points.h"
 #include "compute_grass_data_texture.h"
 #include "compute_meteorograph_texture.h"
@@ -52,7 +51,6 @@ private:
 	Backend::RenderShaderResource BaseTerrainHeightResource() const;
 	Backend::RenderShaderResource SimulationTerrainHeightResource() const;
 	Backend::RenderShaderResource ActiveTerrainHeightResource() const;
-	Backend::RenderShaderResource FinalTerrainHeightResource() const;
 	Backend::RenderShaderResource ActiveTerrainNormalResource() const;
 	bool UsingSharedTerrainWaterHeightfield() const;
 	WaterSurfaceDesc ResolveActiveWaterSurfaceDesc() const;
@@ -73,7 +71,6 @@ private:
 	ComputeTaskRunner m_compute_task_runner{};
 	ComputeClimateTexture m_compute_climate_texture{};
 	ComputeErosionDeltaTexture m_compute_erosion_delta_texture{};
-	ComputeFinalTerrainHeightTexture m_compute_final_terrain_height_texture{};
 	ComputeFloatingLightPoints m_compute_floating_light_points{};
 	ComputeGrassDataTexture m_compute_grass_data_texture{};
 	ComputeMeteorographTexture m_compute_meteorograph_texture{};

@@ -134,25 +134,20 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 void ComputeWaterSurfaceHeightTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* surface_water_srv,
-	ID3D11ShaderResourceView* erosion_delta_srv,
 	float water_surface_height) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr || surface_water_srv == nullptr || erosion_delta_srv == nullptr)
+	if (!IsValid() || terrain_height_srv == nullptr || surface_water_srv == nullptr)
 	{
 		return;
 	}
 
 	const WaterSurfaceHeightConstants constants = {
 		water_surface_height,
-		0.22f,
-		0.82f,
 		0.004f,
-		0.0f,
-		0.0f,
-		0.0f,
-		0.0f,
 		kTextureWidth,
 		kTextureHeight,
+		0u,
+		0u,
 		0u,
 		0u
 	};
@@ -165,7 +160,6 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
 		surface_water_srv,
-		erosion_delta_srv,
 		m_srvs[previous_index]
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uavs[next_index] };
@@ -174,7 +168,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 4, srvs);
+	m_context->CSSetShaderResources(0, 3, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -182,11 +176,11 @@ void ComputeWaterSurfaceHeightTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 4, null_srvs);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

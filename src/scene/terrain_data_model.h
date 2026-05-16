@@ -7,7 +7,6 @@
 #include "terrain_surface_settings.h"
 
 struct ID3D11ShaderResourceView;
-class ComputeFinalTerrainHeightTexture;
 
 struct TerrainMaterialClassification
 {
@@ -31,8 +30,6 @@ struct TerrainSurfaceSample
 class TerrainDataModel
 {
 public:
-	static void SetComputedHeightSource(const ComputeFinalTerrainHeightTexture* computed_height_source);
-	static void ClearComputedHeightSource();
 	static void SetMaterialSettings(const TerrainMaterialSettings& material_settings);
 	static Backend::RenderShaderResource HeightResource();
 	static ID3D11ShaderResourceView* HeightSRV();

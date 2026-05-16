@@ -14,7 +14,6 @@ enum class ComputeSharedResourceId
 {
 	BaseTerrainHeight,
 	TerrainHeight,
-	FinalTerrainHeight,
 	TerrainNormal,
 	TerrainSurfaceData,
 	TerrainVegetationSuitability,

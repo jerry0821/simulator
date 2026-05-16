@@ -14,7 +14,6 @@
 #include "collision.h"
 #include "compute_climate_texture.h"
 #include "compute_erosion_delta_texture.h"
-#include "compute_final_terrain_height_texture.h"
 #include "compute_meteorograph_texture.h"
 #include "compute_noise_texture.h"
 #include "compute_rain_map_texture.h"
@@ -402,7 +401,6 @@ bool Application::InitializeEngineSystems()
 			m_compute_water_surface_height_texture.Update(
 				BaseTerrainHeightResource().shaderResourceView(),
 				m_compute_surface_water_texture.Resource().shaderResourceView(),
-				m_compute_erosion_delta_texture.Resource().shaderResourceView(),
 				m_active_water_surface_height);
 		});
 	m_compute_task_runner.Register(
@@ -442,10 +440,6 @@ bool Application::InitializeEngineSystems()
 		});
 	m_compute_task_runner.InitializeAll(Direct3D_GetDevice(), Direct3D_GetContext());
 	m_compute_floating_light_points.SetSeeds(BuildFloatingWindLightSeeds());
-	if (!m_compute_final_terrain_height_texture.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
-	{
-		return false;
-	}
 	if (!m_compute_terrain_normal_texture.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
 	{
 		return false;
@@ -466,17 +460,10 @@ bool Application::InitializeEngineSystems()
 	m_terrain_classification_last_update_time = -1000.0;
 	m_active_water_surface_desc = ResolveActiveWaterSurfaceDesc();
 	m_active_water_surface_height = m_active_water_surface_desc.height;
-	TerrainDataModel::ClearComputedHeightSource();
 	m_compute_water_surface_height_texture.Update(
 		BaseTerrainHeightResource().shaderResourceView(),
 		m_compute_surface_water_texture.Resource().shaderResourceView(),
-		m_compute_erosion_delta_texture.Resource().shaderResourceView(),
 		m_active_water_surface_height);
-	m_compute_final_terrain_height_texture.Update(
-		UsingSharedTerrainWaterHeightfield()
-			? m_compute_water_surface_height_texture.Resource().shaderResourceView()
-			: MeshFieldRenderer::HeightSRV(),
-		m_compute_erosion_delta_texture.Resource().shaderResourceView());
 	m_compute_terrain_normal_texture.Update(SimulationTerrainHeightResource().shaderResourceView());
 	m_compute_water_interaction_texture.Update(
 		m_compute_visible_water_texture.Resource().shaderResourceView(),
@@ -495,7 +482,8 @@ bool Application::InitializeEngineSystems()
 		ActiveTerrainNormalResource().shaderResourceView(),
 		m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
 		m_compute_terrain_classification_texture.Resource().shaderResourceView());
-	MeshFieldRenderer::SetRenderHeightSRV(ActiveTerrainHeightResource().shaderResourceView());
+	MeshFieldRenderer::SetRenderHeightSRV(
+		ActiveTerrainHeightResource().shaderResourceView());
 	MeshFieldRenderer::SetRenderNormalSRV(ActiveTerrainNormalResource().shaderResourceView());
 	PublishSharedComputeResources();
 	return true;
@@ -600,11 +588,6 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute erosion delta reload failed");
 		}
-		m_compute_final_terrain_height_texture.Finalize();
-		if (!m_compute_final_terrain_height_texture.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
-		{
-			DebugMenu_SetShaderReloadStatus(false, "Compute final terrain height reload failed");
-		}
 		if (!m_compute_wind_field_texture.IsValid())
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute wind field reload failed");
@@ -618,20 +601,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 			m_compute_water_surface_height_texture.Update(
 				BaseTerrainHeightResource().shaderResourceView(),
 				m_compute_surface_water_texture.Resource().shaderResourceView(),
-				m_compute_erosion_delta_texture.Resource().shaderResourceView(),
 				m_active_water_surface_height);
-		}
-		if (!m_compute_final_terrain_height_texture.IsValid())
-		{
-			DebugMenu_SetShaderReloadStatus(false, "Compute final terrain height reload failed");
-		}
-		else
-		{
-			m_compute_final_terrain_height_texture.Update(
-				UsingSharedTerrainWaterHeightfield()
-					? m_compute_water_surface_height_texture.Resource().shaderResourceView()
-					: MeshFieldRenderer::HeightSRV(),
-				m_compute_erosion_delta_texture.Resource().shaderResourceView());
 		}
 		m_compute_terrain_normal_texture.Finalize();
 		if (!m_compute_terrain_normal_texture.Initialize(Direct3D_GetDevice(), Direct3D_GetContext()))
@@ -659,14 +629,6 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 	m_active_water_surface_desc = ResolveActiveWaterSurfaceDesc();
 	m_active_water_surface_height = m_active_water_surface_desc.height;
 	m_compute_task_runner.Dispatch(current_time, elapsed_time);
-	if (m_compute_final_terrain_height_texture.IsValid())
-	{
-		m_compute_final_terrain_height_texture.Update(
-			UsingSharedTerrainWaterHeightfield()
-				? m_compute_water_surface_height_texture.Resource().shaderResourceView()
-				: MeshFieldRenderer::HeightSRV(),
-			m_compute_erosion_delta_texture.Resource().shaderResourceView());
-	}
 	if (m_compute_terrain_normal_texture.IsValid())
 	{
 		m_compute_terrain_normal_texture.Update(SimulationTerrainHeightResource().shaderResourceView());
@@ -711,9 +673,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 	}
 	TerrainDataModel::SetMaterialSettings(terrain_material_settings);
 	MeshFieldRenderer::SetRenderHeightSRV(
-		UsingSharedTerrainWaterHeightfield()
-			? FinalTerrainHeightResource().shaderResourceView()
-			: ActiveTerrainHeightResource().shaderResourceView());
+		ActiveTerrainHeightResource().shaderResourceView());
 	MeshFieldRenderer::SetRenderNormalSRV(ActiveTerrainNormalResource().shaderResourceView());
 	PublishSharedComputeResources();
 	ShaderField_SetTerrainMaterialSettings(terrain_material_settings);
@@ -738,11 +698,6 @@ Backend::RenderShaderResource Application::ActiveTerrainHeightResource() const
 	}
 
 	return TerrainDataModel::HeightResource();
-}
-
-Backend::RenderShaderResource Application::FinalTerrainHeightResource() const
-{
-	return m_compute_final_terrain_height_texture.Resource();
 }
 
 Backend::RenderShaderResource Application::ActiveTerrainNormalResource() const
@@ -813,10 +768,6 @@ void Application::PublishSharedComputeResources()
 		m_compute_erosion_delta_texture.Resource());
 	m_terrain_water_state.PublishTo(m_compute_shared_resource_registry);
 	m_compute_shared_resource_registry.PublishShaderResource(
-		ComputeSharedResourceId::FinalTerrainHeight,
-		"FinalTerrainHeight",
-		FinalTerrainHeightResource());
-	m_compute_shared_resource_registry.PublishShaderResource(
 		ComputeSharedResourceId::RainMap,
 		"RainMap",
 		m_compute_rain_map_texture.Resource());
@@ -872,24 +823,23 @@ RenderFrameContext Application::BuildFrameContext(double current_time, double el
 	frame_context.resources.has_base_terrain_range = ComputeBaseTerrainHeightRange(
 		frame_context.resources.base_terrain_min_height,
 		frame_context.resources.base_terrain_max_height);
-	frame_context.resources.terrain_height = frame_context.resources.terrain_water.terrain_height;
-	frame_context.resources.final_terrain_height =
-		m_compute_shared_resource_registry.GetShaderResource(ComputeSharedResourceId::FinalTerrainHeight);
-	frame_context.resources.has_final_terrain_range = m_compute_final_terrain_height_texture.ComputeHeightRange(
-		frame_context.resources.final_terrain_min_height,
-		frame_context.resources.final_terrain_max_height);
+	frame_context.resources.terrain_height =
+		ActiveTerrainHeightResource();
 	frame_context.resources.has_terrain_heightfield_range =
 		m_compute_water_surface_height_texture.ComputeTerrainHeightRange(
 			frame_context.resources.terrain_heightfield_min_height,
 			frame_context.resources.terrain_heightfield_max_height);
+	frame_context.resources.terrain_heightfield_range_is_fallback = false;
 	frame_context.resources.has_water_heightfield_range =
 		m_compute_water_surface_height_texture.ComputeWaterHeightRange(
 			frame_context.resources.water_heightfield_min_height,
 			frame_context.resources.water_heightfield_max_height);
+	frame_context.resources.water_heightfield_range_is_fallback = false;
 	if (!frame_context.resources.has_terrain_heightfield_range &&
 		frame_context.resources.has_base_terrain_range)
 	{
 		frame_context.resources.has_terrain_heightfield_range = true;
+		frame_context.resources.terrain_heightfield_range_is_fallback = true;
 		frame_context.resources.terrain_heightfield_min_height =
 			frame_context.resources.base_terrain_min_height;
 		frame_context.resources.terrain_heightfield_max_height =
@@ -901,6 +851,7 @@ RenderFrameContext Application::BuildFrameContext(double current_time, double el
 		const SurfaceWaterSimulationSettings& water_settings =
 			DebugMenu_GetSurfaceWaterSimulationSettings();
 		frame_context.resources.has_water_heightfield_range = true;
+		frame_context.resources.water_heightfield_range_is_fallback = true;
 		if (water_settings.presentation_only)
 		{
 			frame_context.resources.water_heightfield_min_height =
@@ -922,19 +873,14 @@ RenderFrameContext Application::BuildFrameContext(double current_time, double el
 					m_active_water_surface_height);
 		}
 	}
-	if (UsingSharedTerrainWaterHeightfield() && frame_context.resources.has_terrain_heightfield_range)
+	if (UsingSharedTerrainWaterHeightfield() &&
+		frame_context.resources.has_terrain_heightfield_range)
 	{
 		frame_context.resources.has_active_terrain_range = true;
 		frame_context.resources.active_terrain_min_height =
 			frame_context.resources.terrain_heightfield_min_height;
 		frame_context.resources.active_terrain_max_height =
 			frame_context.resources.terrain_heightfield_max_height;
-	}
-	else if (DebugMenu_IsFinalTerrainHeightEnabled())
-	{
-		frame_context.resources.has_active_terrain_range = frame_context.resources.has_final_terrain_range;
-		frame_context.resources.active_terrain_min_height = frame_context.resources.final_terrain_min_height;
-		frame_context.resources.active_terrain_max_height = frame_context.resources.final_terrain_max_height;
 	}
 	else
 	{
@@ -983,7 +929,6 @@ RenderFrameContext Application::BuildFrameContext(double current_time, double el
 void Application::FinalizeEngineSystems()
 {
 	DebugMenu_Finalize();
-	TerrainDataModel::ClearComputedHeightSource();
 	m_has_last_terrain_material_settings = false;
 	m_terrain_classification_last_update_time = -1000.0;
 	m_active_water_surface_desc = WaterSurfaceDesc{};
@@ -993,7 +938,6 @@ void Application::FinalizeEngineSystems()
 	m_compute_grass_data_texture.Finalize();
 	m_compute_water_interaction_texture.Finalize();
 	m_compute_terrain_normal_texture.Finalize();
-	m_compute_final_terrain_height_texture.Finalize();
 	MeshFieldRenderer::SetRenderHeightSRV(nullptr);
 	MeshFieldRenderer::SetRenderNormalSRV(nullptr);
 	m_compute_task_runner.FinalizeAll();

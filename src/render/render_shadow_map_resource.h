@@ -8,7 +8,6 @@ class ForwardOpaquePass;
 class TransparencyPass;
 class PostProcessPass;
 class ComputeNoiseTexture;
-class ComputeFinalTerrainHeightTexture;
 class ComputeTerrainClassificationTexture;
 class ComputeTerrainNormalTexture;
 class ComputeWindFieldTexture;
@@ -56,7 +55,6 @@ private:
 	friend class ::TransparencyPass;
 	friend class ::PostProcessPass;
 	friend class ::ComputeNoiseTexture;
-	friend class ::ComputeFinalTerrainHeightTexture;
 	friend class ::ComputeTerrainClassificationTexture;
 	friend class ::ComputeTerrainNormalTexture;
 	friend class ::ComputeWindFieldTexture;

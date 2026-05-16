@@ -5,26 +5,13 @@
 
 #include <DirectXMath.h>
 
-#include "compute_final_terrain_height_texture.h"
-#include "debug_menu.h"
 #include "meshfield.h"
 
 namespace
 {
 using namespace DirectX;
 
-const ComputeFinalTerrainHeightTexture* g_computed_height_source = nullptr;
 TerrainMaterialSettings g_material_settings{};
-
-bool HasComputedHeightSource()
-{
-	return g_computed_height_source != nullptr && g_computed_height_source->IsValid();
-}
-
-bool UseComputedTerrainHeight()
-{
-	return DebugMenu_IsFinalTerrainHeightEnabled() && HasComputedHeightSource();
-}
 
 XMFLOAT3 NormalizeOrUp(const XMFLOAT3& vector)
 {
@@ -101,16 +88,6 @@ float Fbm(float x, float y)
 }
 }
 
-void TerrainDataModel::SetComputedHeightSource(const ComputeFinalTerrainHeightTexture* computed_height_source)
-{
-	g_computed_height_source = computed_height_source;
-}
-
-void TerrainDataModel::ClearComputedHeightSource()
-{
-	g_computed_height_source = nullptr;
-}
-
 void TerrainDataModel::SetMaterialSettings(const TerrainMaterialSettings& material_settings)
 {
 	g_material_settings = material_settings;
@@ -122,11 +99,6 @@ void TerrainDataModel::SetMaterialSettings(const TerrainMaterialSettings& materi
 
 Backend::RenderShaderResource TerrainDataModel::HeightResource()
 {
-	if (UseComputedTerrainHeight())
-	{
-		return g_computed_height_source->Resource();
-	}
-
 	return MeshFieldRenderer::HeightResource();
 }
 
@@ -137,15 +109,6 @@ ID3D11ShaderResourceView* TerrainDataModel::HeightSRV()
 
 float TerrainDataModel::SampleHeightWorld(float world_x, float world_z)
 {
-	if (UseComputedTerrainHeight() && g_computed_height_source->HasCpuHeightData())
-	{
-		return g_computed_height_source->SampleHeightWorld(
-			world_x,
-			world_z,
-			MeshFieldRenderer::FieldWidth(),
-			MeshFieldRenderer::FieldDepth());
-	}
-
 	return MeshFieldRenderer::GetHeight(world_x, world_z);
 }
 
