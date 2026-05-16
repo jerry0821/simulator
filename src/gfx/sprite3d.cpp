@@ -452,8 +452,6 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 	ShaderWater_SetSceneDepth(scene_depth_srv);
 	ShaderWater_Begin();
 
-	Texture_SetExternalSRV(texture_srv, 0);
-
 	Direct3D_SetCullMode(Direct3DCullMode::None);
 	Direct3D_SetAlphaBlendTransparent();
 	Direct3D_SetDepthEnable(true);
@@ -471,6 +469,8 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 	Direct3D_SetDepthEnable(true);
 	Direct3D_SetDepthWrite(true);
 	Direct3D_SetCullMode(Direct3DCullMode::Back);
+
+	(void)texture_srv;
 }
 
 void Sprite3D_DrawTransparentInstanced(

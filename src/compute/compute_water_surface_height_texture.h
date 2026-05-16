@@ -48,11 +48,16 @@ public:
 
 	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
 	void Finalize() override;
+	void ResetState();
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* surface_water_srv,
 		float water_surface_height) const;
 	bool IsValid() const override;
+	bool HasBootstrappedState() const
+	{
+		return m_has_bootstrapped_state;
+	}
 	Backend::RenderShaderResource Resource() const;
 	bool ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const;
 	bool ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const;
@@ -83,6 +88,7 @@ private:
 	ID3D11Texture2D* m_readback_texture = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	mutable unsigned int m_current_index = 0u;
+	mutable bool m_has_bootstrapped_state = false;
 	mutable bool m_cpu_height_data_ready = false;
 	mutable std::vector<float> m_terrain_height_samples{};
 	mutable std::vector<float> m_water_height_samples{};

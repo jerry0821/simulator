@@ -32,18 +32,10 @@ struct VS_OUT
     float2 uv : TEXCOORD1;
 };
 
-float SampleWaterHeight(float2 uv)
-{
-    static const float2 kHeightFieldResolution = float2(257.0f, 257.0f);
-    int2 coord = int2(saturate(uv) * (kHeightFieldResolution - 1.0f) + 0.5f);
-    return water_surface_height_tex.Load(int3(coord, 0)).y;
-}
-
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    posW.y = SampleWaterHeight(vi.uv);
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

@@ -108,6 +108,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 	}
 
 	m_current_index = 0u;
+	m_has_bootstrapped_state = false;
 
 	return true;
 }
@@ -129,6 +130,26 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 	m_device = nullptr;
 	m_context = nullptr;
 	m_current_index = 0u;
+	m_has_bootstrapped_state = false;
+}
+
+void ComputeWaterSurfaceHeightTexture::ResetState()
+{
+	if (!IsValid())
+	{
+		return;
+	}
+
+	const float clear_values[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	for (unsigned int index = 0; index < 2; ++index)
+	{
+		m_context->ClearUnorderedAccessViewFloat(m_uavs[index], clear_values);
+	}
+	m_current_index = 0u;
+	m_has_bootstrapped_state = false;
+	m_cpu_height_data_ready = false;
+	m_terrain_height_samples.clear();
+	m_water_height_samples.clear();
 }
 
 void ComputeWaterSurfaceHeightTexture::Update(
@@ -189,6 +210,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	// Promote the freshly written heightfield for GPU consumers immediately.
 	// CPU readback is only for debug/range inspection and must not gate render usage.
 	m_current_index = next_index;
+	m_has_bootstrapped_state = true;
 
 	if (m_readback_texture == nullptr)
 	{

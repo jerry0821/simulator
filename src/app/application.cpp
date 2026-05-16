@@ -372,8 +372,10 @@ bool Application::InitializeEngineSystems()
 			if (DebugMenu_ConsumeSurfaceWaterResetRequest())
 			{
 				m_compute_surface_water_texture.ClearState();
+				m_compute_water_surface_height_texture.ResetState();
 			}
 			const bool inject_water_pulse = DebugMenu_ConsumeSurfaceWaterInjectionRequest();
+			const bool seed_from_water_level = !m_compute_water_surface_height_texture.HasBootstrappedState();
 			m_compute_surface_water_texture.Update(
 				SimulationTerrainHeightResource().shaderResourceView(),
 				m_compute_rain_map_texture.Resource().shaderResourceView(),
@@ -381,6 +383,7 @@ bool Application::InitializeEngineSystems()
 				m_compute_water_surface_height_texture.Resource().shaderResourceView(),
 				water_height,
 				water_sim_settings,
+				seed_from_water_level,
 				inject_water_pulse,
 				static_cast<float>(current_time));
 		});
@@ -687,6 +690,11 @@ Backend::RenderShaderResource Application::BaseTerrainHeightResource() const
 
 Backend::RenderShaderResource Application::SimulationTerrainHeightResource() const
 {
+	if (UsingSharedTerrainWaterHeightfield())
+	{
+		return m_compute_water_surface_height_texture.Resource();
+	}
+
 	return BaseTerrainHeightResource();
 }
 

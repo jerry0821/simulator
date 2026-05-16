@@ -18,15 +18,15 @@ cbuffer SURFACE_WATER_CONSTANT_BUFFER : register(b0)
     uint width;
     uint height;
     uint presentation_only;
+    uint seed_from_water_level;
     uint injection_enabled;
     uint padding0;
 };
 
 Texture2D g_TerrainHeight : register(t0);
 Texture2D g_RainMap : register(t1);
-Texture2D g_PreviousSurfaceWater : register(t2);
-Texture2D g_WindField : register(t3);
-Texture2D<float2> g_PreviousTerrainWaterHeight : register(t4);
+Texture2D g_WindField : register(t2);
+Texture2D<float2> g_PreviousTerrainWaterHeight : register(t3);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_SurfaceWater : register(u0);
 RWTexture2D<float4> g_SurfaceWaterFlow : register(u1);
@@ -72,11 +72,6 @@ float4 SampleRain(int2 coord)
     return InBounds(coord) ? g_RainMap.Load(int3(coord, 0)) : float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-float4 SamplePreviousSurface(int2 coord)
-{
-    return InBounds(coord) ? g_PreviousSurfaceWater.Load(int3(coord, 0)) : float4(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
 float2 SafeNormalize(float2 v)
 {
     float len_sq = dot(v, v);
@@ -99,12 +94,15 @@ CellState LoadCellState(int2 coord)
     state.terrain_height = SampleTerrainHeight(coord);
 
     float4 rain_sample = SampleRain(coord);
-    float4 previous_surface = SamplePreviousSurface(coord);
+    const float previous_water_height = InBounds(coord)
+        ? g_PreviousTerrainWaterHeight.Load(int3(coord, 0)).g
+        : state.terrain_height;
 
-    state.previous_water = previous_surface.r;
+    state.previous_water = max(previous_water_height - state.terrain_height, 0.0f);
     state.rain_amount = rain_sample.r;
     state.rain_hint = rain_sample.g;
     state.basin_factor = ComputeBasinFactor(state.terrain_height);
+    state.source_water = 0.0f;
     if (IsEdgeCell(coord))
     {
         state.basin_factor *= 0.15f;
@@ -125,6 +123,15 @@ CellState LoadCellState(int2 coord)
         const float injection_falloff =
             1.0f - smoothstep(injection_radius * 0.30f, injection_radius, distance_to_injection);
         injected_water = injection_amount * saturate(injection_falloff);
+    }
+
+    if (presentation_only != 0u)
+    {
+        const float seeded_water = max(water_height - state.terrain_height, 0.0f);
+        state.rain_amount = 0.0f;
+        state.rain_hint = 0.0f;
+        state.source_water = max(state.previous_water, seeded_water) + injected_water;
+        return state;
     }
 
     state.source_water = max(state.previous_water + retained_rain + basin_recharge + injected_water, 0.0f);
@@ -219,13 +226,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     if (presentation_only != 0u)
     {
-        const float terrain_height = SampleTerrainHeight(coord);
-        const float previous_water_height = g_PreviousTerrainWaterHeight.Load(int3(coord, 0)).g;
-        const float seeded_water_height =
-            previous_water_height > terrain_height
-                ? previous_water_height
-                : water_height;
-        const float water_amount = max(seeded_water_height - terrain_height, 0.0f);
+        const CellState center = LoadCellState(coord);
+        const float water_amount = max(center.source_water, 0.0f);
         const float standing_water = smoothstep(0.03f, 0.22f, water_amount);
         const float depth_preview = smoothstep(0.01f, 0.12f, water_amount);
         const float preview_alpha = saturate(depth_preview * 0.16f + standing_water * 0.28f);

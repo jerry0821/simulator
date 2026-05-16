@@ -233,8 +233,8 @@ void ShaderWater_Begin()
 	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &g_pPSConstantBuffer1);
 	ID3D11ShaderResourceView* vs_srvs[2] = { g_pWaterSurfaceHeightSRV, g_pSurfaceWaterSRV };
 	Direct3D_GetContext()->VSSetShaderResources(0, 2, vs_srvs);
-	ID3D11ShaderResourceView* ps_srvs[3] = { g_pFlowFieldSRV, g_pSceneDepthSRV, g_pWaterInteractionSRV };
-	Direct3D_GetContext()->PSSetShaderResources(1, 3, ps_srvs);
+	ID3D11ShaderResourceView* ps_srvs[4] = { g_pSurfaceWaterSRV, g_pFlowFieldSRV, g_pSceneDepthSRV, g_pWaterInteractionSRV };
+	Direct3D_GetContext()->PSSetShaderResources(0, 4, ps_srvs);
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 }
 

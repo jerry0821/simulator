@@ -30,15 +30,13 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float water_depth = max(surface_water.r, 0.0f);
     // x is the terrain channel and stays terrain-driven.
     const float resolved_terrain_height = terrain_height;
-    const float target_surface_height = resolved_terrain_height + water_depth;
-    const float previous_surface_height =
-        previous_terrain_water.y > resolved_terrain_height
-            ? previous_terrain_water.y
-            : resolved_terrain_height;
-    // y is the water channel and is allowed to persist between frames.
+    // y is the water channel and remains an independent surface level.
+    // SurfaceWater decides where water is visible; y itself should not inherit terrain peaks.
+    const float previous_surface_height = previous_terrain_water.y;
+    const float seeded_surface_height = max(previous_surface_height, water_surface_height);
     const float resolved_surface_height =
         water_depth > minimum_depth_for_surface
-            ? max(target_surface_height, resolved_terrain_height)
+            ? seeded_surface_height
             : previous_surface_height;
 
     g_WaterSurfaceHeight[dispatch_thread_id.xy] = float2(resolved_terrain_height, resolved_surface_height);

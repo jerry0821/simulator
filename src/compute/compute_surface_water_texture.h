@@ -61,6 +61,7 @@ public:
 		ID3D11ShaderResourceView* previous_terrain_water_height_srv,
 		float water_height,
 		const SurfaceWaterSimulationSettings& settings,
+		bool seed_from_water_level,
 		bool inject_water_pulse,
 		float time_seconds);
 	bool IsValid() const override;
@@ -91,8 +92,12 @@ private:
 		unsigned int width = 0;
 		unsigned int height = 0;
 		unsigned int presentation_only = 0u;
+		unsigned int seed_from_water_level = 0u;
 		unsigned int injection_enabled = 0u;
 		unsigned int padding0 = 0u;
+		unsigned int padding1 = 0u;
+		unsigned int padding2 = 0u;
+		unsigned int padding3 = 0u;
 	};
 
 	static constexpr unsigned int kTextureWidth = 257;
