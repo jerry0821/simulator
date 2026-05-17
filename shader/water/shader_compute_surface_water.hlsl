@@ -18,15 +18,16 @@ cbuffer SURFACE_WATER_CONSTANT_BUFFER : register(b0)
     uint width;
     uint height;
     uint presentation_only;
-    uint seed_from_water_level;
     uint injection_enabled;
     uint padding0;
+    uint padding1;
+    uint padding2;
+    uint padding3;
 };
 
-Texture2D g_TerrainHeight : register(t0);
+Texture2D<float2> g_TerrainHeight : register(t0);
 Texture2D g_RainMap : register(t1);
 Texture2D g_WindField : register(t2);
-Texture2D<float2> g_PreviousTerrainWaterHeight : register(t3);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_SurfaceWater : register(u0);
 RWTexture2D<float4> g_SurfaceWaterFlow : register(u1);
@@ -64,7 +65,12 @@ float2 ComputeWorldPosition(int2 coord)
 
 float SampleTerrainHeight(int2 coord)
 {
-    return InBounds(coord) ? g_TerrainHeight.Load(int3(coord, 0)).r : water_height;
+    return InBounds(coord) ? g_TerrainHeight.Load(int3(coord, 0)).x : water_height;
+}
+
+float SampleWaterHeight(int2 coord)
+{
+    return InBounds(coord) ? g_TerrainHeight.Load(int3(coord, 0)).y : water_height;
 }
 
 float4 SampleRain(int2 coord)
@@ -94,10 +100,7 @@ CellState LoadCellState(int2 coord)
     state.terrain_height = SampleTerrainHeight(coord);
 
     float4 rain_sample = SampleRain(coord);
-    const float previous_water_height = InBounds(coord)
-        ? g_PreviousTerrainWaterHeight.Load(int3(coord, 0)).g
-        : state.terrain_height;
-
+    const float previous_water_height = SampleWaterHeight(coord);
     state.previous_water = max(previous_water_height - state.terrain_height, 0.0f);
     state.rain_amount = rain_sample.r;
     state.rain_hint = rain_sample.g;
@@ -127,10 +130,9 @@ CellState LoadCellState(int2 coord)
 
     if (presentation_only != 0u)
     {
-        const float seeded_water = max(water_height - state.terrain_height, 0.0f);
         state.rain_amount = 0.0f;
         state.rain_hint = 0.0f;
-        state.source_water = max(state.previous_water, seeded_water) + injected_water;
+        state.source_water = max(state.previous_water + injected_water, 0.0f);
         return state;
     }
 

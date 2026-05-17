@@ -126,9 +126,11 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 			? terrain_water.water_mask.shaderResourceView()
 			: nullptr;
 	ID3D11ShaderResourceView* water_surface_height_srv =
-		terrain_water.water_surface_height_texture.isValid()
-			? terrain_water.water_surface_height_texture.shaderResourceView()
-			: nullptr;
+		frame_context.resources.terrain_height.isValid()
+			? frame_context.resources.terrain_height.shaderResourceView()
+			: (terrain_water.water_surface_height_texture.isValid()
+				? terrain_water.water_surface_height_texture.shaderResourceView()
+				: nullptr);
 	ID3D11ShaderResourceView* water_interaction_srv =
 		terrain_water.water_interaction_data.isValid()
 			? terrain_water.water_interaction_data.shaderResourceView()
@@ -185,7 +187,6 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		water_desc.base_color.w * 0.42f
 	};
 
-	Direct3D_SetSceneColorOnlyRenderTarget();
 	Sprite3D_DrawWaterSRV(
 		water_mask_srv,
 		water_surface_height_srv,
@@ -193,8 +194,8 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		wind_field_srv,
 		water_interaction_srv,
 		scene_depth_srv,
-		highlight_world,
-		flow_color,
+		water_world,
+		base_color,
 		frame_context.globals.camera_position,
 		static_cast<float>(frame_context.globals.time_seconds),
 		water_desc.center_x,

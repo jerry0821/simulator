@@ -32,7 +32,6 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
-			ComputeSharedResourceId::SurfaceWater,
 			ComputeSharedResourceId::SurfaceWaterFlow
 		};
 		return kReadResources;
@@ -50,7 +49,6 @@ public:
 	void Finalize() override;
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* surface_water_srv,
 		ID3D11ShaderResourceView* surface_water_flow_srv) const;
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;

@@ -754,8 +754,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             "TerrainVegetationSuitability: %s",
             frame_context->resources.terrain_vegetation_suitability.isValid() ? "Active" : "Missing");
         ImGui::Text("GrassData: %s", frame_context->resources.grass_data.isValid() ? "Active" : "Missing");
-        ImGui::Text("RainMap: %s", frame_context->resources.rain_map.isValid() ? "Active" : "Missing");
-        ImGui::Text("SurfaceWater: %s", frame_context->resources.surface_water.isValid() ? "Active" : "Missing");
         ImGui::Text("WaterSurfaceHeight: %s", frame_context->resources.water_surface_height.isValid() ? "Active" : "Missing");
         if (frame_context->resources.has_terrain_heightfield_range)
         {
@@ -789,14 +787,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         {
             ImGui::TextDisabled("  TerrainHeight.xy.G Range: unavailable");
         }
-        ImGui::Text("SurfaceWaterFlow: %s", frame_context->resources.surface_water_flow.isValid() ? "Active" : "Missing");
-        ImGui::Text("WaterVelocity: %s", frame_context->resources.water_velocity.isValid() ? "Active" : "Missing");
-        ImGui::Text("WaterSediment: %s", frame_context->resources.water_sediment.isValid() ? "Active" : "Missing");
-        ImGui::Text("VisibleWater: %s", frame_context->resources.visible_water.isValid() ? "Active" : "Missing");
-        ImGui::Text("WaterMask: %s", frame_context->resources.water_mask.isValid() ? "Active" : "Missing");
-        ImGui::Text("WaterInteractionData: %s", frame_context->resources.water_interaction_data.isValid() ? "Active" : "Missing");
-        ImGui::Text("SoilMoisture: %s", frame_context->resources.soil_moisture.isValid() ? "Active" : "Missing");
-        ImGui::Text("ErosionDelta: %s", frame_context->resources.erosion_delta.isValid() ? "Active" : "Missing");
         ImGui::Checkbox("Show Resource Previews", &g_ShowComputeResourcePreviews);
 
         if (g_ShowComputeResourcePreviews && frame_context->resources.base_terrain_height.isValid())
@@ -830,26 +820,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             }
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.terrain_height.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.rain_map.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("RainMap Preview");
-            ImGui::TextWrapped("Bright areas mean stronger rainfall. This drives surface water accumulation.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.rain_map.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.surface_water.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("SurfaceWater Preview");
-            ImGui::TextWrapped("R = authoritative water depth. B = standing-water helper used by WaterMask. G/A remain preview helpers.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.surface_water.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 
@@ -894,96 +864,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
             }
             ImGui::Image(
                 ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_surface_height.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.surface_water_flow.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("SurfaceWater Flow Preview");
-            ImGui::TextWrapped("RGBA = conserved outflow toward East / West / North / South.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.surface_water_flow.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.surface_water_flow_preview.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("SurfaceWater Flow Overlay");
-            ImGui::TextWrapped("This is the lightweight visual overlay drawn on the safe water surface path.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.surface_water_flow_preview.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.water_velocity.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("WaterVelocity Preview");
-            ImGui::TextWrapped("R/G = velocity XY, B = speed, A = transport energy. This is the raw hydrology velocity field.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_velocity.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.water_sediment.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("WaterSediment Preview");
-            ImGui::TextWrapped("R = suspended sediment, G = deposition tendency, B = erosion tendency, A = sediment capacity.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_sediment.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.visible_water.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("VisibleWater Preview");
-            ImGui::TextWrapped("R = visible standing water, G = thin runoff hint, B = pooled-water helper. This splits renderable water from raw simulation depth.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.visible_water.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.water_mask.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("WaterMask Preview");
-            ImGui::TextWrapped("R = water contact, G = shoreline band, B = pooled-water support, A = render coverage.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_mask.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.water_interaction_data.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("WaterInteractionData Preview");
-            ImGui::TextWrapped("R = surface interaction, G = shoreline influence, B = pooled-water interaction, A = retained wetness. This is the consumer-facing water field.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.water_interaction_data.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.soil_moisture.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("SoilMoisture Preview");
-            ImGui::TextWrapped("R = retained soil moisture, G = shoreline seepage, B = recent rainfall memory.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.soil_moisture.shaderResourceView())),
-                ImVec2(192.0f, 192.0f));
-        }
-
-        if (g_ShowComputeResourcePreviews && frame_context->resources.erosion_delta.isValid())
-        {
-            ImGui::Separator();
-            ImGui::TextDisabled("ErosionDelta Preview");
-            ImGui::TextWrapped("R = erosion accumulation, G = deposition accumulation, B = signed delta, A = hydraulic transport energy.");
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.erosion_delta.shaderResourceView())),
                 ImVec2(192.0f, 192.0f));
         }
 

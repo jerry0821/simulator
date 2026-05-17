@@ -152,12 +152,11 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 	m_water_height_samples.clear();
 }
 
-void ComputeWaterSurfaceHeightTexture::Update(
+void ComputeWaterSurfaceHeightTexture::InitializeState(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* surface_water_srv,
 	float water_surface_height) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr || surface_water_srv == nullptr)
+	if (!IsValid() || terrain_height_srv == nullptr)
 	{
 		return;
 	}
@@ -165,8 +164,12 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	const WaterSurfaceHeightConstants constants = {
 		water_surface_height,
 		0.004f,
+		0.35f,
+		0.70f,
+		0.0125f,
 		kTextureWidth,
 		kTextureHeight,
+		1u,
 		0u,
 		0u,
 		0u,
@@ -180,8 +183,108 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
-		surface_water_srv,
 		m_srvs[previous_index]
+	};
+	ID3D11UnorderedAccessView* uavs[] = { m_uavs[next_index] };
+	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
+	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
+
+	m_context->CSSetShader(m_compute_shader, nullptr, 0);
+	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
+	m_context->CSSetShaderResources(0, 2, srvs);
+	m_context->CSSetSamplers(0, 1, samplers);
+	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+	m_context->Dispatch(
+		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
+		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
+		1);
+
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uav = nullptr;
+	ID3D11Buffer* null_cb = nullptr;
+	ID3D11SamplerState* null_sampler = nullptr;
+	m_context->CSSetShaderResources(0, 2, null_srvs);
+	m_context->CSSetSamplers(0, 1, &null_sampler);
+	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+	m_context->CSSetConstantBuffers(0, 1, &null_cb);
+	m_context->CSSetShader(nullptr, nullptr, 0);
+
+	// Promote the freshly written heightfield for GPU consumers immediately.
+	// CPU readback is only for debug/range inspection and must not gate render usage.
+	m_current_index = next_index;
+	m_has_bootstrapped_state = true;
+
+	if (m_readback_texture == nullptr)
+	{
+		m_cpu_height_data_ready = false;
+		return;
+	}
+
+	m_context->CopyResource(m_readback_texture, m_textures[next_index]);
+	m_context->Flush();
+
+	D3D11_MAPPED_SUBRESOURCE mapped_resource{};
+	const HRESULT map_result = m_context->Map(m_readback_texture, 0, D3D11_MAP_READ, 0, &mapped_resource);
+	if (FAILED(map_result))
+	{
+		hal::dout << "ComputeWaterSurfaceHeightTexture::Update(): staging readback Map failed -> 0x"
+				  << std::hex << static_cast<unsigned long>(map_result) << std::dec << std::endl;
+		m_cpu_height_data_ready = false;
+		return;
+	}
+
+	const size_t sample_count = static_cast<size_t>(kTextureWidth) * static_cast<size_t>(kTextureHeight);
+	m_terrain_height_samples.assign(sample_count, 0.0f);
+	m_water_height_samples.assign(sample_count, 0.0f);
+	for (unsigned int row = 0; row < kTextureHeight; ++row)
+	{
+		const float* source_row = reinterpret_cast<const float*>(
+			static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * row);
+		for (unsigned int col = 0; col < kTextureWidth; ++col)
+		{
+			const size_t sample_index = static_cast<size_t>(row) * kTextureWidth + col;
+			m_terrain_height_samples[sample_index] = source_row[col * 2 + 0];
+			m_water_height_samples[sample_index] = source_row[col * 2 + 1];
+		}
+	}
+
+	m_context->Unmap(m_readback_texture, 0);
+	m_cpu_height_data_ready = true;
+}
+
+void ComputeWaterSurfaceHeightTexture::Update(
+	ID3D11ShaderResourceView* terrain_height_srv,
+	ID3D11ShaderResourceView* rain_map_srv) const
+{
+	if (!IsValid() || terrain_height_srv == nullptr || rain_map_srv == nullptr)
+	{
+		return;
+	}
+
+	const WaterSurfaceHeightConstants constants = {
+		0.0f,
+		0.004f,
+		0.35f,
+		0.70f,
+		0.0125f,
+		kTextureWidth,
+		kTextureHeight,
+		0u,
+		0u,
+		0u,
+		0u,
+		0u
+	};
+
+	const unsigned int previous_index = m_current_index;
+	const unsigned int next_index = (m_current_index + 1u) % 2u;
+
+	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);
+
+	ID3D11ShaderResourceView* srvs[] = {
+		terrain_height_srv,
+		m_srvs[previous_index],
+		rain_map_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uavs[next_index] };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
@@ -207,8 +310,6 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 
-	// Promote the freshly written heightfield for GPU consumers immediately.
-	// CPU readback is only for debug/range inspection and must not gate render usage.
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
 

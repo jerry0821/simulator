@@ -33,7 +33,7 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
-			ComputeSharedResourceId::SurfaceWater
+			ComputeSharedResourceId::RainMap
 		};
 		return kReadResources;
 	}
@@ -49,10 +49,12 @@ public:
 	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
 	void Finalize() override;
 	void ResetState();
+	void InitializeState(
+		ID3D11ShaderResourceView* terrain_height_srv,
+		float water_surface_height) const;
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* surface_water_srv,
-		float water_surface_height) const;
+		ID3D11ShaderResourceView* rain_map_srv) const;
 	bool IsValid() const override;
 	bool HasBootstrappedState() const
 	{
@@ -67,12 +69,16 @@ private:
 	{
 		float water_surface_height = 0.0f;
 		float minimum_depth_for_surface = 0.004f;
+		float flow_rate = 0.24f;
+		float max_outflow_fraction = 0.55f;
+		float evaporation_rate = 0.01f;
 		unsigned int width = 0;
 		unsigned int height = 0;
-		unsigned int padding0 = 0u;
+		unsigned int initialize_from_water_level = 0u;
 		unsigned int padding1 = 0u;
 		unsigned int padding2 = 0u;
 		unsigned int padding3 = 0u;
+		unsigned int padding4 = 0u;
 	};
 
 	static constexpr unsigned int kTextureWidth = 257;

@@ -107,12 +107,10 @@ void ComputeVisibleWaterTexture::Finalize()
 
 void ComputeVisibleWaterTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* surface_water_srv,
 	ID3D11ShaderResourceView* surface_water_flow_srv) const
 {
 	if (!IsValid() ||
 		terrain_height_srv == nullptr ||
-		surface_water_srv == nullptr ||
 		surface_water_flow_srv == nullptr)
 	{
 		return;
@@ -137,7 +135,6 @@ void ComputeVisibleWaterTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
-		surface_water_srv,
 		surface_water_flow_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uav };
@@ -146,7 +143,7 @@ void ComputeVisibleWaterTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 3, srvs);
+	m_context->CSSetShaderResources(0, 2, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -154,11 +151,11 @@ void ComputeVisibleWaterTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 3, null_srvs);
+	m_context->CSSetShaderResources(0, 2, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

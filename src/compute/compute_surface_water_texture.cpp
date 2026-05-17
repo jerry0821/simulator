@@ -236,10 +236,8 @@ void ComputeSurfaceWaterTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* rain_map_srv,
 	ID3D11ShaderResourceView* wind_field_srv,
-	ID3D11ShaderResourceView* previous_terrain_water_height_srv,
 	float water_height,
 	const SurfaceWaterSimulationSettings& settings,
-	bool seed_from_water_level,
 	bool inject_water_pulse,
 	float time_seconds)
 {
@@ -268,7 +266,6 @@ void ComputeSurfaceWaterTexture::Update(
 		kTextureWidth,
 		kTextureHeight,
 		settings.presentation_only ? 1u : 0u,
-		seed_from_water_level ? 1u : 0u,
 		inject_water_pulse ? 1u : 0u,
 		0u,
 		0u,
@@ -281,8 +278,7 @@ void ComputeSurfaceWaterTexture::Update(
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
 		rain_map_srv,
-		wind_field_srv,
-		previous_terrain_water_height_srv
+		wind_field_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = {
 		m_uavs[next_index],
@@ -296,7 +292,7 @@ void ComputeSurfaceWaterTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 4, srvs);
+	m_context->CSSetShaderResources(0, 3, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 5, uavs, nullptr);
 	m_context->Dispatch(
@@ -304,11 +300,11 @@ void ComputeSurfaceWaterTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 4, null_srvs);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 5, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

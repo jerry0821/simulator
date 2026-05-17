@@ -134,7 +134,9 @@ void EnsureWaterGeometry()
 			const float u = static_cast<float>(x) / static_cast<float>(kWaterGridResolution);
 			const float v = static_cast<float>(y) / static_cast<float>(kWaterGridResolution);
 			Vertex3D& vertex = vertices[static_cast<size_t>(y) * vertex_side + x];
-			vertex.position = { u - 0.5f, 0.5f - v, 0.0f };
+			// Match the terrain heightfield's UV-to-world mapping:
+			// terrain uses v=0 at -depth/2 and v=1 at +depth/2.
+			vertex.position = { u - 0.5f, v - 0.5f, 0.0f };
 			vertex.normal = { 0.0f, 0.0f, -1.0f };
 			vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
 			vertex.texcoord = { u, v };
@@ -423,7 +425,7 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 						   float fresnel_power,
 						   float highlight_strength)
 {
-	if (texture_srv == nullptr || g_device == nullptr || g_context == nullptr)
+	if (water_surface_height_srv == nullptr || g_device == nullptr || g_context == nullptr)
 	{
 		return;
 	}

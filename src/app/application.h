@@ -103,6 +103,7 @@ private:
 	TerrainMaterialSettings m_last_terrain_material_settings{};
 	bool m_has_last_terrain_material_settings = false;
 	bool m_use_shared_terrain_water_heightfield = true;
+	bool m_pending_surface_water_reset = false;
 };
 
 #endif // APPLICATION_H

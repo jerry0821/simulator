@@ -24,18 +24,25 @@ struct PS_INPUT
     float2 uv : TEXCOORD1;
 };
 
-Texture2D surface_water_tex : register(t0);
+Texture2D<float2> water_surface_height_tex : register(t0);
 SamplerState samp : register(s0);
 
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
-    const float2 uv = saturate(ps_in.uv);
-    const float water_depth = max(surface_water_tex.SampleLevel(samp, uv, 0.0f).r, 0.0f);
-    const float alpha = smoothstep(0.004f, 0.035f, water_depth) * 0.34f;
-    const float depth_factor = smoothstep(0.01f, 0.10f, water_depth);
-    const float3 color = lerp(
-        diffuse_color.rgb * float3(0.95f, 0.99f, 1.02f),
-        diffuse_color.rgb * float3(0.76f, 0.86f, 0.98f),
-        depth_factor);
-    return float4(color, alpha);
+    uint tex_width = 0;
+    uint tex_height = 0;
+    water_surface_height_tex.GetDimensions(tex_width, tex_height);
+    const uint2 texel = uint2(
+        min((uint)round(ps_in.uv.x * max((int)tex_width - 1, 0)), tex_width - 1),
+        min((uint)round(ps_in.uv.y * max((int)tex_height - 1, 0)), tex_height - 1));
+    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0));
+    const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+    const float alpha = water_depth > 0.001f
+        ? max(0.42f, saturate(water_depth * 0.48f) * max(diffuse_color.a, 0.55f))
+        : 0.0f;
+    const float depth_tint = saturate(water_depth * 0.18f);
+    const float3 shallow_color = float3(0.16f, 0.58f, 0.96f);
+    const float3 deep_color = float3(0.04f, 0.26f, 0.72f);
+    const float3 water_color = lerp(shallow_color, deep_color, depth_tint);
+    return float4(water_color, alpha);
 }

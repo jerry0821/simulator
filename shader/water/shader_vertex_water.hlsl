@@ -14,8 +14,6 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
 };
 
 Texture2D<float2> water_surface_height_tex : register(t0);
-Texture2D surface_water_tex : register(t1);
-SamplerState samp : register(s0);
 
 struct VS_IN
 {
@@ -36,6 +34,15 @@ VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
+    uint tex_width = 0;
+    uint tex_height = 0;
+    water_surface_height_tex.GetDimensions(tex_width, tex_height);
+    const uint2 texel = uint2(
+        min((uint)round(vi.uv.x * max((int)tex_width - 1, 0)), tex_width - 1),
+        min((uint)round(vi.uv.y * max((int)tex_height - 1, 0)), tex_height - 1));
+    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0));
+    const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+    posW.y = terrain_water_height.y + (water_depth > 0.0f ? 0.01f : 0.0f);
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

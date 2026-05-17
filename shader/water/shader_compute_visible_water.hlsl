@@ -14,9 +14,8 @@ cbuffer VISIBLE_WATER_CONSTANT_BUFFER : register(b0)
     uint padding2;
 };
 
-Texture2D g_TerrainHeight : register(t0);
-Texture2D g_SurfaceWater : register(t1);
-Texture2D g_SurfaceWaterFlow : register(t2);
+Texture2D<float2> g_TerrainHeight : register(t0);
+Texture2D g_SurfaceWaterFlow : register(t1);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_VisibleWater : register(u0);
 
@@ -28,7 +27,12 @@ float Smoothstep01(float v)
 
 float SampleTerrain(int2 coord)
 {
-    return g_TerrainHeight.Load(int3(coord, 0)).r;
+    return g_TerrainHeight.Load(int3(coord, 0)).x;
+}
+
+float SampleWaterHeight(int2 coord)
+{
+    return g_TerrainHeight.Load(int3(coord, 0)).y;
 }
 
 [numthreads(8, 8, 1)]
@@ -45,7 +49,6 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const int2 up_coord = int2(coord.x, max(coord.y - 1, 0));
     const int2 down_coord = int2(coord.x, min(coord.y + 1, int(height) - 1));
 
-    const float4 surface = g_SurfaceWater.Load(int3(coord, 0));
     const float4 flow = g_SurfaceWaterFlow.Load(int3(coord, 0));
 
     const float terrain_center = SampleTerrain(coord);
@@ -59,8 +62,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float slope_keep =
         1.0f - Smoothstep01(saturate((slope - slope_suppress_start) / max(slope_suppress_end - slope_suppress_start, 1.0e-4f)));
 
-    const float water_depth = surface.r;
-    const float standing_water = surface.b;
+    const float water_depth = max(SampleWaterHeight(coord) - terrain_center, 0.0f);
+    const float standing_water = Smoothstep01(saturate((water_depth - visible_depth_min) / max(standing_water_min - visible_depth_min, 1.0e-4f)));
     const float flow_strength = saturate((flow.x + flow.y + flow.z + flow.w) * 5.0f);
 
     const float pooled_core =
