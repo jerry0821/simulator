@@ -37,7 +37,7 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
-			ComputeSharedResourceId::SurfaceWater,
+			ComputeSharedResourceId::WaterSurfaceHeight,
 			ComputeSharedResourceId::WaterVelocity,
 			ComputeSharedResourceId::WaterSediment
 		};
@@ -56,7 +56,7 @@ public:
 	void Finalize() override;
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* surface_water_srv,
+		ID3D11ShaderResourceView* water_surface_height_srv,
 		ID3D11ShaderResourceView* water_velocity_srv,
 		ID3D11ShaderResourceView* water_sediment_srv);
 	bool IsValid() const override;

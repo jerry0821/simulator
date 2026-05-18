@@ -59,6 +59,7 @@ public:
 	static float GetHeight(float x, float z);
 	static void ApplyTerrainSettings(const TerrainSettings& settings);
 	static const TerrainSettings& GetTerrainSettings();
+	static void RebuildHeightTextureForShaderReload();
 	static float GetSuggestedWaterHeight();
 	static float FieldWidth();
 	static float FieldDepth();

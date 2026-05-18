@@ -1,6 +1,7 @@
 #include "compute_water_surface_height_texture.h"
 
 #include <algorithm>
+#include <cfloat>
 #include <cstring>
 #include <d3d11.h>
 #include <fstream>
@@ -164,15 +165,12 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	const WaterSurfaceHeightConstants constants = {
 		water_surface_height,
 		0.004f,
-		0.35f,
-		0.70f,
-		0.0125f,
+		0.0f,
+		0.0f,
+		0.0f,
 		kTextureWidth,
 		kTextureHeight,
 		1u,
-		0u,
-		0u,
-		0u,
 		0u
 	};
 
@@ -254,9 +252,9 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 
 void ComputeWaterSurfaceHeightTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* rain_map_srv) const
+	ID3D11ShaderResourceView* surface_water_srv) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr || rain_map_srv == nullptr)
+	if (!IsValid() || terrain_height_srv == nullptr || surface_water_srv == nullptr)
 	{
 		return;
 	}
@@ -264,27 +262,22 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	const WaterSurfaceHeightConstants constants = {
 		0.0f,
 		0.004f,
-		0.35f,
-		0.70f,
-		0.0125f,
+		0.0f,
+		0.0f,
+		0.0f,
 		kTextureWidth,
 		kTextureHeight,
-		0u,
-		0u,
-		0u,
 		0u,
 		0u
 	};
 
-	const unsigned int previous_index = m_current_index;
 	const unsigned int next_index = (m_current_index + 1u) % 2u;
 
 	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
-		m_srvs[previous_index],
-		rain_map_srv
+		surface_water_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uavs[next_index] };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
@@ -292,7 +285,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 3, srvs);
+	m_context->CSSetShaderResources(0, 2, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -300,11 +293,11 @@ void ComputeWaterSurfaceHeightTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 3, null_srvs);
+	m_context->CSSetShaderResources(0, 2, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
@@ -403,5 +396,61 @@ bool ComputeWaterSurfaceHeightTexture::ComputeWaterHeightRange(float& out_min_he
 
 	out_min_height = *min_it;
 	out_max_height = *max_it;
+	return true;
+}
+
+bool ComputeWaterSurfaceHeightTexture::ComputeWaterDepthRange(float& out_min_depth, float& out_max_depth) const
+{
+	if (!m_cpu_height_data_ready ||
+		m_water_height_samples.empty() ||
+		m_terrain_height_samples.empty() ||
+		m_water_height_samples.size() != m_terrain_height_samples.size())
+	{
+		return false;
+	}
+
+	float min_depth = FLT_MAX;
+	float max_depth = -FLT_MAX;
+	for (size_t i = 0; i < m_water_height_samples.size(); ++i)
+	{
+		const float depth = std::max(m_water_height_samples[i] - m_terrain_height_samples[i], 0.0f);
+		min_depth = std::min(min_depth, depth);
+		max_depth = std::max(max_depth, depth);
+	}
+
+	if (min_depth == FLT_MAX || max_depth == -FLT_MAX)
+	{
+		return false;
+	}
+
+	out_min_depth = min_depth;
+	out_max_depth = max_depth;
+	return true;
+}
+
+bool ComputeWaterSurfaceHeightTexture::SampleCell(
+	unsigned int x,
+	unsigned int y,
+	float& out_terrain_height,
+	float& out_water_height,
+	float& out_water_depth) const
+{
+	if (!m_cpu_height_data_ready ||
+		m_terrain_height_samples.empty() ||
+		m_water_height_samples.empty() ||
+		m_terrain_height_samples.size() != m_water_height_samples.size())
+	{
+		return false;
+	}
+
+	if (x >= kTextureWidth || y >= kTextureHeight)
+	{
+		return false;
+	}
+
+	const size_t sample_index = static_cast<size_t>(y) * kTextureWidth + x;
+	out_terrain_height = m_terrain_height_samples[sample_index];
+	out_water_height = m_water_height_samples[sample_index];
+	out_water_depth = std::max(out_water_height - out_terrain_height, 0.0f);
 	return true;
 }

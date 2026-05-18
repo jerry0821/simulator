@@ -17,27 +17,7 @@ ID3D11Buffer* g_pVSConstantBuffer0 = nullptr;
 ID3D11Buffer* g_pVSConstantBuffer1 = nullptr;
 ID3D11Buffer* g_pVSConstantBuffer2 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer0 = nullptr;
-ID3D11Buffer* g_pPSConstantBuffer1 = nullptr;
-ID3D11ShaderResourceView* g_pWaterSurfaceHeightSRV = nullptr;
-ID3D11ShaderResourceView* g_pFlowFieldSRV = nullptr;
-ID3D11ShaderResourceView* g_pWaterInteractionSRV = nullptr;
-ID3D11ShaderResourceView* g_pSceneDepthSRV = nullptr;
-
-struct WaterSurfaceSettings
-{
-	XMFLOAT3 camera_position{ 0.0f, 0.0f, 0.0f };
-	float fresnel_power = 4.5f;
-	float highlight_strength = 0.28f;
-	float time_seconds = 0.0f;
-	float surface_center_x = 0.0f;
-	float surface_center_z = 0.0f;
-	float surface_size_x = 512.0f;
-	float surface_size_z = 512.0f;
-	float padding0 = 0.0f;
-	float padding1 = 0.0f;
-};
-
-WaterSurfaceSettings g_surface_settings{};
+ID3D11ShaderResourceView* g_pSharedHeightfieldSRV = nullptr;
 }
 
 bool ShaderWater_Initialize()
@@ -122,15 +102,12 @@ bool ShaderWater_Initialize()
 
 	buffer_desc.ByteWidth = sizeof(XMFLOAT4);
 	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pPSConstantBuffer0);
-	buffer_desc.ByteWidth = sizeof(WaterSurfaceSettings);
-	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pPSConstantBuffer1);
 
 	return true;
 }
 
 void ShaderWater_Finalize()
 {
-	SAFE_RELEASE(g_pPSConstantBuffer1);
 	SAFE_RELEASE(g_pPSConstantBuffer0);
 	SAFE_RELEASE(g_pPixelShader);
 	SAFE_RELEASE(g_pVSConstantBuffer2);
@@ -138,10 +115,7 @@ void ShaderWater_Finalize()
 	SAFE_RELEASE(g_pVSConstantBuffer0);
 	SAFE_RELEASE(g_pInputLayout);
 	SAFE_RELEASE(g_pVertexShader);
-	g_pWaterSurfaceHeightSRV = nullptr;
-	g_pFlowFieldSRV = nullptr;
-	g_pWaterInteractionSRV = nullptr;
-	g_pSceneDepthSRV = nullptr;
+	g_pSharedHeightfieldSRV = nullptr;
 }
 
 void ShaderWater_SetWorldMatrix(const XMMATRIX& matrix)
@@ -170,53 +144,9 @@ void ShaderWater_SetMaterialColor(const XMFLOAT4& material_color)
 	Direct3D_GetContext()->UpdateSubresource(g_pPSConstantBuffer0, 0, nullptr, &material_color, 0, 0);
 }
 
-void ShaderWater_SetCameraPosition(const XMFLOAT3& camera_position)
+void ShaderWater_SetSharedHeightfield(ID3D11ShaderResourceView* terrain_height_srv)
 {
-	g_surface_settings.camera_position = camera_position;
-	Direct3D_GetContext()->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &g_surface_settings, 0, 0);
-}
-
-void ShaderWater_SetSurfaceSettings(float fresnel_power,
-									float highlight_strength,
-									float time_seconds,
-									float surface_center_x,
-									float surface_center_z,
-									float surface_size_x,
-									float surface_size_z)
-{
-	g_surface_settings.fresnel_power = fresnel_power;
-	g_surface_settings.highlight_strength = highlight_strength;
-	g_surface_settings.time_seconds = time_seconds;
-	g_surface_settings.surface_center_x = surface_center_x;
-	g_surface_settings.surface_center_z = surface_center_z;
-	g_surface_settings.surface_size_x = surface_size_x;
-	g_surface_settings.surface_size_z = surface_size_z;
-	Direct3D_GetContext()->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &g_surface_settings, 0, 0);
-}
-
-void ShaderWater_SetWaterSurfaceHeight(ID3D11ShaderResourceView* water_surface_height_srv)
-{
-	g_pWaterSurfaceHeightSRV = water_surface_height_srv;
-}
-
-void ShaderWater_SetSurfaceWater(ID3D11ShaderResourceView* surface_water_srv)
-{
-	(void)surface_water_srv;
-}
-
-void ShaderWater_SetFlowField(ID3D11ShaderResourceView* flow_field_srv)
-{
-	g_pFlowFieldSRV = flow_field_srv;
-}
-
-void ShaderWater_SetWaterInteraction(ID3D11ShaderResourceView* water_interaction_srv)
-{
-	g_pWaterInteractionSRV = water_interaction_srv;
-}
-
-void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv)
-{
-	g_pSceneDepthSRV = scene_depth_srv;
+	g_pSharedHeightfieldSRV = terrain_height_srv;
 }
 
 void ShaderWater_Begin()
@@ -228,19 +158,16 @@ void ShaderWater_Begin()
 	Direct3D_GetContext()->VSSetConstantBuffers(1, 1, &g_pVSConstantBuffer1);
 	Direct3D_GetContext()->VSSetConstantBuffers(2, 1, &g_pVSConstantBuffer2);
 	Direct3D_GetContext()->PSSetConstantBuffers(0, 1, &g_pPSConstantBuffer0);
-	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &g_pPSConstantBuffer1);
-	ID3D11ShaderResourceView* vs_srvs[1] = { g_pWaterSurfaceHeightSRV };
+	ID3D11ShaderResourceView* vs_srvs[1] = { g_pSharedHeightfieldSRV };
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, vs_srvs);
-	ID3D11ShaderResourceView* ps_srvs[4] = { g_pWaterSurfaceHeightSRV, g_pFlowFieldSRV, g_pSceneDepthSRV, g_pWaterInteractionSRV };
-	Direct3D_GetContext()->PSSetShaderResources(0, 4, ps_srvs);
+	ID3D11ShaderResourceView* ps_srvs[1] = { g_pSharedHeightfieldSRV };
+	Direct3D_GetContext()->PSSetShaderResources(0, 1, ps_srvs);
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 }
 
 void ShaderWater_End()
 {
-	ID3D11ShaderResourceView* null_srvs[4] = { nullptr, nullptr, nullptr, nullptr };
-	ID3D11Buffer* null_ps_buffer = nullptr;
+	ID3D11ShaderResourceView* null_srvs[1] = { nullptr };
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, null_srvs);
-	Direct3D_GetContext()->PSSetShaderResources(0, 4, null_srvs);
-	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &null_ps_buffer);
+	Direct3D_GetContext()->PSSetShaderResources(0, 1, null_srvs);
 }

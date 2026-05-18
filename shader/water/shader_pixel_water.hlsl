@@ -38,11 +38,11 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0));
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     const float alpha = water_depth > 0.001f
-        ? max(0.42f, saturate(water_depth * 0.48f) * max(diffuse_color.a, 0.55f))
+        ? saturate(0.12f + water_depth * 0.22f)
         : 0.0f;
-    const float depth_tint = saturate(water_depth * 0.18f);
-    const float3 shallow_color = float3(0.16f, 0.58f, 0.96f);
-    const float3 deep_color = float3(0.04f, 0.26f, 0.72f);
+    const float depth_tint = saturate(water_depth * 0.08f);
+    const float3 shallow_color = float3(0.34f, 0.78f, 1.00f);
+    const float3 deep_color = float3(0.03f, 0.20f, 0.62f);
     const float3 water_color = lerp(shallow_color, deep_color, depth_tint);
     return float4(water_color, alpha);
 }

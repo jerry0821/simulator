@@ -145,13 +145,13 @@ void ComputeErosionDeltaTexture::Finalize()
 
 void ComputeErosionDeltaTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* surface_water_srv,
+	ID3D11ShaderResourceView* water_surface_height_srv,
 	ID3D11ShaderResourceView* water_velocity_srv,
 	ID3D11ShaderResourceView* water_sediment_srv)
 {
 	if (!IsValid() ||
 		terrain_height_srv == nullptr ||
-		surface_water_srv == nullptr ||
+		water_surface_height_srv == nullptr ||
 		water_velocity_srv == nullptr ||
 		water_sediment_srv == nullptr)
 	{
@@ -176,7 +176,7 @@ void ComputeErosionDeltaTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
-		surface_water_srv,
+		water_surface_height_srv,
 		water_velocity_srv,
 		water_sediment_srv,
 		m_srvs[m_current_index]

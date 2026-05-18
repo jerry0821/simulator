@@ -46,6 +46,8 @@ static std::string g_ShaderReloadMessage = "Ready";
 static bool g_SurfaceWaterInjectionRequested = false;
 static bool g_SurfaceWaterResetRequested = false;
 static bool g_ShowComputeResourcePreviews = false;
+static int g_WaterProbeX = 128;
+static int g_WaterProbeY = 128;
 static bool g_EnableTerrainSurfacePresentation = true;
 static bool g_EnableGrassGpu = true;
 static bool g_EnableWaterSurfaceDeformation = true;
@@ -539,6 +541,12 @@ bool DebugMenu_ConsumeSurfaceWaterResetRequest()
     return was_requested;
 }
 
+void DebugMenu_GetWaterProbeCell(unsigned int& out_x, unsigned int& out_y)
+{
+	out_x = static_cast<unsigned int>(std::max(g_WaterProbeX, 0));
+	out_y = static_cast<unsigned int>(std::max(g_WaterProbeY, 0));
+}
+
 const ComputeNoiseSettings& DebugMenu_GetComputeNoiseSettings()
 {
     return g_ComputeNoiseSettings;
@@ -698,8 +706,9 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Edge Emphasis", &g_WaterSurfaceSettings.edge_emphasis, 0.0f, 3.0f);
     ImGui::Separator();
     ImGui::TextDisabled("Surface Water Simulation");
-    ImGui::SliderFloat("Rain Accumulation", &g_SurfaceWaterSimulationSettings.accumulation_rate, 0.01f, 0.18f);
-    ImGui::SliderFloat("Evaporation", &g_SurfaceWaterSimulationSettings.evaporation_rate, 0.0f, 0.02f);
+    ImGui::Checkbox("Presentation Only", &g_SurfaceWaterSimulationSettings.presentation_only);
+    ImGui::SliderFloat("Rain Accumulation", &g_SurfaceWaterSimulationSettings.accumulation_rate, 0.0f, 0.18f);
+    ImGui::SliderFloat("Evaporation", &g_SurfaceWaterSimulationSettings.evaporation_rate, 0.0f, 0.10f);
     ImGui::SliderFloat("Seepage", &g_SurfaceWaterSimulationSettings.seepage_rate, 0.0f, 0.02f);
     ImGui::SliderFloat("Basin Fade", &g_SurfaceWaterSimulationSettings.basin_fade, 2.0f, 12.0f);
     ImGui::SliderFloat("Downhill Flow", &g_SurfaceWaterSimulationSettings.downhill_flow_rate, 0.05f, 0.60f);
@@ -786,6 +795,68 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         else
         {
             ImGui::TextDisabled("  TerrainHeight.xy.G Range: unavailable");
+        }
+        if (frame_context->resources.has_water_depth_range)
+        {
+            ImGui::Text(
+                "  WaterDepth(y-x) Range: %.4f .. %.4f",
+                frame_context->resources.water_depth_min,
+                frame_context->resources.water_depth_max);
+        }
+        else
+        {
+            ImGui::TextDisabled("  WaterDepth(y-x) Range: unavailable");
+        }
+        ImGui::SliderInt("Probe X", &g_WaterProbeX, 0, 256);
+        ImGui::SliderInt("Probe Y", &g_WaterProbeY, 0, 256);
+        if (frame_context->resources.has_water_probe_height)
+        {
+            ImGui::Text(
+                "  Probe[%u,%u] Terrain/Water/Depth: %.4f / %.4f / %.4f",
+                frame_context->resources.water_probe_x,
+                frame_context->resources.water_probe_y,
+                frame_context->resources.water_probe_terrain_height,
+                frame_context->resources.water_probe_water_height,
+                frame_context->resources.water_probe_depth);
+        }
+        else
+        {
+            ImGui::TextDisabled("  Probe Terrain/Water/Depth: unavailable");
+        }
+        if (frame_context->resources.has_surface_water_amount_range)
+        {
+            ImGui::Text(
+                "  SurfaceWater.r Range: %.4f .. %.4f",
+                frame_context->resources.surface_water_min_amount,
+                frame_context->resources.surface_water_max_amount);
+        }
+        else
+        {
+            ImGui::TextDisabled("  SurfaceWater.r Range: unavailable");
+        }
+        if (frame_context->resources.has_surface_flow_magnitude_range)
+        {
+            ImGui::Text(
+                "  SurfaceWaterFlow Sum Range: %.4f .. %.4f",
+                frame_context->resources.surface_flow_min_magnitude,
+                frame_context->resources.surface_flow_max_magnitude);
+        }
+        else
+        {
+            ImGui::TextDisabled("  SurfaceWaterFlow Sum Range: unavailable");
+        }
+        if (frame_context->resources.has_water_probe_surface)
+        {
+            ImGui::Text(
+                "  Probe[%u,%u] Surface/FlowSum: %.4f / %.4f",
+                frame_context->resources.water_probe_x,
+                frame_context->resources.water_probe_y,
+                frame_context->resources.water_probe_surface_amount,
+                frame_context->resources.water_probe_flow_sum);
+        }
+        else
+        {
+            ImGui::TextDisabled("  Probe Surface/FlowSum: unavailable");
         }
         ImGui::Checkbox("Show Resource Previews", &g_ShowComputeResourcePreviews);
 

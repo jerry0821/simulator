@@ -1095,6 +1095,11 @@ const TerrainSettings& MeshFieldRenderer::GetTerrainSettings()
 	return g_terrain_settings;
 }
 
+void MeshFieldRenderer::RebuildHeightTextureForShaderReload()
+{
+	RebuildHeightTexture();
+}
+
 float MeshFieldRenderer::GetSuggestedWaterHeight()
 {
 	// Startup-only water level seed. Keep it visibly above the lower terrain band

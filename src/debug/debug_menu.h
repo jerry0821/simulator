@@ -20,9 +20,9 @@ struct TerrainMaterialSettings;
 struct WaterSurfaceDesc;
 struct SurfaceWaterSimulationSettings
 {
-	bool presentation_only = true;
-	float accumulation_rate = 0.040f;
-	float evaporation_rate = 0.0065f;
+	bool presentation_only = false;
+	float accumulation_rate = 0.0f;
+	float evaporation_rate = 0.0450f;
 	float seepage_rate = 0.0040f;
 	float basin_fade = 6.0f;
 	float downhill_flow_rate = 0.48f;
@@ -31,7 +31,7 @@ struct SurfaceWaterSimulationSettings
 	float debug_injection_x = 46.0f;
 	float debug_injection_z = 118.0f;
 	float debug_injection_radius = 14.0f;
-	float debug_injection_amount = 0.90f;
+	float debug_injection_amount = 1.80f;
 };
 
 struct PostProcessSettings
@@ -81,6 +81,7 @@ void DebugMenu_SetShaderReloadStatus(bool succeeded, const char* message);
 bool DebugMenu_ConsumeShaderReloadRequest();
 bool DebugMenu_ConsumeSurfaceWaterInjectionRequest();
 bool DebugMenu_ConsumeSurfaceWaterResetRequest();
+void DebugMenu_GetWaterProbeCell(unsigned int& out_x, unsigned int& out_y);
 const ComputeNoiseSettings& DebugMenu_GetComputeNoiseSettings();
 const TerrainSettings& DebugMenu_GetTerrainSettings();
 const TerrainMaterialSettings& DebugMenu_GetTerrainMaterialSettings();

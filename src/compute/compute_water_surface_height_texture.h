@@ -33,7 +33,7 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
-			ComputeSharedResourceId::RainMap
+			ComputeSharedResourceId::SurfaceWater
 		};
 		return kReadResources;
 	}
@@ -54,7 +54,7 @@ public:
 		float water_surface_height) const;
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* rain_map_srv) const;
+		ID3D11ShaderResourceView* surface_water_srv) const;
 	bool IsValid() const override;
 	bool HasBootstrappedState() const
 	{
@@ -63,22 +63,21 @@ public:
 	Backend::RenderShaderResource Resource() const;
 	bool ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const;
 	bool ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const;
+	bool ComputeWaterDepthRange(float& out_min_depth, float& out_max_depth) const;
+	bool SampleCell(unsigned int x, unsigned int y, float& out_terrain_height, float& out_water_height, float& out_water_depth) const;
 
 private:
 	struct WaterSurfaceHeightConstants
 	{
 		float water_surface_height = 0.0f;
 		float minimum_depth_for_surface = 0.004f;
-		float flow_rate = 0.24f;
-		float max_outflow_fraction = 0.55f;
-		float evaporation_rate = 0.01f;
+		float padding0 = 0.0f;
+		float padding1 = 0.0f;
+		float padding2 = 0.0f;
 		unsigned int width = 0;
 		unsigned int height = 0;
 		unsigned int initialize_from_water_level = 0u;
-		unsigned int padding1 = 0u;
-		unsigned int padding2 = 0u;
 		unsigned int padding3 = 0u;
-		unsigned int padding4 = 0u;
 	};
 
 	static constexpr unsigned int kTextureWidth = 257;

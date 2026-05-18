@@ -145,10 +145,10 @@ void ComputeSoilMoistureTexture::Finalize()
 
 void ComputeSoilMoistureTexture::Update(
 	ID3D11ShaderResourceView* rain_map_srv,
-	ID3D11ShaderResourceView* surface_water_srv,
+	ID3D11ShaderResourceView* water_surface_height_srv,
 	ID3D11ShaderResourceView* water_mask_srv)
 {
-	if (!IsValid() || rain_map_srv == nullptr || surface_water_srv == nullptr || water_mask_srv == nullptr)
+	if (!IsValid() || rain_map_srv == nullptr || water_surface_height_srv == nullptr || water_mask_srv == nullptr)
 	{
 		return;
 	}
@@ -169,7 +169,7 @@ void ComputeSoilMoistureTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		rain_map_srv,
-		surface_water_srv,
+		water_surface_height_srv,
 		water_mask_srv,
 		m_srvs[m_current_index]
 	};

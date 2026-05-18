@@ -13,7 +13,7 @@ cbuffer EROSION_DELTA_CONSTANT_BUFFER : register(b0)
 };
 
 Texture2D g_TerrainHeight : register(t0);
-Texture2D g_SurfaceWater : register(t1);
+Texture2D<float2> g_WaterSurfaceHeight : register(t1);
 Texture2D g_WaterVelocity : register(t2);
 Texture2D g_WaterSediment : register(t3);
 Texture2D g_PreviousErosionDelta : register(t4);
@@ -42,8 +42,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float terrain_n = g_TerrainHeight.SampleLevel(g_ErosionSampler, saturate(uv + float2(0.0f, texel.y)), 0.0f).r;
     float terrain_s = g_TerrainHeight.SampleLevel(g_ErosionSampler, saturate(uv + float2(0.0f, -texel.y)), 0.0f).r;
 
-    float4 surface = g_SurfaceWater.SampleLevel(g_ErosionSampler, saturate(uv), 0.0f);
-    float water_amount = surface.r;
+    float2 water_height = g_WaterSurfaceHeight.SampleLevel(g_ErosionSampler, saturate(uv), 0.0f);
+    float water_amount = max(water_height.y - water_height.x, 0.0f);
     float standing_water = smoothstep(0.04f, 0.16f, water_amount);
     float4 velocity = g_WaterVelocity.SampleLevel(g_ErosionSampler, saturate(uv), 0.0f);
     float4 sediment = g_WaterSediment.SampleLevel(g_ErosionSampler, saturate(uv), 0.0f);

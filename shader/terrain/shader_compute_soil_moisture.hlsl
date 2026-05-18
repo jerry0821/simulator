@@ -11,7 +11,7 @@ cbuffer SOIL_MOISTURE_CONSTANT_BUFFER : register(b0)
 };
 
 Texture2D g_RainMap : register(t0);
-Texture2D g_SurfaceWater : register(t1);
+Texture2D<float2> g_WaterSurfaceHeight : register(t1);
 Texture2D g_WaterMask : register(t2);
 Texture2D g_PreviousSoilMoisture : register(t3);
 SamplerState g_SoilSampler : register(s0);
@@ -34,7 +34,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float2 texel = 1.0f / float2(width, height);
 
     float4 rain_sample = g_RainMap.SampleLevel(g_SoilSampler, saturate(uv), 0.0f);
-    float4 surface_sample = g_SurfaceWater.SampleLevel(g_SoilSampler, saturate(uv), 0.0f);
+    float2 water_height_sample = g_WaterSurfaceHeight.SampleLevel(g_SoilSampler, saturate(uv), 0.0f);
     float4 mask_sample = g_WaterMask.SampleLevel(g_SoilSampler, saturate(uv), 0.0f);
 
     float previous = SamplePreviousMoisture(uv);
@@ -47,7 +47,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     float rain_amount = rain_sample.r;
     float rain_wet_hint = rain_sample.g;
-    float surface_amount = surface_sample.r;
+    float surface_amount = max(water_height_sample.y - water_height_sample.x, 0.0f);
     float water_coverage = mask_sample.r;
     float shoreline_contact = mask_sample.g;
     float pooled_contact = mask_sample.b;

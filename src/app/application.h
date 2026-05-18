@@ -21,7 +21,6 @@
 #include "compute_terrain_normal_texture.h"
 #include "compute_water_interaction_texture.h"
 #include "compute_visible_water_texture.h"
-#include "compute_water_surface_height_texture.h"
 #include "compute_water_mask_texture.h"
 #include "compute_wind_field_texture.h"
 #include "render_backend_dx11.h"
@@ -83,7 +82,6 @@ private:
 	ComputeTerrainNormalTexture m_compute_terrain_normal_texture{};
 	ComputeWaterInteractionTexture m_compute_water_interaction_texture{};
 	ComputeVisibleWaterTexture m_compute_visible_water_texture{};
-	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
 	ComputeWaterMaskTexture m_compute_water_mask_texture{};
 	ComputeWindFieldTexture m_compute_wind_field_texture{};
 	TerrainWaterState m_terrain_water_state{};
@@ -101,7 +99,9 @@ private:
 	float m_active_water_surface_height = 0.0f;
 	float m_glitch_amount = 0.0f;
 	TerrainMaterialSettings m_last_terrain_material_settings{};
+	TerrainSettings m_last_terrain_settings{};
 	bool m_has_last_terrain_material_settings = false;
+	bool m_has_last_terrain_settings = false;
 	bool m_use_shared_terrain_water_heightfield = true;
 	bool m_pending_surface_water_reset = false;
 };
