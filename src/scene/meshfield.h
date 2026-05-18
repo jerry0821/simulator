@@ -53,7 +53,9 @@ class MeshFieldRenderer
 public:
 	static void Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
 	static void Finalize();
-	static void Draw();
+	static void Draw(
+		ID3D11ShaderResourceView* terrain_height_srv,
+		ID3D11ShaderResourceView* terrain_normal_srv);
 	static void SetFlatMode(bool is_flat);
 	static void DrawMeshOnly();
 	static float GetHeight(float x, float z);
@@ -65,13 +67,11 @@ public:
 	static float FieldDepth();
 	static Backend::RenderShaderResource HeightResource();
 	static ID3D11ShaderResourceView* HeightSRV();
-	static void SetRenderHeightSRV(ID3D11ShaderResourceView* srv);
-	static void SetRenderNormalSRV(ID3D11ShaderResourceView* srv);
 };
 
 void MeshField_Initialize(ID3D11Device* pDevice, ID3D11DeviceContext* pContext);
 void MeshField_Finalize(void);
-void MeshField_Draw();
+void MeshField_Draw(ID3D11ShaderResourceView* terrain_height_srv, ID3D11ShaderResourceView* terrain_normal_srv);
 void MeshField_SetFlatMode(bool isFlat);
 
 void MeshField_DrawMeshOnly();

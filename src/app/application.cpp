@@ -483,9 +483,6 @@ bool Application::InitializeEngineSystems()
 		ActiveTerrainNormalResource().shaderResourceView(),
 		m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
 		m_compute_terrain_classification_texture.Resource().shaderResourceView());
-	MeshFieldRenderer::SetRenderHeightSRV(
-		ActiveTerrainHeightResource().shaderResourceView());
-	MeshFieldRenderer::SetRenderNormalSRV(ActiveTerrainNormalResource().shaderResourceView());
 	PublishSharedComputeResources();
 	return true;
 }
@@ -671,9 +668,6 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 		}
 	}
 	TerrainDataModel::SetMaterialSettings(terrain_material_settings);
-	MeshFieldRenderer::SetRenderHeightSRV(
-		ActiveTerrainHeightResource().shaderResourceView());
-	MeshFieldRenderer::SetRenderNormalSRV(ActiveTerrainNormalResource().shaderResourceView());
 	PublishSharedComputeResources();
 	ShaderField_SetTerrainMaterialSettings(terrain_material_settings);
 	Sprite_Begin();
@@ -973,8 +967,6 @@ void Application::FinalizeEngineSystems()
 	m_compute_grass_data_texture.Finalize();
 	m_compute_water_interaction_texture.Finalize();
 	m_compute_terrain_normal_texture.Finalize();
-	MeshFieldRenderer::SetRenderHeightSRV(nullptr);
-	MeshFieldRenderer::SetRenderNormalSRV(nullptr);
 	m_compute_task_runner.FinalizeAll();
 	Light_Finalize();
 	MeshFieldRenderer::Finalize();

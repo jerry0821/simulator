@@ -1240,7 +1240,9 @@ void MapController::Draw(const RenderFrameContext& frame_context)
       {
         const XMMATRIX scale_matrix = XMMatrixScaling(5.0f, 5.0f, 5.0f);
         ShaderField_SetWorldMatrix(scale_matrix);
-        MeshFieldRenderer::Draw();
+        MeshFieldRenderer::Draw(
+          frame_context.resources.terrain_height.shaderResourceView(),
+          frame_context.resources.terrain_normal.shaderResourceView());
       }
       break;
     case BLOCK:
