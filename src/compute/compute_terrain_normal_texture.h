@@ -2,6 +2,7 @@
 #define COMPUTE_TERRAIN_NORMAL_TEXTURE_H
 
 #include "compute_task.h"
+#include "compute_texture_dimensions.h"
 #include "render_shadow_map_resource.h"
 
 struct ID3D11Device;
@@ -43,8 +44,8 @@ private:
 		unsigned int height = 0;
 	};
 
-	static constexpr unsigned int kTextureWidth = 257;
-	static constexpr unsigned int kTextureHeight = 257;
+	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kHydrologyResolution;
+	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kHydrologyResolution;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

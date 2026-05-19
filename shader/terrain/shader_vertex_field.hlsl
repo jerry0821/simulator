@@ -85,8 +85,11 @@ struct VS_OUT
 
 float SampleTerrainHeight(float2 uv)
 {
-    static const float2 kHeightFieldResolution = float2(257.0f, 257.0f);
-    int2 coord = int2(saturate(uv) * (kHeightFieldResolution - 1.0f) + 0.5f);
+    uint height_width = 0;
+    uint height_height = 0;
+    g_HeightMap.GetDimensions(height_width, height_height);
+    float2 height_resolution = max(float2(height_width, height_height), 1.0f.xx);
+    int2 coord = int2(saturate(uv) * (height_resolution - 1.0f) + 0.5f);
     return g_HeightMap.Load(int3(coord, 0)).x;
 }
 

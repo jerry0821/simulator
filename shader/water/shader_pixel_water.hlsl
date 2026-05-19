@@ -33,21 +33,26 @@ float2 SafeNormalize2(float2 value)
     return len_sq > 1.0e-6f ? value * rsqrt(len_sq) : float2(1.0f, 0.0f);
 }
 
-float4 main(PS_INPUT ps_in) : SV_TARGET
+float2 ComputeWaterSampleUv(float2 uv)
 {
     uint tex_width = 0;
     uint tex_height = 0;
     water_surface_height_tex.GetDimensions(tex_width, tex_height);
-    const uint2 texel = uint2(
-        min((uint)round(ps_in.uv.x * max((int)tex_width - 1, 0)), tex_width - 1),
-        min((uint)round(ps_in.uv.y * max((int)tex_height - 1, 0)), tex_height - 1));
-    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0)).xy;
-    const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
-    clip(water_depth - 0.006f);
+    const float2 texel_size = 1.0f / max(float2(tex_width, tex_height), 1.0f.xx);
+    const float2 half_texel = texel_size * 0.5f;
+    return clamp(uv, half_texel, 1.0f.xx - half_texel);
+}
 
-    const float4 velocity_sample = water_velocity_tex.Load(int3(texel, 0));
-    const float4 sediment_sample = water_sediment_tex.Load(int3(texel, 0));
-    const float3 terrain_normal = normalize(terrain_normal_tex.Load(int3(texel, 0)).xyz);
+float4 main(PS_INPUT ps_in) : SV_TARGET
+{
+    const float2 sample_uv = ComputeWaterSampleUv(saturate(ps_in.uv));
+    const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
+    const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+    const float depth_visibility = smoothstep(0.003f, 0.014f, water_depth);
+
+    const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
+    const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
+    const float3 terrain_normal = normalize(terrain_normal_tex.SampleLevel(samp, sample_uv, 0.0f).xyz);
 
     const float2 flow_velocity = velocity_sample.xy;
     const float water_speed = saturate(velocity_sample.z);
@@ -112,7 +117,8 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         fresnel * 0.18f +
         water_speed * 0.06f +
         sediment_capacity * 0.04f;
-    alpha = saturate(alpha);
+    alpha = saturate(alpha * depth_visibility);
+    clip(alpha - 0.002f);
 
     return float4(saturate(water_color), alpha);
 }

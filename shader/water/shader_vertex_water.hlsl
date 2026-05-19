@@ -14,6 +14,7 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
 };
 
 Texture2D<float4> water_surface_height_tex : register(t0);
+SamplerState samp : register(s0);
 
 struct VS_IN
 {
@@ -30,17 +31,22 @@ struct VS_OUT
     float2 uv : TEXCOORD1;
 };
 
+float2 ComputeWaterSampleUv(float2 uv)
+{
+    uint tex_width = 0;
+    uint tex_height = 0;
+    water_surface_height_tex.GetDimensions(tex_width, tex_height);
+    const float2 texel_size = 1.0f / max(float2(tex_width, tex_height), 1.0f.xx);
+    const float2 half_texel = texel_size * 0.5f;
+    return clamp(uv, half_texel, 1.0f.xx - half_texel);
+}
+
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    uint tex_width = 0;
-    uint tex_height = 0;
-    water_surface_height_tex.GetDimensions(tex_width, tex_height);
-    const uint2 texel = uint2(
-        min((uint)round(vi.uv.x * max((int)tex_width - 1, 0)), tex_width - 1),
-        min((uint)round(vi.uv.y * max((int)tex_height - 1, 0)), tex_height - 1));
-    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0)).xy;
+    const float2 sample_uv = ComputeWaterSampleUv(saturate(vi.uv));
+    const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     const float surface_lift =
         water_depth > 0.0f

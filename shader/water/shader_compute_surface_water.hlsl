@@ -12,13 +12,13 @@ cbuffer SURFACE_WATER_CONSTANT_BUFFER : register(b0)
 
 Texture2D<float4> g_WaterSurfaceHeight : register(t0);
 Texture2D<float4> g_AuthoritativeWaterFlow : register(t1);
-Texture2D g_WindField : register(t2);
+Texture2D<float4> g_AuthoritativeWaterVelocity : register(t2);
+Texture2D<float4> g_AuthoritativeWaterSediment : register(t3);
+Texture2D g_WindField : register(t4);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_SurfaceWater : register(u0);
 RWTexture2D<float4> g_SurfaceWaterFlow : register(u1);
 RWTexture2D<float4> g_SurfaceWaterFlowPreview : register(u2);
-RWTexture2D<float4> g_WaterVelocity : register(u3);
-RWTexture2D<float4> g_WaterSediment : register(u4);
 
 bool InBounds(int2 coord)
 {
@@ -39,11 +39,6 @@ float LoadDepth(int2 coord)
 {
     float2 terrain_water = LoadTerrainWater(coord);
     return max(terrain_water.y - terrain_water.x, 0.0f);
-}
-
-float4 LoadFlow(int2 coord)
-{
-    return max(g_AuthoritativeWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
 }
 
 float2 ComputeWorldPosition(int2 coord)
@@ -71,37 +66,23 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const int2 coord = int2(dispatch_thread_id.xy);
     const float2 terrain_water = LoadTerrainWater(coord);
     const float water_depth = max(terrain_water.y - terrain_water.x, 0.0f);
-    const float4 flow = LoadFlow(coord);
-    const float2 flow_vector = float2(flow.x - flow.y, flow.w - flow.z);
+    const float4 flow = max(g_AuthoritativeWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
     const float total_flux = dot(flow, 1.0f.xxxx);
+    const float4 velocity_sample = g_AuthoritativeWaterVelocity.Load(int3(ClampCoord(coord), 0));
+    const float4 sediment_sample = g_AuthoritativeWaterSediment.Load(int3(ClampCoord(coord), 0));
+    const float2 flow_vector = velocity_sample.xy;
 
-    const float east_terrain = LoadTerrainWater(coord + int2(1, 0)).x;
-    const float west_terrain = LoadTerrainWater(coord + int2(-1, 0)).x;
-    const float north_terrain = LoadTerrainWater(coord + int2(0, 1)).x;
-    const float south_terrain = LoadTerrainWater(coord + int2(0, -1)).x;
-    const float2 terrain_gradient = float2(
-        east_terrain - west_terrain,
-        north_terrain - south_terrain) * 0.5f;
-    const float terrain_slope = saturate(length(terrain_gradient) * 0.55f);
-
-    const float2 water_velocity_xy =
-        flow_vector / max(water_depth * 4.0f + 0.04f, 0.08f);
-    const float water_speed = saturate(length(water_velocity_xy) * 3.5f);
-    const float transport_energy = saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f));
+    const float water_speed = saturate(velocity_sample.z);
+    const float transport_energy = saturate(velocity_sample.w);
 
     const float standing_water = smoothstep(0.03f, 0.18f, water_depth);
     const float runoff = smoothstep(0.004f, 0.045f, total_flux);
     const float depth_preview = smoothstep(0.01f, 0.12f, water_depth);
 
-    const float sediment_capacity =
-        saturate(water_speed * 0.62f + terrain_slope * 0.38f) *
-        saturate(water_depth * 2.8f + 0.12f);
-    const float erosion_tendency =
-        saturate(terrain_slope * water_speed * 1.2f + runoff * 0.22f);
-    const float deposition_tendency =
-        saturate((1.0f - water_speed) * (standing_water * 0.70f + 0.18f));
-    const float suspended_sediment =
-        saturate(sediment_capacity * (0.55f + transport_energy * 0.35f));
+    const float suspended_sediment = saturate(sediment_sample.x);
+    const float deposition_tendency = saturate(sediment_sample.y);
+    const float erosion_tendency = saturate(sediment_sample.z);
+    const float sediment_capacity = saturate(sediment_sample.w);
 
     const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
     const float4 wind_sample = g_WindField.SampleLevel(g_SurfaceSampler, uv, 0.0f);
@@ -136,10 +117,4 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     g_SurfaceWater[dispatch_thread_id.xy] = float4(water_depth, depth_preview, standing_water, runoff);
     g_SurfaceWaterFlow[dispatch_thread_id.xy] = flow;
     g_SurfaceWaterFlowPreview[dispatch_thread_id.xy] = float4(preview_color, preview_alpha);
-    g_WaterVelocity[dispatch_thread_id.xy] = float4(water_velocity_xy, water_speed, transport_energy);
-    g_WaterSediment[dispatch_thread_id.xy] = float4(
-        suspended_sediment,
-        deposition_tendency,
-        erosion_tendency,
-        sediment_capacity);
 }

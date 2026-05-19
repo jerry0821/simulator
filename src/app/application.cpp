@@ -363,16 +363,6 @@ bool Application::InitializeEngineSystems()
 				static_cast<float>(current_time));
 		});
 	m_compute_task_runner.Register(
-		m_compute_erosion_delta_texture,
-		[this](double /*current_time*/, double /*elapsed_time*/)
-		{
-			m_compute_erosion_delta_texture.Update(
-				SimulationTerrainHeightResource().shaderResourceView(),
-				m_compute_surface_water_texture.Resource().shaderResourceView(),
-				m_compute_surface_water_texture.VelocityResource().shaderResourceView(),
-				m_compute_surface_water_texture.SedimentResource().shaderResourceView());
-		});
-	m_compute_task_runner.Register(
 		m_compute_water_surface_height_texture,
 		[this](double /*current_time*/, double elapsed_time)
 		{
@@ -411,6 +401,8 @@ bool Application::InitializeEngineSystems()
 			m_compute_surface_water_texture.Update(
 				m_compute_water_surface_height_texture.Resource().shaderResourceView(),
 				m_compute_water_surface_height_texture.FlowResource().shaderResourceView(),
+				m_compute_water_surface_height_texture.VelocityResource().shaderResourceView(),
+				m_compute_water_surface_height_texture.SedimentResource().shaderResourceView(),
 				m_compute_wind_field_texture.Resource().shaderResourceView(),
 				static_cast<float>(current_time));
 		});
@@ -477,6 +469,8 @@ bool Application::InitializeEngineSystems()
 	m_compute_surface_water_texture.Update(
 		m_compute_water_surface_height_texture.Resource().shaderResourceView(),
 		m_compute_water_surface_height_texture.FlowResource().shaderResourceView(),
+		m_compute_water_surface_height_texture.VelocityResource().shaderResourceView(),
+		m_compute_water_surface_height_texture.SedimentResource().shaderResourceView(),
 		m_compute_wind_field_texture.Resource().shaderResourceView(),
 		0.0f);
 	m_compute_terrain_normal_texture.Update(SimulationTerrainHeightResource().shaderResourceView());
@@ -490,7 +484,7 @@ bool Application::InitializeEngineSystems()
 		SimulationTerrainHeightResource().shaderResourceView(),
 		ActiveTerrainNormalResource().shaderResourceView(),
 		m_compute_water_interaction_texture.Resource().shaderResourceView(),
-		m_compute_erosion_delta_texture.Resource().shaderResourceView(),
+		m_compute_water_surface_height_texture.ErosionDeltaResource().shaderResourceView(),
 		m_compute_climate_texture.Resource().shaderResourceView(),
 		initial_terrain_material_settings);
 	m_compute_grass_data_texture.Update(
@@ -600,10 +594,6 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute water interaction reload failed");
 		}
-		if (!m_compute_erosion_delta_texture.IsValid())
-		{
-			DebugMenu_SetShaderReloadStatus(false, "Compute erosion delta reload failed");
-		}
 		if (!m_compute_wind_field_texture.IsValid())
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute wind field reload failed");
@@ -685,7 +675,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 				SimulationTerrainHeightResource().shaderResourceView(),
 				ActiveTerrainNormalResource().shaderResourceView(),
 				m_compute_water_interaction_texture.Resource().shaderResourceView(),
-				m_compute_erosion_delta_texture.Resource().shaderResourceView(),
+				m_compute_water_surface_height_texture.ErosionDeltaResource().shaderResourceView(),
 				m_compute_climate_texture.Resource().shaderResourceView(),
 				terrain_material_settings);
 			if (m_compute_grass_data_texture.IsValid())
@@ -790,13 +780,13 @@ void Application::PublishSharedComputeResources()
 		m_compute_water_surface_height_texture.Resource(),
 		m_compute_surface_water_texture.FlowResource(),
 		m_compute_surface_water_texture.FlowPreviewResource(),
-		m_compute_surface_water_texture.VelocityResource(),
-		m_compute_surface_water_texture.SedimentResource(),
+		m_compute_water_surface_height_texture.VelocityResource(),
+		m_compute_water_surface_height_texture.SedimentResource(),
 		m_compute_visible_water_texture.Resource(),
 		m_compute_water_mask_texture.Resource(),
 		m_compute_water_interaction_texture.Resource(),
 		m_compute_soil_moisture_texture.Resource(),
-		m_compute_erosion_delta_texture.Resource());
+		m_compute_water_surface_height_texture.ErosionDeltaResource());
 	m_terrain_water_state.PublishTo(m_compute_shared_resource_registry);
 	m_compute_shared_resource_registry.PublishShaderResource(
 		ComputeSharedResourceId::RainMap,
