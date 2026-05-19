@@ -32,6 +32,7 @@ public:
 	ResourceSpan ReadResources() const override
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
+			ComputeSharedResourceId::ClimateField,
 			ComputeSharedResourceId::TerrainHeight
 		};
 		return kReadResources;
@@ -50,7 +51,9 @@ public:
 
 	void Update(
 		float time_seconds,
+		float delta_time_seconds,
 		const ComputeNoiseSettings& settings,
+		ID3D11ShaderResourceView* climate_field_srv,
 		ID3D11ShaderResourceView* terrain_height_srv) const;
 
 	bool IsValid() const override;
@@ -60,17 +63,21 @@ private:
 	struct WindConstants
 	{
 		float time_seconds = 0.0f;
+		float delta_time_seconds = 1.0f / 60.0f;
 		float wind_direction_x = 1.0f;
 		float wind_direction_y = 0.0f;
 		float wind_strength = 0.08f;
 		float wind_cross_influence = 0.55f;
 		float noise_scale = 18.0f;
-		float padding0 = 0.0f;
-		float padding1 = 0.0f;
+		float pressure_wind_scale = 0.085f;
+		float source_blend_rate = 0.42f;
+		float propagation_scale = 0.72f;
+		float terrain_guidance_scale = 0.20f;
+		float storm_coupling = 0.28f;
 		unsigned int width = 0;
 		unsigned int height = 0;
-		unsigned int padding2 = 0;
-		unsigned int padding3 = 0;
+		unsigned int initialize_state = 1u;
+		unsigned int padding0 = 0;
 	};
 
 	static constexpr unsigned int kTextureWidth = 256;
@@ -80,10 +87,12 @@ private:
 	ID3D11Device* m_device = nullptr;
 	ID3D11DeviceContext* m_context = nullptr;
 	ID3D11ComputeShader* m_compute_shader = nullptr;
-	ID3D11Texture2D* m_texture = nullptr;
-	ID3D11ShaderResourceView* m_srv = nullptr;
-	ID3D11UnorderedAccessView* m_uav = nullptr;
+	ID3D11Texture2D* m_textures[2] = { nullptr, nullptr };
+	ID3D11ShaderResourceView* m_srvs[2] = { nullptr, nullptr };
+	ID3D11UnorderedAccessView* m_uavs[2] = { nullptr, nullptr };
 	ID3D11Buffer* m_constant_buffer = nullptr;
+	mutable unsigned int m_current_index = 0;
+	mutable bool m_has_state = false;
 };
 
 #endif // COMPUTE_WIND_FIELD_TEXTURE_H

@@ -33,6 +33,11 @@ float2 SafeNormalize2(float2 value)
     return len_sq > 1.0e-6f ? value * rsqrt(len_sq) : float2(1.0f, 0.0f);
 }
 
+float2 SafeWaveDir(float2 base_dir, float2 flow_dir, float flow_influence)
+{
+    return SafeNormalize2(base_dir + flow_dir * flow_influence);
+}
+
 float2 ComputeWaterSampleUv(float2 uv)
 {
     uint tex_width = 0;
@@ -63,24 +68,33 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float sediment_capacity = saturate(sediment_sample.w);
 
     const float2 flow_dir = SafeNormalize2(flow_velocity);
-    const float2 cross_dir = float2(-flow_dir.y, flow_dir.x);
-    const float ripple_phase_a =
-        dot(ps_in.uv * float2(46.0f, 44.0f), flow_dir) +
-        time_seconds * (0.45f + water_speed * 1.15f);
-    const float ripple_phase_b =
-        dot(ps_in.uv * float2(33.0f, 38.0f), cross_dir) -
-        time_seconds * (0.28f + transport_energy * 0.90f);
-    const float ripple_a = sin(ripple_phase_a * 6.2831853f);
-    const float ripple_b = sin(ripple_phase_b * 6.2831853f + 0.8f);
-    const float ripple_c = sin((ripple_phase_a + ripple_phase_b) * 3.1415926f);
+    const float2 wave_dir_a = SafeWaveDir(float2(0.86f, 0.52f), flow_dir, 0.55f);
+    const float2 wave_dir_b = SafeWaveDir(float2(-0.31f, 0.95f), float2(-flow_dir.y, flow_dir.x), 0.26f);
+    const float phase_a =
+        dot(ps_in.posW.xz, wave_dir_a) * 0.020f -
+        time_seconds * (0.04f + water_speed * 0.22f);
+    const float phase_b =
+        dot(ps_in.posW.xz, wave_dir_b) * 0.013f -
+        time_seconds * (0.025f + water_speed * 0.12f + transport_energy * 0.05f);
+    const float ripple_a = sin(phase_a * 6.2831853f);
+    const float ripple_b = sin(phase_b * 6.2831853f + 0.8f);
+    const float ripple_c = sin((phase_a + phase_b) * 3.1415926f);
     const float ripple_strength =
-        (0.08f + highlight_strength * 0.10f) *
-        smoothstep(0.008f, 0.09f, water_depth);
+        (0.004f + highlight_strength * 0.016f) *
+        smoothstep(0.012f, 0.11f, water_depth) *
+        smoothstep(0.03f, 0.18f, water_speed);
+    const float ripple_aa =
+        rcp(1.0f + (abs(ddx(phase_a)) + abs(ddy(phase_a)) + abs(ddx(phase_b)) + abs(ddy(phase_b))) * 5.0f);
+    const float ripple_grad_a =
+        cos(phase_a * 6.2831853f) * ripple_strength * 6.2831853f * 0.020f * ripple_aa;
+    const float ripple_grad_b =
+        cos(phase_b * 6.2831853f + 0.8f) * ripple_strength * 6.2831853f * 0.013f * ripple_aa;
+    const float2 ripple_gradient = wave_dir_a * ripple_grad_a + wave_dir_b * ripple_grad_b;
 
     float3 surface_normal = normalize(float3(
-        terrain_normal.x * 0.18f + flow_velocity.x * 0.28f + ripple_a * ripple_strength,
+        terrain_normal.x * 0.20f + flow_velocity.x * 0.05f + ripple_gradient.x,
         1.0f,
-        terrain_normal.z * 0.18f + flow_velocity.y * 0.28f + ripple_b * ripple_strength));
+        terrain_normal.z * 0.20f + flow_velocity.y * 0.05f + ripple_gradient.y));
     surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.35f - water_depth * 4.0f)));
 
     const float3 view_dir = normalize(camera_position - ps_in.posW);
@@ -95,9 +109,9 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float shallow_factor = 1.0f - deep_factor;
     const float muddiness = saturate(suspended_sediment * 0.70f + deposition * 0.22f);
     const float foam_hint =
-        smoothstep(0.08f, 0.38f, water_speed + erosion * 0.24f) *
+        smoothstep(0.12f, 0.42f, water_speed + erosion * 0.20f) *
         smoothstep(0.004f, 0.05f, water_depth) *
-        (0.30f + 0.70f * saturate(ripple_c * 0.5f + 0.5f));
+        (0.22f + 0.52f * saturate(ripple_c * 0.5f + 0.5f));
 
     float3 shallow_color = diffuse_color.rgb * float3(0.84f, 1.02f, 1.10f);
     float3 deep_color = diffuse_color.rgb * float3(0.42f, 0.70f, 1.16f);

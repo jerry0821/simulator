@@ -58,27 +58,30 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 	texture_desc.Height = kTextureHeight;
 	texture_desc.MipLevels = 1;
 	texture_desc.ArraySize = 1;
-	texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texture_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	texture_desc.SampleDesc.Count = 1;
 	texture_desc.Usage = D3D11_USAGE_DEFAULT;
 	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-	if (FAILED(m_device->CreateTexture2D(&texture_desc, nullptr, &m_texture)))
+	for (int i = 0; i < 2; ++i)
 	{
-		Finalize();
-		return false;
-	}
+		if (FAILED(m_device->CreateTexture2D(&texture_desc, nullptr, &m_textures[i])))
+		{
+			Finalize();
+			return false;
+		}
 
-	if (FAILED(m_device->CreateShaderResourceView(m_texture, nullptr, &m_srv)))
-	{
-		Finalize();
-		return false;
-	}
+		if (FAILED(m_device->CreateShaderResourceView(m_textures[i], nullptr, &m_srvs[i])))
+		{
+			Finalize();
+			return false;
+		}
 
-	if (FAILED(m_device->CreateUnorderedAccessView(m_texture, nullptr, &m_uav)))
-	{
-		Finalize();
-		return false;
+		if (FAILED(m_device->CreateUnorderedAccessView(m_textures[i], nullptr, &m_uavs[i])))
+		{
+			Finalize();
+			return false;
+		}
 	}
 
 	D3D11_BUFFER_DESC buffer_desc{};
@@ -93,26 +96,35 @@ bool ComputeWindFieldTexture::Initialize(ID3D11Device* device, ID3D11DeviceConte
 		return false;
 	}
 
+	m_current_index = 0;
+	m_has_state = false;
 	return true;
 }
 
 void ComputeWindFieldTexture::Finalize()
 {
 	SafeRelease(m_constant_buffer);
-	SafeRelease(m_uav);
-	SafeRelease(m_srv);
-	SafeRelease(m_texture);
+	for (int i = 0; i < 2; ++i)
+	{
+		SafeRelease(m_uavs[i]);
+		SafeRelease(m_srvs[i]);
+		SafeRelease(m_textures[i]);
+	}
 	SafeRelease(m_compute_shader);
 	m_device = nullptr;
 	m_context = nullptr;
+	m_current_index = 0;
+	m_has_state = false;
 }
 
 void ComputeWindFieldTexture::Update(
 	float time_seconds,
+	float delta_time_seconds,
 	const ComputeNoiseSettings& settings,
+	ID3D11ShaderResourceView* climate_field_srv,
 	ID3D11ShaderResourceView* terrain_height_srv) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr)
+	if (!IsValid() || climate_field_srv == nullptr || terrain_height_srv == nullptr)
 	{
 		return;
 	}
@@ -137,50 +149,67 @@ void ComputeWindFieldTexture::Update(
 		auto* constants = static_cast<WindConstants*>(mapped_resource.pData);
 		*constants = WindConstants{
 			time_seconds,
+			delta_time_seconds,
 			wind_dir_x,
 			wind_dir_y,
 			settings.wind_strength,
 			settings.wind_cross_influence,
 			settings.noise_scale,
-			0.0f,
-			0.0f,
+			0.085f,
+			0.42f,
+			0.72f,
+			0.20f,
+			0.28f,
 			kTextureWidth,
 			kTextureHeight,
-			0u,
+			m_has_state ? 0u : 1u,
 			0u };
 		m_context->Unmap(m_constant_buffer, 0);
 	}
 
+	const unsigned int previous_index = m_current_index;
+	const unsigned int next_index = (m_current_index + 1u) % 2u;
+
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, &m_constant_buffer);
-	ID3D11ShaderResourceView* srvs[] = { terrain_height_srv };
+	ID3D11ShaderResourceView* srvs[] = {
+		m_srvs[previous_index],
+		climate_field_srv,
+		terrain_height_srv
+	};
 	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
-	m_context->CSSetShaderResources(0, 1, srvs);
+	m_context->CSSetShaderResources(0, 3, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 1, &m_uav, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 1, &m_uavs[next_index], nullptr);
 	m_context->Dispatch(kTextureWidth / kThreadGroupSize, kTextureHeight / kThreadGroupSize, 1);
 
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_constant_buffer = nullptr;
-	ID3D11ShaderResourceView* null_srv = nullptr;
+	ID3D11ShaderResourceView* null_srvs[3] = { nullptr, nullptr, nullptr };
 	ID3D11SamplerState* null_sampler = nullptr;
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
-	m_context->CSSetShaderResources(0, 1, &null_srv);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetShader(nullptr, nullptr, 0);
+
+	m_current_index = next_index;
+	m_has_state = true;
 }
 
 bool ComputeWindFieldTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
-		   m_texture != nullptr &&
-		   m_srv != nullptr &&
-		   m_uav != nullptr &&
+		   m_textures[0] != nullptr &&
+		   m_textures[1] != nullptr &&
+		   m_srvs[0] != nullptr &&
+		   m_srvs[1] != nullptr &&
+		   m_uavs[0] != nullptr &&
+		   m_uavs[1] != nullptr &&
 		   m_constant_buffer != nullptr;
 }
 
 Backend::RenderShaderResource ComputeWindFieldTexture::Resource() const
 {
-	return Backend::RenderShaderResource(m_srv);
+	return Backend::RenderShaderResource(m_srvs[m_current_index]);
 }

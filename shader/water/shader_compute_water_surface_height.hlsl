@@ -55,8 +55,6 @@ static const float kWaterDeltaTime = 1.0f / 60.0f;
 static const float kWaterFlowDamping = 0.005f;
 static const float kHydrologicalCycleRate = 0.5f;
 static const float kWaterBaseHeight = 0.0f;
-static const float kEdgeSeaPull = 0.28f;
-static const float kEdgeDrainRate = 0.035f;
 static const float kHydraulicErosionRate = 0.020f;
 static const float kHydraulicDepositionRate = 0.016f;
 static const float kThermalErosionRate = 0.030f;
@@ -301,23 +299,35 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
         max(center_surface - SamplePreviousSurfaceHeight(coord + int2(0, 1)), 0.0f),
         max(center_surface - SamplePreviousSurfaceHeight(coord + int2(0, -1)), 0.0f));
 
-    const float edge_delta =
-        max(center_surface - max(SampleWorkingTerrainHeight(coord), kWaterBaseHeight), 0.0f) * kEdgeSeaPull;
-    if (coord.x <= 0)
+    const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
+    const float4 wind_sample = g_WindField.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    const float2 wind_dir = SafeNormalize(wind_sample.xy * 2.0f - 1.0f);
+    const float wind_strength = saturate(wind_sample.z);
+    if (wind_strength > 1.0e-4f)
     {
-        surface_delta_heights.y = edge_delta;
-    }
-    if (coord.x >= int(width) - 1)
-    {
-        surface_delta_heights.x = edge_delta;
-    }
-    if (coord.y <= 0)
-    {
-        surface_delta_heights.w = edge_delta;
-    }
-    if (coord.y >= int(height) - 1)
-    {
-        surface_delta_heights.z = edge_delta;
+        const float2 world_pos = ComputeWorldPosition(coord);
+        const float along_wind = dot(world_pos, wind_dir);
+        const float cross_wind = dot(world_pos, float2(-wind_dir.y, wind_dir.x));
+        const float wind_phase =
+            along_wind * 0.030f -
+            time_seconds * (0.10f + wind_strength * 0.40f) +
+            cross_wind * 0.006f;
+        const float gust = 0.5f + 0.5f * sin(wind_phase * 6.2831853f);
+        const float4 neighbor_depth = float4(
+            SamplePreviousDepth(coord + int2(1, 0)),
+            SamplePreviousDepth(coord + int2(-1, 0)),
+            SamplePreviousDepth(coord + int2(0, 1)),
+            SamplePreviousDepth(coord + int2(0, -1)));
+        const float disturbance_scale =
+            wind_strength *
+            (0.10f + gust * 0.16f) *
+            max(length(surface_delta_heights), 0.001f);
+        const float4 wind_effect =
+            float4(wind_dir.x, -wind_dir.x, wind_dir.y, -wind_dir.y) * disturbance_scale;
+        const float4 max_disturbance =
+            max(min(neighbor_depth, available_water.xxxx) * 0.22f, 0.001f.xxxx);
+        surface_delta_heights =
+            max(surface_delta_heights + clamp(wind_effect, -max_disturbance, max_disturbance), 0.0f.xxxx);
     }
 
     float4 candidate = max(previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
@@ -491,10 +501,19 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float total_flux = dot(outflow, 1.0f.xxxx);
     const float2 flow_vector = float2(outflow.x - outflow.y, outflow.w - outflow.z);
     const float average_depth = max((source_depth + next_depth) * 0.5f, 1.0e-3f);
-    const float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
-    const float water_speed = saturate(length(water_velocity_xy) * 3.5f);
-    const float transport_energy =
-        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f));
+    const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
+    const float4 wind_sample = g_WindField.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    const float wind_strength = saturate(wind_sample.z);
+    const float2 wind_dir = SafeNormalize(wind_sample.xy * 2.0f - 1.0f);
+    const float wind_surface_factor =
+        smoothstep(0.01f, 0.12f, next_depth) *
+        wind_strength *
+        (0.55f + basin_factor * 0.45f);
+    float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
+    water_velocity_xy += wind_dir * ((0.008f + next_depth * 0.035f) * wind_surface_factor);
+    float water_speed = saturate(length(water_velocity_xy) * 3.5f);
+    float transport_energy =
+        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f + wind_surface_factor * 0.12f));
 
     const float east_terrain = SampleWorkingTerrainHeight(coord + int2(1, 0));
     const float west_terrain = SampleWorkingTerrainHeight(coord + int2(-1, 0));
@@ -570,17 +589,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             saturate(previous_suspended_sediment + erosion_amount - deposition_amount * 0.85f);
     }
 
-    const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
-    const float4 wind_sample = g_WindField.SampleLevel(g_TerrainSampler, uv, 0.0f);
-    const float wind_strength = saturate(wind_sample.z);
     const float evaporation_loss =
         min(
             next_depth,
             evaporation_rate *
                 water_dt *
                 60.0f *
-                lerp(1.15f, 0.50f, basin_factor) *
-                lerp(0.85f, 1.35f, wind_strength));
+                lerp(1.08f, 0.58f, basin_factor) *
+                lerp(0.95f, 1.18f, wind_strength));
     next_depth = max(next_depth - evaporation_loss, 0.0f);
 
     const float seepage_loss =
@@ -589,17 +605,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             seepage_rate * water_dt * 60.0f * (1.0f - basin_factor));
     next_depth = max(next_depth - seepage_loss, 0.0f);
 
-    if (IsEdgeCell(coord))
-    {
-        const float edge_surface =
-            max(terrain_height + next_depth - kEdgeDrainRate * water_dt * 60.0f, kWaterBaseHeight);
-        next_depth = max(edge_surface - terrain_height, 0.0f);
-    }
-
-    const float resolved_surface_height = max(terrain_height + next_depth, IsEdgeCell(coord) ? kWaterBaseHeight : terrain_height);
+    const float resolved_surface_height =
+        IsEdgeCell(coord)
+            ? max(terrain_height + next_depth, kWaterBaseHeight)
+            : terrain_height + next_depth;
 
     const float depth_preview = smoothstep(0.01f, 0.12f, next_depth);
-    const float2 wind_dir = SafeNormalize(wind_sample.xy * 2.0f - 1.0f);
     const float2 world_pos = ComputeWorldPosition(coord);
     const float along_wind = dot(world_pos, wind_dir);
     const float cross_wind = dot(world_pos, float2(-wind_dir.y, wind_dir.x));

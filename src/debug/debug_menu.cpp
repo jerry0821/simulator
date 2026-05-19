@@ -670,6 +670,44 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     }
     ImGui::End();
 
+    ImGui::Begin("Atmosphere");
+    if (frame_context == nullptr)
+    {
+        ImGui::TextDisabled("No frame context");
+    }
+    else
+    {
+        const ImVec2 preview_size(224.0f, 224.0f);
+
+        ImGui::TextDisabled("Climate Field");
+        ImGui::TextWrapped("RGB = temperature / humidity / rainfall field used by rain and atmospheric coupling.");
+        if (!frame_context->resources.climate_field.isValid())
+        {
+            ImGui::TextDisabled("ClimateField Preview: Missing");
+        }
+        else
+        {
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.climate_field.shaderResourceView())),
+                preview_size);
+        }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("Meteorograph Field");
+        ImGui::TextWrapped("Baked atmospheric map: climate background plus wind arrows and camera marker.");
+        if (!frame_context->resources.meteorograph_field.isValid())
+        {
+            ImGui::TextDisabled("Meteorograph Preview: Missing");
+        }
+        else
+        {
+            ImGui::Image(
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.meteorograph_field.shaderResourceView())),
+                preview_size);
+        }
+    }
+    ImGui::End();
+
     ImGui::Begin("Water");
     ImGui::SliderFloat("Water Height Override", &g_WaterSurfaceSettings.height, -1.0f, 32.0f);
     ImGui::Separator();

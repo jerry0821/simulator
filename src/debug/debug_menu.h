@@ -20,9 +20,9 @@ struct TerrainMaterialSettings;
 struct WaterSurfaceDesc;
 struct SurfaceWaterSimulationSettings
 {
-	float accumulation_rate = 0.030f;
-	float evaporation_rate = 0.0055f;
-	float seepage_rate = 0.0025f;
+	float accumulation_rate = 0.034f;
+	float evaporation_rate = 0.0048f;
+	float seepage_rate = 0.0020f;
 	float basin_fade = 5.0f;
 	float downhill_flow_rate = 0.54f;
 	float max_outflow_fraction = 0.84f;

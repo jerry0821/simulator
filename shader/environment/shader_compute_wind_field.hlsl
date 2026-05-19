@@ -1,21 +1,27 @@
-Texture2D g_TerrainHeight : register(t0);
+Texture2D<float4> g_PreviousWindField : register(t0);
+Texture2D<float4> g_ClimateField : register(t1);
+Texture2D g_TerrainHeight : register(t2);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_Output : register(u0);
 
 cbuffer CS_WIND_FIELD : register(b0)
 {
     float g_TimeSeconds;
+    float g_DeltaTimeSeconds;
     float g_WindDirectionX;
     float g_WindDirectionY;
     float g_WindStrength;
     float g_WindCrossInfluence;
     float g_NoiseScale;
-    float g_Padding0;
-    float g_Padding1;
+    float g_PressureWindScale;
+    float g_SourceBlendRate;
+    float g_PropagationScale;
+    float g_TerrainGuidanceScale;
+    float g_StormCoupling;
     uint g_Width;
     uint g_Height;
-    uint g_Padding2;
-    uint g_Padding3;
+    uint g_InitializeState;
+    uint g_Padding0;
 };
 
 float Hash21(float2 p)
@@ -65,6 +71,23 @@ float2 SafeNormalize(float2 v)
         result = v * rsqrt(length_sq);
     }
     return result;
+}
+
+float3 DecodeWindSample(float4 encoded)
+{
+    const float2 dir = SafeNormalize(encoded.xy * 2.0f - 1.0f);
+    return float3(dir, saturate(encoded.z));
+}
+
+float4 EncodeWindSample(float2 dir, float strength, float storminess)
+{
+    const float2 encoded_dir = SafeNormalize(dir) * 0.5f + 0.5f;
+    return float4(encoded_dir, saturate(strength), saturate(storminess));
+}
+
+float3 SampleClimate(float2 uv)
+{
+    return g_ClimateField.SampleLevel(g_SurfaceSampler, saturate(uv), 0.0f).rgb;
 }
 
 float SampleTerrainHeight(float2 uv)
@@ -130,62 +153,95 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     }
 
     float2 uv = (dispatch_thread_id.xy + 0.5) / float2(g_Width, g_Height);
+    const float2 texel = 1.0f / float2(g_Width, g_Height);
+    const float wind_dt = max(min(g_DeltaTimeSeconds, 1.0f / 30.0f), 1.0e-4f);
     float2 wind_dir = SafeNormalize(float2(g_WindDirectionX, g_WindDirectionY));
     float2 cross_dir = float2(-wind_dir.y, wind_dir.x);
+    const float3 climate_center = SampleClimate(uv);
+    const float3 climate_right = SampleClimate(uv + float2(texel.x, 0.0f));
+    const float3 climate_left = SampleClimate(uv - float2(texel.x, 0.0f));
+    const float3 climate_up = SampleClimate(uv + float2(0.0f, texel.y));
+    const float3 climate_down = SampleClimate(uv - float2(0.0f, texel.y));
+    const float storminess = saturate(climate_center.y * (0.62f + climate_center.z * 0.38f));
 
-    float2 domain = uv * max(g_NoiseScale, 1.0);
-    float2 drift = wind_dir * g_TimeSeconds * 0.008 + cross_dir * sin(g_TimeSeconds * 0.004) * 0.025;
+    float2 domain = uv * max(g_NoiseScale, 1.0f);
+    float2 drift = wind_dir * g_TimeSeconds * 0.0055f + cross_dir * sin(g_TimeSeconds * 0.0035f) * 0.020f;
+    float2 noise_dir = SafeNormalize(float2(
+        FBM(domain * 0.22f + drift * 8.0f + float2(13.0f, -7.0f)) - 0.5f,
+        FBM(domain * 0.22f - drift * 7.0f + float2(-11.0f, 17.0f)) - 0.5f));
 
-    // Broad atmospheric bands provide only a weak global bias.
-    float jet_band_north = exp(-pow((uv.y - 0.22) / 0.14, 2.0));
-    float jet_band_mid = exp(-pow((uv.y - 0.52) / 0.20, 2.0));
-    float jet_band_south = exp(-pow((uv.y - 0.80) / 0.16, 2.0));
-    float2 bias_flow =
-        wind_dir * (0.48 + jet_band_north * 0.42 + jet_band_mid * 0.16 - jet_band_south * 0.06) +
-        cross_dir * ((jet_band_north - jet_band_south) * 0.08 + (jet_band_mid - 0.35) * 0.03);
-
-    // Curl-noise dominated flow: start from a smooth scalar potential and derive a divergence-free field.
-    float2 warp = float2(
-        FBM(domain * 0.14 + drift * 10.0 + float2(7.1, 13.4)),
-        FBM(domain * 0.14 - drift * 8.0 + float2(-4.8, 3.2))) - 0.5;
-    float2 flow_uv = uv + drift + warp * (0.08 + g_WindCrossInfluence * 0.06);
-
-    const float eps = 0.010;
-    float potential_x1 = FBM((flow_uv + float2(eps, 0.0)) * 2.0 + float2(11.0, 5.0))
-                       + FBM((flow_uv + float2(eps, 0.0)) * 4.2 + float2(-9.2, 14.7)) * 0.28;
-    float potential_x0 = FBM((flow_uv - float2(eps, 0.0)) * 2.0 + float2(11.0, 5.0))
-                       + FBM((flow_uv - float2(eps, 0.0)) * 4.2 + float2(-9.2, 14.7)) * 0.28;
-    float potential_y1 = FBM((flow_uv + float2(0.0, eps)) * 2.0 + float2(11.0, 5.0))
-                       + FBM((flow_uv + float2(0.0, eps)) * 4.2 + float2(-9.2, 14.7)) * 0.28;
-    float potential_y0 = FBM((flow_uv - float2(0.0, eps)) * 2.0 + float2(11.0, 5.0))
-                       + FBM((flow_uv - float2(0.0, eps)) * 4.2 + float2(-9.2, 14.7)) * 0.28;
-
-    float dphi_dx = (potential_x1 - potential_x0) / (eps * 2.0);
-    float dphi_dy = (potential_y1 - potential_y0) / (eps * 2.0);
-    float2 curl_flow = float2(dphi_dy, -dphi_dx);
-
-    // Keep the global wind as the dominant direction and use curl only as a gentle perturbation.
-    TerrainFlowState terrain_flow = ComputeTerrainFlow(uv, bias_flow);
+    TerrainFlowState terrain_flow = ComputeTerrainFlow(uv, wind_dir);
     float wind_against_slope = saturate(dot(wind_dir, -terrain_flow.slope_dir));
     float wind_along_channel = saturate(abs(dot(wind_dir, terrain_flow.contour_dir)));
     float2 terrain_guidance =
-        terrain_flow.contour_dir * terrain_flow.channel_mask * (0.16f + g_WindCrossInfluence * 0.20f) +
-        terrain_flow.slope_dir * terrain_flow.ridge_mask * 0.05f;
-    float2 combined_flow = bias_flow * 1.35 + curl_flow * 0.28 + terrain_guidance * 0.70f;
-    float2 local_dir = SafeNormalize(combined_flow);
+        terrain_flow.contour_dir * terrain_flow.channel_mask * (0.20f + g_WindCrossInfluence * 0.16f) +
+        terrain_flow.slope_dir * (terrain_flow.ridge_mask * 0.05f - terrain_flow.valley_mask * 0.08f);
 
-    float strength_noise = FBM(flow_uv * 1.4 + float2(9.6, -6.4));
-    float strength = saturate(
-        0.08 +
-        g_WindStrength * 1.35 +
-        length(curl_flow) * 0.06 +
-        terrain_flow.ridge_mask * (0.08f + wind_along_channel * 0.06f) +
-        terrain_flow.channel_mask * wind_along_channel * 0.04f -
-        terrain_flow.valley_mask * (0.05f + wind_against_slope * 0.08f) -
-        terrain_flow.slope_amount * wind_against_slope * 0.04f +
-        max(max(jet_band_north, jet_band_mid), jet_band_south) * 0.10 +
-        (strength_noise - 0.5) * 0.06);
-    float2 encoded_dir = local_dir * 0.5 + 0.5;
+    const float jet_band_north = exp(-pow((uv.y - 0.22f) / 0.14f, 2.0f));
+    const float jet_band_mid = exp(-pow((uv.y - 0.52f) / 0.20f, 2.0f));
+    const float jet_band_south = exp(-pow((uv.y - 0.80f) / 0.16f, 2.0f));
+    const float2 bias_flow =
+        wind_dir * (0.42f + jet_band_north * 0.26f + jet_band_mid * 0.10f - jet_band_south * 0.05f) +
+        cross_dir * ((jet_band_north - jet_band_south) * 0.06f + (jet_band_mid - 0.35f) * 0.02f);
 
-    g_Output[dispatch_thread_id.xy] = float4(encoded_dir, strength, 1.0);
+    float2 source_dir = SafeNormalize(
+        lerp(wind_dir, noise_dir, 0.30f + storminess * 0.32f) +
+        bias_flow * 0.22f +
+        terrain_guidance * g_TerrainGuidanceScale);
+    float source_strength = saturate(
+        g_WindStrength *
+        (0.72f + storminess * g_StormCoupling + climate_center.x * 0.10f) +
+        terrain_flow.ridge_mask * 0.06f -
+        terrain_flow.valley_mask * 0.04f);
+
+    if (g_InitializeState != 0u)
+    {
+        g_Output[dispatch_thread_id.xy] = EncodeWindSample(source_dir, source_strength, storminess);
+        return;
+    }
+
+    const float3 previous_center = DecodeWindSample(g_PreviousWindField.Load(int3(dispatch_thread_id.xy, 0)));
+    const float3 previous_right = DecodeWindSample(g_PreviousWindField.Load(int3(clamp(int2(dispatch_thread_id.xy) + int2(1, 0), int2(0, 0), int2(int(g_Width) - 1, int(g_Height) - 1)), 0)));
+    const float3 previous_left = DecodeWindSample(g_PreviousWindField.Load(int3(clamp(int2(dispatch_thread_id.xy) + int2(-1, 0), int2(0, 0), int2(int(g_Width) - 1, int(g_Height) - 1)), 0)));
+    const float3 previous_up = DecodeWindSample(g_PreviousWindField.Load(int3(clamp(int2(dispatch_thread_id.xy) + int2(0, 1), int2(0, 0), int2(int(g_Width) - 1, int(g_Height) - 1)), 0)));
+    const float3 previous_down = DecodeWindSample(g_PreviousWindField.Load(int3(clamp(int2(dispatch_thread_id.xy) + int2(0, -1), int2(0, 0), int2(int(g_Width) - 1, int(g_Height) - 1)), 0)));
+
+    float2 previous_wind = previous_center.xy * previous_center.z;
+    float2 wind_right = previous_right.xy * previous_right.z;
+    float2 wind_left = previous_left.xy * previous_left.z;
+    float2 wind_up = previous_up.xy * previous_up.z;
+    float2 wind_down = previous_down.xy * previous_down.z;
+
+    float2 neighbor_transport = float2(
+        (-wind_right.x + wind_left.x),
+        (-wind_up.y + wind_down.y));
+    float2 pressure_wind = clamp(
+        float2(
+            climate_right.x - climate_left.x,
+            climate_up.x - climate_down.x) * (-g_PressureWindScale),
+        -g_PressureWindScale.xx,
+        g_PressureWindScale.xx);
+    float2 humidity_pull =
+        float2(
+            climate_right.y - climate_left.y,
+            climate_up.y - climate_down.y) *
+        (0.018f + climate_center.z * 0.026f);
+
+    previous_wind = lerp(
+        previous_wind,
+        source_dir * source_strength,
+        saturate(wind_dt * g_SourceBlendRate * (0.65f + storminess * 0.55f)));
+    previous_wind +=
+        (neighbor_transport * g_PropagationScale +
+         pressure_wind +
+         humidity_pull +
+         terrain_guidance * (g_TerrainGuidanceScale * (0.55f + wind_along_channel * 0.45f))) * wind_dt;
+
+    const float max_strength =
+        saturate(0.30f + g_WindStrength * 1.45f + storminess * 0.24f + wind_against_slope * 0.06f);
+    float strength = min(length(previous_wind), max(max_strength, 0.02f));
+    float2 local_dir = strength > 1.0e-5f ? previous_wind / strength : source_dir;
+    strength = saturate(strength);
+
+    g_Output[dispatch_thread_id.xy] = EncodeWindSample(local_dir, strength, storminess);
 }
