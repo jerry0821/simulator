@@ -10,7 +10,6 @@ class PostProcessPass;
 class ComputeNoiseTexture;
 class ComputeTerrainClassificationTexture;
 class ComputeTerrainNormalTexture;
-class ComputeWindFieldTexture;
 class ComputeClimateTexture;
 class ComputeGrassDataTexture;
 class ComputeMeteorographTexture;
@@ -51,7 +50,6 @@ private:
 	friend class ::ComputeNoiseTexture;
 	friend class ::ComputeTerrainClassificationTexture;
 	friend class ::ComputeTerrainNormalTexture;
-	friend class ::ComputeWindFieldTexture;
 	friend class ::ComputeClimateTexture;
 	friend class ::ComputeGrassDataTexture;
 	friend class ::ComputeMeteorographTexture;

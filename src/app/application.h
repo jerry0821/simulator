@@ -11,13 +11,11 @@
 #include "compute_grass_data_texture.h"
 #include "compute_meteorograph_texture.h"
 #include "compute_noise_texture.h"
-#include "compute_rain_map_texture.h"
 #include "compute_shared_resource_registry.h"
 #include "compute_task_runner.h"
 #include "compute_terrain_classification_texture.h"
 #include "compute_terrain_normal_texture.h"
 #include "compute_water_surface_height_texture.h"
-#include "compute_wind_field_texture.h"
 #include "render_backend_dx11.h"
 #include "render_water_surface.h"
 #include "renderer.h"
@@ -68,12 +66,10 @@ private:
 	ComputeGrassDataTexture m_compute_grass_data_texture{};
 	ComputeMeteorographTexture m_compute_meteorograph_texture{};
 	ComputeNoiseTexture m_compute_noise_texture{};
-	ComputeRainMapTexture m_compute_rain_map_texture{};
 	ComputeSharedResourceRegistry m_compute_shared_resource_registry{};
 	ComputeTerrainClassificationTexture m_compute_terrain_classification_texture{};
 	ComputeTerrainNormalTexture m_compute_terrain_normal_texture{};
 	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
-	ComputeWindFieldTexture m_compute_wind_field_texture{};
 	TerrainWaterState m_terrain_water_state{};
 
 #if defined(DEBUG) || defined(_DEBUG)

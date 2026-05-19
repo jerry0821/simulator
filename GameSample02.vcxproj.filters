@@ -239,9 +239,6 @@
     <ClCompile Include="src\compute\compute_meteorograph_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\compute\compute_wind_field_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
     <ClCompile Include="src\debug\debug_menu.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
@@ -547,9 +544,6 @@
     <ClInclude Include="src\compute\compute_meteorograph_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\compute\compute_wind_field_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
     <ClInclude Include="src\compute\compute_task.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
@@ -769,9 +763,6 @@
       <Filter>Shader Files\Environment</Filter>
     </FxCompile>
     <FxCompile Include="shader\environment\shader_compute_meteorograph.hlsl">
-      <Filter>Shader Files\Environment</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\environment\shader_compute_wind_field.hlsl">
       <Filter>Shader Files\Environment</Filter>
     </FxCompile>
     <FxCompile Include="shader\terrain\shader_compute_terrain_height.hlsl">

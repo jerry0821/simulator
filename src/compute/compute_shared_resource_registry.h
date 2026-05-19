@@ -28,7 +28,6 @@ enum class ComputeSharedResourceId
 	SoilMoisture,
 	ErosionDelta,
 	ComputeNoise,
-	WindField,
 	ClimateField,
 	MeteorographField,
 	GrassInstances,

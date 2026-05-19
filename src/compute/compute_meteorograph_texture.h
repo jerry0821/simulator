@@ -32,7 +32,6 @@ public:
 	ResourceSpan ReadResources() const override
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
-			ComputeSharedResourceId::ClimateField,
 			ComputeSharedResourceId::BaseTerrainHeight
 		};
 		return kReadResources;
@@ -41,6 +40,7 @@ public:
 	ResourceSpan WriteResources() const override
 	{
 		static constexpr ComputeSharedResourceId kWriteResources[] = {
+			ComputeSharedResourceId::RainMap,
 			ComputeSharedResourceId::MeteorographField
 		};
 		return kWriteResources;
@@ -53,11 +53,11 @@ public:
 		float time_seconds,
 		float delta_time_seconds,
 		const ComputeNoiseSettings& settings,
-		Backend::RenderShaderResource climate_field,
 		Backend::RenderShaderResource terrain_height) const;
 
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;
+	Backend::RenderShaderResource RainResource() const;
 
 private:
 	struct MeteorographConstants
@@ -67,21 +67,21 @@ private:
 		float wind_direction_x = 1.0f;
 		float wind_direction_y = 0.0f;
 		float wind_strength = 0.08f;
-		float wind_cross_influence = 0.55f;
-		float noise_scale = 18.0f;
-		float pressure_scale = 0.095f;
-		float source_blend_rate = 0.42f;
-		float propagation_scale = 0.58f;
-		float terrain_guidance_scale = 0.20f;
-		float storm_coupling = 0.28f;
-		float humidity_advection = 0.18f;
-		float temperature_relax = 0.16f;
-		float rain_coupling = 0.34f;
-		float padding0 = 0.0f;
+		float wind_cross_influence = 0.16f;
+		float noise_scale = 12.0f;
+		float pressure_scale = 0.0065f;
+		float source_blend_rate = 0.20f;
+		float propagation_scale = 0.55f;
+		float humidity_advection = 0.08f;
+		float temperature_relax = 0.10f;
+		float rain_coupling = 0.22f;
+		float rain_multiplier = 1.0f;
+		float force_rain = 0.0f;
+		float humidity_capacity = 0.86f;
 		unsigned int width = 0;
 		unsigned int height = 0;
 		unsigned int initialize_state = 1u;
-		unsigned int padding1 = 0u;
+		unsigned int padding0 = 0u;
 	};
 
 	static constexpr unsigned int kTextureWidth = 256;
@@ -94,6 +94,9 @@ private:
 	ID3D11Texture2D* m_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_uavs[2] = { nullptr, nullptr };
+	ID3D11Texture2D* m_rain_texture = nullptr;
+	ID3D11ShaderResourceView* m_rain_srv = nullptr;
+	ID3D11UnorderedAccessView* m_rain_uav = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	mutable unsigned int m_current_index = 0u;
 	mutable bool m_has_state = false;

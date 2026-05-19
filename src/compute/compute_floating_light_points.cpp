@@ -183,7 +183,7 @@ bool ComputeFloatingLightPoints::SetSeeds(const std::vector<Seed>& seeds)
 void ComputeFloatingLightPoints::Update(
 	float time_seconds,
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* wind_field_srv,
+	ID3D11ShaderResourceView* meteorograph_srv,
 	const DirectX::XMFLOAT3& camera_position,
 	const DirectX::XMFLOAT3& camera_forward,
 	const DirectX::XMFLOAT3& camera_right,
@@ -218,7 +218,7 @@ void ComputeFloatingLightPoints::Update(
 	ID3D11ShaderResourceView* input_srvs[3] = {
 		m_seed_srv,
 		terrain_height_srv,
-		wind_field_srv
+		meteorograph_srv
 	};
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);

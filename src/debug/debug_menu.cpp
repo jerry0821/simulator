@@ -170,8 +170,6 @@ const char* ToString(ComputeSharedResourceId id)
         return "ErosionDelta";
     case ComputeSharedResourceId::ComputeNoise:
         return "ComputeNoise";
-    case ComputeSharedResourceId::WindField:
-        return "WindField";
     case ComputeSharedResourceId::ClimateField:
         return "ClimateField";
     case ComputeSharedResourceId::MeteorographField:

@@ -32,7 +32,7 @@ cbuffer CS_FLOATING_LIGHT_CONSTANT_BUFFER : register(b0)
 
 StructuredBuffer<FloatingLightSeed> g_LightSeeds : register(t0);
 Texture2D g_TerrainHeight : register(t1);
-Texture2D g_WindField : register(t2);
+Texture2D<float4> g_Meteorograph : register(t2);
 RWStructuredBuffer<InstanceData> g_InstanceData : register(u0);
 
 float Hash21(float2 p)
@@ -60,7 +60,7 @@ float4 SampleSmoothedWind(float2 world_xz)
 {
     uint width = 0;
     uint height = 0;
-    g_WindField.GetDimensions(width, height);
+    g_Meteorograph.GetDimensions(width, height);
 
     float2 uv = float2(
         saturate((world_xz.x - world_min_x) / max(world_max_x - world_min_x, 1.0e-4f)),
@@ -73,11 +73,11 @@ float4 SampleSmoothedWind(float2 world_xz)
     int2 yp = min(center + int2(0, 1), max_coord);
     int2 ym = max(center - int2(0, 1), int2(0, 0));
 
-    float4 wind_center = g_WindField.Load(int3(center, 0));
-    float4 wind_xp = g_WindField.Load(int3(xp, 0));
-    float4 wind_xm = g_WindField.Load(int3(xm, 0));
-    float4 wind_yp = g_WindField.Load(int3(yp, 0));
-    float4 wind_ym = g_WindField.Load(int3(ym, 0));
+    float4 wind_center = g_Meteorograph.Load(int3(center, 0));
+    float4 wind_xp = g_Meteorograph.Load(int3(xp, 0));
+    float4 wind_xm = g_Meteorograph.Load(int3(xm, 0));
+    float4 wind_yp = g_Meteorograph.Load(int3(yp, 0));
+    float4 wind_ym = g_Meteorograph.Load(int3(ym, 0));
     return wind_center * 0.40f + (wind_xp + wind_xm + wind_yp + wind_ym) * 0.15f;
 }
 
@@ -94,9 +94,9 @@ float SampleTerrainHeightWorld(float2 world_xz)
     return g_TerrainHeight.Load(int3(coord, 0)).r;
 }
 
-float3 DecodeWindDirection(float4 encoded_wind)
+float3 DecodeWindDirection(float4 wind_sample)
 {
-    float2 dir = encoded_wind.xy * 2.0f - 1.0f;
+    float2 dir = wind_sample.xy;
     float len_sq = dot(dir, dir);
     if (len_sq < 1.0e-6f)
     {
@@ -154,7 +154,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float4 wind_sample = SampleSmoothedWind(anchor_world_xz);
     const float3 wind_dir3 = DecodeWindDirection(wind_sample);
     const float2 wind_dir = normalize(wind_dir3.xz + 1.0e-6f.xx);
-    const float wind_strength = saturate(wind_sample.z);
+    const float wind_strength = saturate(length(wind_sample.xy));
     const float2 cross_dir = float2(-wind_dir.y, wind_dir.x);
 
     const float stream_noise =

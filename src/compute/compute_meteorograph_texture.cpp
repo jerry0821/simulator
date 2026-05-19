@@ -74,6 +74,16 @@ bool ComputeMeteorographTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 		}
 	}
 
+	D3D11_TEXTURE2D_DESC rain_desc = texture_desc;
+	rain_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	if (FAILED(m_device->CreateTexture2D(&rain_desc, nullptr, &m_rain_texture)) ||
+		FAILED(m_device->CreateShaderResourceView(m_rain_texture, nullptr, &m_rain_srv)) ||
+		FAILED(m_device->CreateUnorderedAccessView(m_rain_texture, nullptr, &m_rain_uav)))
+	{
+		Finalize();
+		return false;
+	}
+
 	D3D11_BUFFER_DESC buffer_desc{};
 	buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
 	buffer_desc.ByteWidth = sizeof(MeteorographConstants);
@@ -94,6 +104,9 @@ bool ComputeMeteorographTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 void ComputeMeteorographTexture::Finalize()
 {
 	SafeRelease(m_constant_buffer);
+	SafeRelease(m_rain_uav);
+	SafeRelease(m_rain_srv);
+	SafeRelease(m_rain_texture);
 	for (unsigned int index = 0; index < 2; ++index)
 	{
 		SafeRelease(m_uavs[index]);
@@ -111,10 +124,9 @@ void ComputeMeteorographTexture::Update(
 	float time_seconds,
 	float delta_time_seconds,
 	const ComputeNoiseSettings& settings,
-	Backend::RenderShaderResource climate_field,
 	Backend::RenderShaderResource terrain_height) const
 {
-	if (!IsValid() || !climate_field.isValid() || !terrain_height.isValid())
+	if (!IsValid() || !terrain_height.isValid())
 	{
 		return;
 	}
@@ -145,15 +157,15 @@ void ComputeMeteorographTexture::Update(
 			settings.wind_strength,
 			settings.wind_cross_influence,
 			settings.noise_scale,
-			0.085f,
-			0.42f,
-			0.58f,
-			0.20f,
-			0.28f,
+			0.005f,
 			0.18f,
-			0.16f,
-			0.34f,
-			0.0f,
+			0.58f,
+			0.06f,
+			0.10f,
+			0.40f,
+			settings.rain_multiplier,
+			settings.force_rain,
+			0.86f,
 			kTextureWidth,
 			kTextureHeight,
 			m_has_state ? 0u : 1u,
@@ -163,25 +175,27 @@ void ComputeMeteorographTexture::Update(
 
 	const unsigned int previous_index = m_current_index;
 	const unsigned int next_index = (m_current_index + 1u) % 2u;
-	ID3D11ShaderResourceView* input_srvs[3] = {
+	ID3D11ShaderResourceView* input_srvs[2] = {
 		m_srvs[previous_index],
-		climate_field.shaderResourceView(),
 		terrain_height.shaderResourceView()};
 	ID3D11SamplerState* sampler_state = Backend::DX11::Sampler::GetState();
+	ID3D11UnorderedAccessView* output_uavs[2] = {
+		m_uavs[next_index],
+		m_rain_uav };
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, &m_constant_buffer);
-	m_context->CSSetShaderResources(0, 3, input_srvs);
+	m_context->CSSetShaderResources(0, 2, input_srvs);
 	m_context->CSSetSamplers(0, 1, &sampler_state);
-	m_context->CSSetUnorderedAccessViews(0, 1, &m_uavs[next_index], nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 2, output_uavs, nullptr);
 	m_context->Dispatch(kTextureWidth / kThreadGroupSize, kTextureHeight / kThreadGroupSize, 1);
 
-	ID3D11UnorderedAccessView* null_uav = nullptr;
+	ID3D11UnorderedAccessView* null_uavs[2] = { nullptr, nullptr };
 	ID3D11Buffer* null_constant_buffer = nullptr;
-	ID3D11ShaderResourceView* null_srvs[3] = { nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[2] = { nullptr, nullptr };
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
-	m_context->CSSetShaderResources(0, 3, null_srvs);
+	m_context->CSSetUnorderedAccessViews(0, 2, null_uavs, nullptr);
+	m_context->CSSetShaderResources(0, 2, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
 	m_context->CSSetShader(nullptr, nullptr, 0);
@@ -199,10 +213,18 @@ bool ComputeMeteorographTexture::IsValid() const
 		   m_srvs[1] != nullptr &&
 		   m_uavs[0] != nullptr &&
 		   m_uavs[1] != nullptr &&
+		   m_rain_texture != nullptr &&
+		   m_rain_srv != nullptr &&
+		   m_rain_uav != nullptr &&
 		   m_constant_buffer != nullptr;
 }
 
 Backend::RenderShaderResource ComputeMeteorographTexture::Resource() const
 {
 	return Backend::RenderShaderResource(m_srvs[m_current_index]);
+}
+
+Backend::RenderShaderResource ComputeMeteorographTexture::RainResource() const
+{
+	return Backend::RenderShaderResource(m_rain_srv);
 }

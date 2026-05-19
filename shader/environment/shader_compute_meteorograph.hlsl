@@ -1,8 +1,8 @@
 Texture2D<float4> g_PreviousMeteorograph : register(t0);
-Texture2D<float3> g_ClimateField : register(t1);
-Texture2D g_TerrainHeight : register(t2);
+Texture2D g_TerrainHeight : register(t1);
 SamplerState g_LinearSampler : register(s0);
 RWTexture2D<float4> g_Output : register(u0);
+RWTexture2D<float4> g_RainOut : register(u1);
 
 cbuffer CS_METEOROGRAPH : register(b0)
 {
@@ -16,17 +16,21 @@ cbuffer CS_METEOROGRAPH : register(b0)
     float g_PressureScale;
     float g_SourceBlendRate;
     float g_PropagationScale;
-    float g_TerrainGuidanceScale;
-    float g_StormCoupling;
     float g_HumidityAdvection;
     float g_TemperatureRelax;
     float g_RainCoupling;
-    float g_Padding0;
+    float g_RainMultiplier;
+    float g_ForceRain;
+    float g_HumidityCapacity;
     uint g_Width;
     uint g_Height;
     uint g_InitializeState;
-    uint g_Padding1;
+    uint g_Padding0;
 };
+
+static const float kWindSourceIntensity = 1.8f;
+static const float kHumidityDiffuseWeight = 0.01f;
+static const float kRainFadeoff = 0.55f;
 
 float2 SafeNormalize(float2 value)
 {
@@ -34,24 +38,28 @@ float2 SafeNormalize(float2 value)
     return len_sq > 1.0e-6f ? value * rsqrt(len_sq) : float2(1.0f, 0.0f);
 }
 
-int2 ClampCoord(int2 coord)
+int2 WrapCoord(int2 coord)
 {
-    return clamp(coord, int2(0, 0), int2(int(g_Width) - 1, int(g_Height) - 1));
+    const int width = int(g_Width);
+    const int height = int(g_Height);
+    coord.x = ((coord.x % width) + width) % width;
+    coord.y = ((coord.y % height) + height) % height;
+    return coord;
+}
+
+float2 WrapUv(float2 uv)
+{
+    return frac(uv + 1024.0f);
 }
 
 float4 SamplePreviousState(int2 coord)
 {
-    return g_PreviousMeteorograph.Load(int3(ClampCoord(coord), 0));
+    return g_PreviousMeteorograph.Load(int3(WrapCoord(coord), 0));
 }
 
-float3 SampleClimate(float2 uv)
+float4 SampleTerrainState(float2 uv)
 {
-    return g_ClimateField.SampleLevel(g_LinearSampler, saturate(uv), 0.0f);
-}
-
-float SampleTerrainHeight(float2 uv)
-{
-    return g_TerrainHeight.SampleLevel(g_LinearSampler, saturate(uv), 0.0f).r;
+    return g_TerrainHeight.SampleLevel(g_LinearSampler, WrapUv(uv), 0.0f);
 }
 
 float Hash21(float2 p)
@@ -92,54 +100,35 @@ float FBM(float2 p)
     return value;
 }
 
-struct TerrainFlowState
+float ComputeSurfaceTemperature(float2 uv, float terrain_height, float water_depth)
 {
-    float2 slope_dir;
-    float2 contour_dir;
-    float slope_amount;
-    float ridge_mask;
-    float valley_mask;
-    float channel_mask;
-};
+    const float latitude = abs(uv.y * 2.0f - 1.0f);
+    const float elevation_cooling = saturate(max(terrain_height, 0.0f) * 0.0125f);
+    const float marine_moderation = saturate(water_depth * 0.18f);
+    const float diurnal =
+        sin(g_TimeSeconds * 0.026f + uv.x * 6.2831853f + uv.y * 2.6f) * 0.035f;
 
-TerrainFlowState ComputeTerrainFlow(float2 uv, float2 reference_dir)
+    return saturate(
+        0.72f -
+        latitude * 0.24f -
+        elevation_cooling * 0.18f +
+        marine_moderation * 0.05f +
+        diurnal);
+}
+
+float ComputeEvaporationSource(float2 wind_velocity, float humidity, float water_depth)
 {
-    TerrainFlowState state = (TerrainFlowState)0;
+    const float wind_strength = saturate(length(wind_velocity));
+    const float exposed_water = saturate(water_depth * 0.95f);
+    const float dry_air = 1.0f - saturate(humidity);
+    return dry_air * exposed_water * (0.045f + wind_strength * 0.065f) * g_RainCoupling;
+}
 
-    uint terrain_width = 0u;
-    uint terrain_height = 0u;
-    g_TerrainHeight.GetDimensions(terrain_width, terrain_height);
-    const float2 texel = float2(
-        1.0f / max(float(terrain_width), 1.0f),
-        1.0f / max(float(terrain_height), 1.0f));
-
-    const float height_center = SampleTerrainHeight(uv);
-    const float height_x_pos = SampleTerrainHeight(uv + float2(texel.x, 0.0f));
-    const float height_x_neg = SampleTerrainHeight(uv - float2(texel.x, 0.0f));
-    const float height_y_pos = SampleTerrainHeight(uv + float2(0.0f, texel.y));
-    const float height_y_neg = SampleTerrainHeight(uv - float2(0.0f, texel.y));
-
-    const float2 height_gradient = float2(
-        height_x_pos - height_x_neg,
-        height_y_pos - height_y_neg);
-    const float relief =
-        max(max(height_x_pos, height_x_neg), max(height_y_pos, height_y_neg)) -
-        min(min(height_x_pos, height_x_neg), min(height_y_pos, height_y_neg));
-    const float laplacian =
-        (height_x_pos + height_x_neg + height_y_pos + height_y_neg) -
-        height_center * 4.0f;
-
-    state.slope_amount = saturate(length(height_gradient) * 0.22f + relief * 0.08f);
-    state.ridge_mask = saturate((-laplacian) * 0.18f + relief * 0.05f);
-    state.valley_mask = saturate(laplacian * 0.14f + relief * 0.04f);
-    state.slope_dir = SafeNormalize(-height_gradient);
-    state.contour_dir = float2(-state.slope_dir.y, state.slope_dir.x);
-    if (dot(state.contour_dir, reference_dir) < 0.0f)
-    {
-        state.contour_dir *= -1.0f;
-    }
-    state.channel_mask = saturate(state.slope_amount * 0.55f + state.valley_mask * 0.65f);
-    return state;
+float4 BuildRainState(float rain_amount, float humidity, float water_depth)
+{
+    const float wet_hint =
+        saturate(rain_amount * 0.68f + humidity * 0.22f + saturate(water_depth) * 0.24f);
+    return float4(saturate(rain_amount), wet_hint, saturate(humidity), 1.0f);
 }
 
 [numthreads(8, 8, 1)]
@@ -152,58 +141,36 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     const int2 coord = int2(dispatch_thread_id.xy);
     const float2 uv = (dispatch_thread_id.xy + 0.5f) / float2(g_Width, g_Height);
-    const float2 texel = 1.0f / float2(g_Width, g_Height);
-    const float dt = max(min(g_DeltaTimeSeconds, 1.0f / 30.0f), 1.0e-4f);
+    const float dt = max(min(g_DeltaTimeSeconds, 1.0f / 60.0f), 1.0e-4f);
 
     const float2 prevailing_wind = SafeNormalize(float2(g_WindDirectionX, g_WindDirectionY));
     const float2 cross_dir = float2(-prevailing_wind.y, prevailing_wind.x);
-    const float3 climate_center = SampleClimate(uv);
-    const float3 climate_right = SampleClimate(uv + float2(texel.x, 0.0f));
-    const float3 climate_left = SampleClimate(uv - float2(texel.x, 0.0f));
-    const float3 climate_up = SampleClimate(uv + float2(0.0f, texel.y));
-    const float3 climate_down = SampleClimate(uv - float2(0.0f, texel.y));
-    const float storminess = saturate(climate_center.y * (0.62f + climate_center.z * 0.38f));
+    const float4 terrain_state = SampleTerrainState(uv);
+    const float terrain_height = terrain_state.x;
+    const float water_surface = max(terrain_state.y, terrain_height);
+    const float water_depth = max(water_surface - terrain_height, 0.0f);
+    const float target_temperature = ComputeSurfaceTemperature(uv, terrain_height, water_depth);
 
     const float2 domain = uv * max(g_NoiseScale, 1.0f);
     const float2 drift =
-        prevailing_wind * g_TimeSeconds * 0.0055f +
-        cross_dir * sin(g_TimeSeconds * 0.0035f) * 0.020f;
-    const float2 noise_dir = SafeNormalize(float2(
-        FBM(domain * 0.22f + drift * 8.0f + float2(13.0f, -7.0f)) - 0.5f,
-        FBM(domain * 0.22f - drift * 7.0f + float2(-11.0f, 17.0f)) - 0.5f));
-
-    const TerrainFlowState terrain_flow = ComputeTerrainFlow(uv, prevailing_wind);
-    const float wind_against_slope = saturate(dot(prevailing_wind, -terrain_flow.slope_dir));
-    const float wind_along_channel = saturate(abs(dot(prevailing_wind, terrain_flow.contour_dir)));
-    const float2 terrain_guidance =
-        terrain_flow.contour_dir * terrain_flow.channel_mask * (0.20f + g_WindCrossInfluence * 0.16f) +
-        terrain_flow.slope_dir * (terrain_flow.ridge_mask * 0.05f - terrain_flow.valley_mask * 0.08f);
-
-    const float jet_band_north = exp(-pow((uv.y - 0.22f) / 0.14f, 2.0f));
-    const float jet_band_mid = exp(-pow((uv.y - 0.52f) / 0.20f, 2.0f));
-    const float jet_band_south = exp(-pow((uv.y - 0.80f) / 0.16f, 2.0f));
-    const float2 bias_flow =
-        prevailing_wind * (0.42f + jet_band_north * 0.26f + jet_band_mid * 0.10f - jet_band_south * 0.05f) +
-        cross_dir * ((jet_band_north - jet_band_south) * 0.06f + (jet_band_mid - 0.35f) * 0.02f);
-
+        prevailing_wind * g_TimeSeconds * 0.018f +
+        cross_dir * sin(g_TimeSeconds * 0.0018f) * 0.010f;
+    const float2 random_wind_source = SafeNormalize(float2(
+        FBM(domain * 0.55f + drift * 3.1f + float2(7.1f, -4.2f)) - 0.5f,
+        FBM(domain * 0.55f + drift.yx * float2(-2.3f, 2.0f) + float2(-5.4f, 9.7f)) - 0.5f));
     const float2 source_dir = SafeNormalize(
-        lerp(prevailing_wind, noise_dir, 0.30f + storminess * 0.32f) +
-        bias_flow * 0.22f +
-        terrain_guidance * g_TerrainGuidanceScale);
-    const float source_strength = saturate(
-        g_WindStrength *
-        (0.72f + storminess * g_StormCoupling + climate_center.x * 0.10f) +
-        terrain_flow.ridge_mask * 0.06f -
-        terrain_flow.valley_mask * 0.04f);
-
-    const float climate_humidity =
-        saturate(climate_center.y * (0.72f + climate_center.z * g_RainCoupling));
-    const float climate_temperature =
-        saturate(climate_center.x - climate_center.z * 0.10f + source_strength * 0.03f);
+        lerp(prevailing_wind, random_wind_source, 0.10f + g_WindCrossInfluence * 0.12f));
+    const float source_strength =
+        max(g_WindStrength, 1.0e-4f) * (0.95f + water_depth * 0.05f);
 
     if (g_InitializeState != 0u)
     {
-        g_Output[coord] = float4(source_dir * source_strength, climate_humidity, climate_temperature);
+        const float humidity_seed = saturate(
+            0.38f +
+            FBM(domain * 0.40f + float2(13.7f, -8.1f)) * 0.26f +
+            water_depth * 0.18f);
+        g_Output[coord] = float4(source_dir * source_strength, humidity_seed, target_temperature);
+        g_RainOut[coord] = BuildRainState(0.0f, humidity_seed, water_depth);
         return;
     }
 
@@ -213,64 +180,59 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float4 previous_up = SamplePreviousState(coord + int2(0, 1));
     const float4 previous_down = SamplePreviousState(coord + int2(0, -1));
 
-    float2 wind_velocity = previous_center.xy;
-    const float2 neighbor_wind =
-        (previous_right.xy + previous_left.xy + previous_up.xy + previous_down.xy) * 0.25f;
     const float2 neighbor_transport = float2(
         -previous_right.x + previous_left.x,
         -previous_up.y + previous_down.y);
     const float2 pressure_wind = clamp(
         float2(
-            climate_right.x - climate_left.x,
-            climate_up.x - climate_down.x) * (-g_PressureScale),
+            (previous_right.w - previous_center.w) + (previous_left.w - previous_center.w),
+            (previous_up.w - previous_center.w) + (previous_down.w - previous_center.w)) * (-g_PressureScale),
         -g_PressureScale.xx,
         g_PressureScale.xx);
-    const float2 humidity_push =
-        float2(
-            climate_right.y - climate_left.y,
-            climate_up.y - climate_down.y) *
-        (0.030f + climate_center.z * 0.042f);
 
-    wind_velocity = lerp(wind_velocity, neighbor_wind, saturate(dt * g_PropagationScale * 0.55f));
-    wind_velocity = lerp(
-        wind_velocity,
-        source_dir * source_strength,
-        saturate(dt * g_SourceBlendRate * (0.75f + storminess * 0.45f)));
-    wind_velocity +=
-        (neighbor_transport * g_PropagationScale +
-         pressure_wind +
-         humidity_push +
-         terrain_guidance * (g_TerrainGuidanceScale * (0.55f + wind_along_channel * 0.45f))) * dt;
+    float2 wind_velocity = lerp(
+        previous_center.xy,
+        source_dir * max(source_strength, kWindSourceIntensity * g_WindStrength),
+        saturate(dt * g_SourceBlendRate));
+    wind_velocity += (neighbor_transport * g_PropagationScale + pressure_wind) * dt;
 
-    const float max_strength =
-        saturate(0.18f + g_WindStrength * 1.32f + storminess * 0.22f + wind_against_slope * 0.05f);
+    const float max_strength = max(g_WindStrength * 1.65f + 0.04f, 1.0e-4f);
     const float wind_length = length(wind_velocity);
-    if (wind_length > max(max_strength, 1.0e-4f))
+    if (wind_length > max_strength)
     {
         wind_velocity *= max_strength / wind_length;
     }
 
-    const float humidity_neighbors =
-        (previous_right.z + previous_left.z + previous_up.z + previous_down.z) * 0.25f;
-    float humidity = lerp(
-        previous_center.z,
-        climate_humidity,
-        saturate(dt * (0.34f + climate_center.z * 0.28f)));
-    humidity = lerp(humidity, humidity_neighbors, saturate(dt * g_HumidityAdvection));
-    humidity = saturate(
-        humidity +
-        climate_center.z * dt * 0.14f -
-        climate_center.x * dt * 0.04f +
-        saturate(length(wind_velocity)) * dt * 0.03f);
+    const float2 humiture_flow_t = -previous_up.y * previous_up.zw;
+    const float2 humiture_flow_b = previous_down.y * previous_down.zw;
+    const float2 humiture_flow_r = -previous_right.x * previous_right.zw;
+    const float2 humiture_flow_l = previous_left.x * previous_left.zw;
+    float2 humiture = max(
+        previous_center.zw + (humiture_flow_t + humiture_flow_b + humiture_flow_r + humiture_flow_l) * dt,
+        float2(0.0f, 0.0f));
 
-    const float temperature_neighbors =
-        (previous_right.w + previous_left.w + previous_up.w + previous_down.w) * 0.25f;
-    float temperature = lerp(
-        previous_center.w,
-        climate_temperature,
-        saturate(dt * g_TemperatureRelax));
-    temperature = lerp(temperature, temperature_neighbors, saturate(dt * 0.12f));
-    temperature = saturate(temperature - climate_center.z * dt * 0.05f);
+    const float diffuse_weight = min(max(g_HumidityAdvection, kHumidityDiffuseWeight) * dt, 0.24f);
+    const float concentrated_weight = max(1.0f - diffuse_weight * 4.0f, 0.0f);
+    humiture =
+        humiture * concentrated_weight +
+        (previous_up.zw + previous_down.zw + previous_right.zw + previous_left.zw) * diffuse_weight;
+
+    float humidity = max(humiture.x, 0.0f);
+    humidity += ComputeEvaporationSource(wind_velocity, humidity, water_depth) * dt;
+
+    float rain_amount = max(humidity - g_HumidityCapacity, 0.0f) * kRainFadeoff * dt;
+    rain_amount *= max(g_RainMultiplier, 0.0f);
+    rain_amount = max(rain_amount, saturate(g_ForceRain * humidity) * 0.12f);
+    rain_amount = saturate(rain_amount);
+    humidity = saturate(humidity - rain_amount);
+
+    float temperature = lerp(humiture.y, target_temperature, saturate(dt * g_TemperatureRelax));
+    temperature = lerp(
+        temperature,
+        (previous_up.w + previous_down.w + previous_right.w + previous_left.w) * 0.25f,
+        saturate(dt * 0.05f));
+    temperature = saturate(temperature);
 
     g_Output[coord] = float4(wind_velocity, humidity, temperature);
+    g_RainOut[coord] = BuildRainState(rain_amount, humidity, water_depth);
 }

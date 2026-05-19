@@ -15,12 +15,10 @@
 #include "compute_climate_texture.h"
 #include "compute_meteorograph_texture.h"
 #include "compute_noise_texture.h"
-#include "compute_rain_map_texture.h"
 #include "compute_shared_resource_registry.h"
 #include "compute_task.h"
 #include "compute_terrain_normal_texture.h"
 #include "compute_water_surface_height_texture.h"
-#include "compute_wind_field_texture.h"
 #include "cube.h"
 #include "debug_ostream.h"
 #include "cylinder.h"
@@ -339,23 +337,15 @@ bool Application::InitializeEngineSystems()
 		m_compute_meteorograph_texture,
 		[this](double current_time, double elapsed_time)
 		{
+			const Backend::RenderShaderResource atmosphere_terrain =
+				m_compute_water_surface_height_texture.HasBootstrappedState()
+					? SimulationTerrainHeightResource()
+					: BaseTerrainHeightResource();
 			m_compute_meteorograph_texture.Update(
 				static_cast<float>(current_time),
 				static_cast<float>(elapsed_time),
 				DebugMenu_GetComputeNoiseSettings(),
-				m_compute_climate_texture.Resource(),
-				BaseTerrainHeightResource());
-		});
-	m_compute_task_runner.Register(
-		m_compute_rain_map_texture,
-		[this](double current_time, double /*elapsed_time*/)
-		{
-			const auto& compute_settings = DebugMenu_GetComputeNoiseSettings();
-			m_compute_rain_map_texture.Update(
-				m_compute_meteorograph_texture.Resource().shaderResourceView(),
-				compute_settings.rain_multiplier,
-				compute_settings.force_rain,
-				static_cast<float>(current_time));
+				atmosphere_terrain);
 		});
 	m_compute_task_runner.Register(
 		m_compute_water_surface_height_texture,
@@ -382,7 +372,7 @@ bool Application::InitializeEngineSystems()
 					DebugMenu_ConsumeSurfaceWaterInjectionRequest();
 				m_compute_water_surface_height_texture.Update(
 					BaseTerrainHeightResource().shaderResourceView(),
-					m_compute_rain_map_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.RainResource().shaderResourceView(),
 					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					water_sim_settings,
@@ -414,13 +404,7 @@ bool Application::InitializeEngineSystems()
 		0.0f,
 		1.0f / 60.0f,
 		DebugMenu_GetComputeNoiseSettings(),
-		m_compute_climate_texture.Resource(),
 		BaseTerrainHeightResource());
-	m_compute_rain_map_texture.Update(
-		m_compute_meteorograph_texture.Resource().shaderResourceView(),
-		DebugMenu_GetComputeNoiseSettings().rain_multiplier,
-		DebugMenu_GetComputeNoiseSettings().force_rain,
-		0.0f);
 	m_compute_water_surface_height_texture.InitializeState(
 		BaseTerrainHeightResource().shaderResourceView(),
 		m_compute_meteorograph_texture.Resource().shaderResourceView(),
@@ -519,10 +503,6 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute noise reload failed");
 		}
-		if (!m_compute_rain_map_texture.IsValid())
-		{
-			DebugMenu_SetShaderReloadStatus(false, "Compute rain map reload failed");
-		}
 		if (!m_compute_meteorograph_texture.IsValid())
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute meteorograph reload failed");
@@ -535,16 +515,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 				0.0f,
 				1.0f / 60.0f,
 				DebugMenu_GetComputeNoiseSettings(),
-				m_compute_climate_texture.Resource(),
 				BaseTerrainHeightResource());
-		}
-		if (m_compute_rain_map_texture.IsValid() && m_compute_meteorograph_texture.IsValid())
-		{
-			m_compute_rain_map_texture.Update(
-				m_compute_meteorograph_texture.Resource().shaderResourceView(),
-				DebugMenu_GetComputeNoiseSettings().rain_multiplier,
-				DebugMenu_GetComputeNoiseSettings().force_rain,
-				0.0f);
 		}
 		if (!m_compute_water_surface_height_texture.IsValid())
 		{
@@ -564,7 +535,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 			{
 				m_compute_water_surface_height_texture.Update(
 					BaseTerrainHeightResource().shaderResourceView(),
-					m_compute_rain_map_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.RainResource().shaderResourceView(),
 					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					DebugMenu_GetSurfaceWaterSimulationSettings(),
@@ -733,7 +704,7 @@ void Application::PublishSharedComputeResources()
 	m_compute_shared_resource_registry.PublishShaderResource(
 		ComputeSharedResourceId::RainMap,
 		"RainMap",
-		m_compute_rain_map_texture.Resource());
+		m_compute_meteorograph_texture.RainResource());
 	m_compute_shared_resource_registry.PublishShaderResource(
 		ComputeSharedResourceId::ComputeNoise,
 		"ComputeNoise",

@@ -231,12 +231,14 @@ float SamplePreviousDepth(int2 coord)
 
 float SampleRainAmount(int2 coord)
 {
-    return max(g_RainMap.Load(int3(ClampCoord(coord), 0)).r, 0.0f);
+    const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
+    return max(g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f).r, 0.0f);
 }
 
 float4 SampleRainState(int2 coord)
 {
-    return g_RainMap.Load(int3(ClampCoord(coord), 0));
+    const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
+    return g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f);
 }
 
 float4 SamplePreviousSoilMoistureState(int2 coord)

@@ -9,6 +9,7 @@ cbuffer GRASS_DATA_CONSTANT_BUFFER : register(b0)
 Texture2D g_TerrainNormal : register(t0);
 Texture2D g_TerrainVegetationSuitability : register(t1);
 Texture2D g_TerrainSurfaceData : register(t2);
+Texture2D<float4> g_Meteorograph : register(t3);
 SamplerState g_GrassDataSampler : register(s0);
 RWTexture2D<float4> g_GrassData : register(u0);
 
@@ -47,6 +48,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float beach = saturate(surface_data.g);
     float humidity = saturate(surface_data.b);
     float roughness = saturate(surface_data.a);
+    float4 meteorograph = g_Meteorograph.SampleLevel(g_GrassDataSampler, uv, 0.0f);
+    float climate_humidity = saturate(meteorograph.z);
+    float climate_temperature = saturate(meteorograph.w);
+    float wind_strength = saturate(length(meteorograph.xy));
 
     float slope_support = smoothstep(0.42f, 0.76f, normal_y);
     float base_possibility =
@@ -59,12 +64,16 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         lerp(0.90f, 1.0f, slope_support) *
         lerp(0.76f, 1.0f, humidity) *
         lerp(1.0f, 0.92f, roughness);
+    possibility *= lerp(0.82f, 1.04f, climate_humidity);
+    possibility *= lerp(0.90f, 1.02f, 1.0f - abs(climate_temperature - 0.52f) * 1.35f);
     possibility = saturate(possibility);
 
     float density_hash = Hash21(float2(dispatch_thread_id.xy) + float2(19.7f, 3.1f));
     float aridity = saturate((1.0f - humidity) * 0.75f + roughness * 0.25f);
     float scaling = lerp(1.30f, 0.72f, aridity);
     scaling *= lerp(0.92f, 1.08f, vegetation_suitability);
+    scaling *= lerp(0.92f, 1.08f, climate_humidity);
+    scaling *= lerp(1.00f, 0.94f, wind_strength);
 
     g_GrassData[dispatch_thread_id.xy] = float4(possibility, density_hash, scaling, 0.0f);
 }

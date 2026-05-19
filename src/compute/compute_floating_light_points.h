@@ -33,7 +33,7 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::TerrainHeight,
-			ComputeSharedResourceId::WindField
+			ComputeSharedResourceId::MeteorographField
 		};
 		return kReadResources;
 	}
@@ -45,7 +45,7 @@ public:
 	void Update(
 		float time_seconds,
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* wind_field_srv,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		const DirectX::XMFLOAT3& camera_position,
 		const DirectX::XMFLOAT3& camera_forward,
 		const DirectX::XMFLOAT3& camera_right,
