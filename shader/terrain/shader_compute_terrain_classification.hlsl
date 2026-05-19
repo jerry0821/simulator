@@ -32,8 +32,7 @@ Texture2D g_WaterInteractionData : register(t2);
 Texture2D g_ErosionDelta : register(t3);
 Texture2D g_ClimateField : register(t4);
 SamplerState g_ClassificationSampler : register(s0);
-RWTexture2D<float4> g_TerrainSurfaceData : register(u0);
-RWTexture2D<float> g_TerrainVegetationSuitability : register(u1);
+RWTexture2D<float> g_TerrainVegetationSuitability : register(u0);
 
 float Hash21(float2 p)
 {
@@ -133,10 +132,6 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     float grass_flatness = saturate((normal_y - grass_slope_min) / max(grass_slope_max - grass_slope_min, 1.0e-5f));
     float lowland = 1.0f - smoothstep(lowland_height_end, lowland_height_end + 30.0f, terrain_height);
-    float shoreline = smoothstep(
-        water_height + shoreline_offset_start,
-        water_height + shoreline_offset_end,
-        terrain_height);
     float above_water = smoothstep(
         water_height + max(shoreline_offset_start * 0.18f, 0.08f),
         water_height + max(shoreline_offset_start + 0.95f, 1.15f),
@@ -151,45 +146,18 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         0.72f,
         patch_noise * 0.7f + detail_noise * 0.3f + (macro_noise - 0.5f) * grass_noise_strength);
 
-    float flood_penalty = 1.0f - smoothstep(0.76f, 0.98f, max(surface_wetness, pooled_wetness * 0.92f));
     float erosion_mask = saturate(erosion_delta.r * 1.85f + max(-erosion_delta.b, 0.0f) * 0.65f);
-    float wetness = saturate(
-        max(shoreline * (0.68f + shoreline_wetness * 0.32f), retained_moisture * 0.55f) * wetness_gain +
-        surface_wetness * 0.18f +
-        pooled_wetness * 0.12f +
-        climate.g * 0.08f);
-    float surface_grass_coverage =
-        grass_flatness *
-        shoreline *
-        lerp(0.72f, 1.0f, lowland) *
-        lerp(0.42f, 1.0f, macro_mask) *
-        patch_mask *
-        flood_penalty *
-        lerp(0.88f, 1.12f, retained_moisture) *
-        lerp(1.0f, 0.78f, erosion_mask);
     float vegetation_noise = smoothstep(0.22f, 0.70f, macro_noise * 0.65f + patch_noise * 0.35f);
     float moisture_support = lerp(0.92f, 1.0f, saturate(retained_moisture * 0.82f + climate.g * 0.18f));
     float vegetation_suitability =
         grass_flatness *
         above_water *
+        lerp(0.72f, 1.0f, lowland) *
+        lerp(0.42f, 1.0f, macro_mask) *
         lerp(0.68f, 1.0f, vegetation_noise) *
         moisture_support *
+        lerp(1.0f, 0.82f, max(surface_wetness, pooled_wetness * 0.92f)) *
         lerp(1.0f, 0.96f, erosion_mask);
     vegetation_suitability = saturate(vegetation_suitability);
-    surface_grass_coverage = saturate(surface_grass_coverage);
-
-    float cliff_slope_mask = 1.0f - smoothstep(rock_slope_start, rock_slope_end, normal_y);
-    float cliff_height_mask = smoothstep(rock_height_start, rock_height_end, terrain_height);
-    float rock_mask = saturate(cliff_slope_mask * 1.15f + cliff_height_mask * 0.30f);
-    rock_mask *= lerp(1.06f, 0.88f, climate.g);
-    rock_mask = saturate(pow(rock_mask, 1.8f));
-
-    float slope_amount = saturate(1.0f - normal_y);
-    float surface_slope = smoothstep(1.0f - rock_slope_end, 1.0f - rock_slope_start, slope_amount);
-    float beach_mask = saturate(max(shoreline_wetness, shoreline * (1.0f - pooled_wetness * 0.25f)));
-    float humidity = saturate(retained_moisture * 0.48f + wetness * 0.20f + climate.g * 0.08f);
-    float roughness = saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
-
-    g_TerrainSurfaceData[dispatch_thread_id.xy] = float4(surface_slope, beach_mask, humidity, roughness);
     g_TerrainVegetationSuitability[dispatch_thread_id.xy] = vegetation_suitability;
 }

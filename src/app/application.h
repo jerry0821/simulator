@@ -7,22 +7,16 @@
 
 #include "debug_text.h"
 #include "compute_climate_texture.h"
-#include "compute_erosion_delta_texture.h"
 #include "compute_floating_light_points.h"
 #include "compute_grass_data_texture.h"
 #include "compute_meteorograph_texture.h"
 #include "compute_noise_texture.h"
 #include "compute_rain_map_texture.h"
 #include "compute_shared_resource_registry.h"
-#include "compute_soil_moisture_texture.h"
-#include "compute_surface_water_texture.h"
 #include "compute_task_runner.h"
 #include "compute_terrain_classification_texture.h"
 #include "compute_terrain_normal_texture.h"
-#include "compute_water_interaction_texture.h"
-#include "compute_visible_water_texture.h"
 #include "compute_water_surface_height_texture.h"
-#include "compute_water_mask_texture.h"
 #include "compute_wind_field_texture.h"
 #include "render_backend_dx11.h"
 #include "render_water_surface.h"
@@ -70,21 +64,15 @@ private:
 	SceneController m_scene_controller{};
 	ComputeTaskRunner m_compute_task_runner{};
 	ComputeClimateTexture m_compute_climate_texture{};
-	ComputeErosionDeltaTexture m_compute_erosion_delta_texture{};
 	ComputeFloatingLightPoints m_compute_floating_light_points{};
 	ComputeGrassDataTexture m_compute_grass_data_texture{};
 	ComputeMeteorographTexture m_compute_meteorograph_texture{};
 	ComputeNoiseTexture m_compute_noise_texture{};
 	ComputeRainMapTexture m_compute_rain_map_texture{};
 	ComputeSharedResourceRegistry m_compute_shared_resource_registry{};
-	ComputeSoilMoistureTexture m_compute_soil_moisture_texture{};
-	ComputeSurfaceWaterTexture m_compute_surface_water_texture{};
 	ComputeTerrainClassificationTexture m_compute_terrain_classification_texture{};
 	ComputeTerrainNormalTexture m_compute_terrain_normal_texture{};
-	ComputeWaterInteractionTexture m_compute_water_interaction_texture{};
-	ComputeVisibleWaterTexture m_compute_visible_water_texture{};
 	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
-	ComputeWaterMaskTexture m_compute_water_mask_texture{};
 	ComputeWindFieldTexture m_compute_wind_field_texture{};
 	TerrainWaterState m_terrain_water_state{};
 

@@ -62,25 +62,9 @@ bool ComputeTerrainClassificationTexture::Initialize(ID3D11Device* device, ID3D1
 	texture_desc.Usage = D3D11_USAGE_DEFAULT;
 	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-	if (FAILED(m_device->CreateTexture2D(&texture_desc, nullptr, &m_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
 	D3D11_TEXTURE2D_DESC vegetation_desc = texture_desc;
 	vegetation_desc.Format = DXGI_FORMAT_R16_FLOAT;
 	if (FAILED(m_device->CreateTexture2D(&vegetation_desc, nullptr, &m_vegetation_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
-	D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-	srv_desc.Format = texture_desc.Format;
-	srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srv_desc.Texture2D.MipLevels = 1;
-	if (FAILED(m_device->CreateShaderResourceView(m_texture, &srv_desc, &m_srv)))
 	{
 		Finalize();
 		return false;
@@ -91,15 +75,6 @@ bool ComputeTerrainClassificationTexture::Initialize(ID3D11Device* device, ID3D1
 	vegetation_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	vegetation_srv_desc.Texture2D.MipLevels = 1;
 	if (FAILED(m_device->CreateShaderResourceView(m_vegetation_texture, &vegetation_srv_desc, &m_vegetation_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-	uav_desc.Format = texture_desc.Format;
-	uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-	if (FAILED(m_device->CreateUnorderedAccessView(m_texture, &uav_desc, &m_uav)))
 	{
 		Finalize();
 		return false;
@@ -134,9 +109,6 @@ void ComputeTerrainClassificationTexture::Finalize()
 	SafeRelease(m_vegetation_uav);
 	SafeRelease(m_vegetation_srv);
 	SafeRelease(m_vegetation_texture);
-	SafeRelease(m_uav);
-	SafeRelease(m_srv);
-	SafeRelease(m_texture);
 	SafeRelease(m_compute_shader);
 	m_device = nullptr;
 	m_context = nullptr;
@@ -196,7 +168,7 @@ void ComputeTerrainClassificationTexture::Update(
 		erosion_delta_srv,
 		climate_srv
 	};
-	ID3D11UnorderedAccessView* uavs[] = { m_uav, m_vegetation_uav };
+	ID3D11UnorderedAccessView* uavs[] = { m_vegetation_uav };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
 	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
 
@@ -204,19 +176,19 @@ void ComputeTerrainClassificationTexture::Update(
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
 	m_context->CSSetShaderResources(0, 5, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
 		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
 	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
-	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uavs[] = { nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
 	m_context->CSSetShaderResources(0, 5, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
-	m_context->CSSetUnorderedAccessViews(0, 2, null_uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 }
@@ -224,18 +196,10 @@ void ComputeTerrainClassificationTexture::Update(
 bool ComputeTerrainClassificationTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
-		m_texture != nullptr &&
-		m_srv != nullptr &&
-		m_uav != nullptr &&
 		m_vegetation_texture != nullptr &&
 		m_vegetation_srv != nullptr &&
 		m_vegetation_uav != nullptr &&
 		m_constant_buffer != nullptr;
-}
-
-Backend::RenderShaderResource ComputeTerrainClassificationTexture::Resource() const
-{
-	return Backend::RenderShaderResource(m_srv);
 }
 
 Backend::RenderShaderResource ComputeTerrainClassificationTexture::VegetationSuitabilityResource() const

@@ -26,7 +26,6 @@ public:
 		ID3D11ShaderResourceView* climate_srv,
 		const TerrainMaterialSettings& material_settings);
 	bool IsValid() const;
-	Backend::RenderShaderResource Resource() const;
 	Backend::RenderShaderResource VegetationSuitabilityResource() const;
 
 private:
@@ -65,9 +64,6 @@ private:
 	ID3D11Device* m_device = nullptr;
 	ID3D11DeviceContext* m_context = nullptr;
 	ID3D11ComputeShader* m_compute_shader = nullptr;
-	ID3D11Texture2D* m_texture = nullptr;
-	ID3D11ShaderResourceView* m_srv = nullptr;
-	ID3D11UnorderedAccessView* m_uav = nullptr;
 	ID3D11Texture2D* m_vegetation_texture = nullptr;
 	ID3D11ShaderResourceView* m_vegetation_srv = nullptr;
 	ID3D11UnorderedAccessView* m_vegetation_uav = nullptr;

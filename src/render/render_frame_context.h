@@ -53,11 +53,8 @@ struct RenderFrameResources
 	bool has_water_heightfield_range = false;
 	bool water_heightfield_range_is_fallback = false;
 	Backend::RenderShaderResource surface_water_flow{};
-	Backend::RenderShaderResource surface_water_flow_preview{};
 	Backend::RenderShaderResource water_velocity{};
 	Backend::RenderShaderResource water_sediment{};
-	Backend::RenderShaderResource visible_water{};
-	Backend::RenderShaderResource water_mask{};
 	Backend::RenderShaderResource water_interaction_data{};
 	Backend::RenderShaderResource soil_moisture{};
 	Backend::RenderShaderResource erosion_delta{};

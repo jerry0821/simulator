@@ -160,22 +160,16 @@
     <ClCompile Include="src\geometry\collision.cpp" />
     <ClCompile Include="src\debug\collision_debug.cpp" />
     <ClCompile Include="src\compute\compute_climate_texture.cpp" />
-    <ClCompile Include="src\compute\compute_erosion_delta_texture.cpp" />
     <ClCompile Include="src\compute\compute_floating_light_points.cpp" />
     <ClCompile Include="src\compute\compute_grass_data_texture.cpp" />
     <ClCompile Include="src\compute\compute_grass_instances.cpp" />
     <ClCompile Include="src\compute\compute_meteorograph_texture.cpp" />
     <ClCompile Include="src\compute\compute_noise_texture.cpp" />
     <ClCompile Include="src\compute\compute_rain_map_texture.cpp" />
-    <ClCompile Include="src\compute\compute_soil_moisture_texture.cpp" />
-    <ClCompile Include="src\compute\compute_surface_water_texture.cpp" />
     <ClCompile Include="src\compute\compute_terrain_classification_texture.cpp" />
     <ClCompile Include="src\compute\compute_terrain_normal_texture.cpp" />
-    <ClCompile Include="src\compute\compute_water_interaction_texture.cpp" />
-    <ClCompile Include="src\compute\compute_visible_water_texture.cpp" />
     <ClCompile Include="src\compute\compute_water_surface_height_texture.cpp" />
     <ClCompile Include="src\compute\compute_task_runner.cpp" />
-    <ClCompile Include="src\compute\compute_water_mask_texture.cpp" />
     <ClCompile Include="src\compute\compute_wind_field_texture.cpp" />
     <ClCompile Include="src\geometry\cube.cpp" />
     <ClCompile Include="src\render\passes\depth_prepass.cpp" />
@@ -267,23 +261,17 @@
     <ClInclude Include="src\geometry\collision.h" />
     <ClInclude Include="src\geometry\collision_internal.h" />
     <ClInclude Include="src\compute\compute_climate_texture.h" />
-    <ClInclude Include="src\compute\compute_erosion_delta_texture.h" />
     <ClInclude Include="src\compute\compute_floating_light_points.h" />
     <ClInclude Include="src\compute\compute_grass_data_texture.h" />
     <ClInclude Include="src\compute\compute_grass_instances.h" />
     <ClInclude Include="src\compute\compute_meteorograph_texture.h" />
     <ClInclude Include="src\compute\compute_noise_texture.h" />
     <ClInclude Include="src\compute\compute_rain_map_texture.h" />
-    <ClInclude Include="src\compute\compute_soil_moisture_texture.h" />
-    <ClInclude Include="src\compute\compute_surface_water_texture.h" />
     <ClInclude Include="src\compute\compute_terrain_classification_texture.h" />
     <ClInclude Include="src\compute\compute_terrain_normal_texture.h" />
-    <ClInclude Include="src\compute\compute_water_interaction_texture.h" />
-    <ClInclude Include="src\compute\compute_visible_water_texture.h" />
     <ClInclude Include="src\compute\compute_water_surface_height_texture.h" />
     <ClInclude Include="src\compute\compute_task.h" />
     <ClInclude Include="src\compute\compute_task_runner.h" />
-    <ClInclude Include="src\compute\compute_water_mask_texture.h" />
     <ClInclude Include="src\compute\compute_wind_field_texture.h" />
     <ClInclude Include="src\geometry\cube.h" />
     <ClInclude Include="src\render\passes\depth_prepass.h" />
@@ -498,25 +486,7 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_surface_water.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_visible_water.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
     <FxCompile Include="shader\water\shader_compute_water_surface_height.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\terrain\shader_compute_erosion_delta.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
@@ -529,18 +499,6 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="shader\terrain\shader_compute_terrain_classification.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\terrain\shader_compute_soil_moisture.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_water_interaction.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
@@ -565,12 +523,6 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="shader\vegetation\shader_compute_grass_instances.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_water_mask.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>

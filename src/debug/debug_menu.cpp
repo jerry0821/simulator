@@ -158,16 +158,10 @@ const char* ToString(ComputeSharedResourceId id)
         return "WaterSurfaceHeight";
     case ComputeSharedResourceId::SurfaceWaterFlow:
         return "SurfaceWaterFlow";
-    case ComputeSharedResourceId::SurfaceWaterFlowPreview:
-        return "SurfaceWaterFlowPreview";
     case ComputeSharedResourceId::WaterVelocity:
         return "WaterVelocity";
     case ComputeSharedResourceId::WaterSediment:
         return "WaterSediment";
-    case ComputeSharedResourceId::VisibleWater:
-        return "VisibleWater";
-    case ComputeSharedResourceId::WaterMask:
-        return "WaterMask";
     case ComputeSharedResourceId::WaterInteractionData:
         return "WaterInteractionData";
     case ComputeSharedResourceId::SoilMoisture:

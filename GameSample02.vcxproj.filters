@@ -218,28 +218,16 @@
     <ClCompile Include="src\compute\compute_climate_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\compute\compute_erosion_delta_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
     <ClCompile Include="src\compute\compute_final_terrain_height_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_rain_map_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\compute\compute_soil_moisture_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
-    <ClCompile Include="src\compute\compute_surface_water_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
     <ClCompile Include="src\compute\compute_water_surface_height_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_terrain_classification_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
-    <ClCompile Include="src\compute\compute_visible_water_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_grass_instances.cpp">
@@ -249,9 +237,6 @@
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_meteorograph_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
-    <ClCompile Include="src\compute\compute_water_mask_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_wind_field_texture.cpp">
@@ -541,28 +526,16 @@
     <ClInclude Include="src\compute\compute_climate_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\compute\compute_erosion_delta_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
     <ClInclude Include="src\compute\compute_final_terrain_height_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_rain_map_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\compute\compute_soil_moisture_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
-    <ClInclude Include="src\compute\compute_surface_water_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
     <ClInclude Include="src\compute\compute_water_surface_height_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_terrain_classification_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
-    <ClInclude Include="src\compute\compute_visible_water_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_grass_instances.h">
@@ -581,9 +554,6 @@
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_task_runner.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
-    <ClInclude Include="src\compute\compute_water_mask_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\debug\debug_menu.h">
@@ -780,17 +750,8 @@
     <FxCompile Include="shader\environment\shader_compute_rain_map.hlsl">
       <Filter>Shader Files\Environment</Filter>
     </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_surface_water.hlsl">
-      <Filter>Shader Files\Water</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_visible_water.hlsl">
-      <Filter>Shader Files\Water</Filter>
-    </FxCompile>
     <FxCompile Include="shader\water\shader_compute_water_surface_height.hlsl">
       <Filter>Shader Files\Water</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\terrain\shader_compute_erosion_delta.hlsl">
-      <Filter>Shader Files\Terrain</Filter>
     </FxCompile>
     <FxCompile Include="shader\terrain\shader_compute_final_terrain_height.hlsl">
       <Filter>Shader Files\Terrain</Filter>
@@ -798,17 +759,11 @@
     <FxCompile Include="shader\terrain\shader_compute_terrain_classification.hlsl">
       <Filter>Shader Files\Terrain</Filter>
     </FxCompile>
-    <FxCompile Include="shader\terrain\shader_compute_soil_moisture.hlsl">
-      <Filter>Shader Files\Terrain</Filter>
-    </FxCompile>
     <FxCompile Include="shader\vegetation\shader_compute_grass_coverage.hlsl">
       <Filter>Shader Files\Vegetation</Filter>
     </FxCompile>
     <FxCompile Include="shader\vegetation\shader_compute_grass_instances.hlsl">
       <Filter>Shader Files\Vegetation</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_water_mask.hlsl">
-      <Filter>Shader Files\Water</Filter>
     </FxCompile>
     <FxCompile Include="shader\environment\shader_compute_floating_light_points.hlsl">
       <Filter>Shader Files\Environment</Filter>

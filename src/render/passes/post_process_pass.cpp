@@ -293,9 +293,7 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 	ID3D11ShaderResourceView* water_presence_srv =
 		terrain_water.water_interaction_data.isValid()
 			? terrain_water.water_interaction_data.shaderResourceView()
-			: (terrain_water.visible_water.isValid()
-				? terrain_water.visible_water.shaderResourceView()
-				: nullptr);
+			: nullptr;
 	ID3D11ShaderResourceView* water_surface_height_srv =
 		frame_context.resources.water_surface_height.isValid()
 			? frame_context.resources.water_surface_height.shaderResourceView()

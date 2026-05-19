@@ -12,16 +12,10 @@ class ComputeTerrainClassificationTexture;
 class ComputeTerrainNormalTexture;
 class ComputeWindFieldTexture;
 class ComputeClimateTexture;
-class ComputeErosionDeltaTexture;
 class ComputeGrassDataTexture;
 class ComputeMeteorographTexture;
 class ComputeRainMapTexture;
-class ComputeSoilMoistureTexture;
-class ComputeSurfaceWaterTexture;
-class ComputeWaterInteractionTexture;
 class ComputeWaterSurfaceHeightTexture;
-class ComputeVisibleWaterTexture;
-class ComputeWaterMaskTexture;
 class MeshFieldRenderer;
 
 namespace Backend
@@ -59,16 +53,10 @@ private:
 	friend class ::ComputeTerrainNormalTexture;
 	friend class ::ComputeWindFieldTexture;
 	friend class ::ComputeClimateTexture;
-	friend class ::ComputeErosionDeltaTexture;
 	friend class ::ComputeGrassDataTexture;
 	friend class ::ComputeMeteorographTexture;
 	friend class ::ComputeRainMapTexture;
-	friend class ::ComputeSoilMoistureTexture;
-	friend class ::ComputeSurfaceWaterTexture;
-	friend class ::ComputeWaterInteractionTexture;
 	friend class ::ComputeWaterSurfaceHeightTexture;
-	friend class ::ComputeVisibleWaterTexture;
-	friend class ::ComputeWaterMaskTexture;
 	friend class ::MeshFieldRenderer;
 };
 
