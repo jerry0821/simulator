@@ -1214,7 +1214,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
         kClimateWorldMaxX,
         kClimateWorldMinZ,
         kClimateWorldMaxZ);
-    ShaderSprite3D_Cutout_SetWindField(frame_context.resources.wind_field.shaderResourceView());
+    ShaderSprite3D_Cutout_SetWindField(frame_context.resources.meteorograph_field.shaderResourceView());
     ShaderSprite3D_CutoutInstanced_SetWindSettings(
         wrapped_time_seconds,
         {noise_settings.wind_direction_x, noise_settings.wind_direction_y},
@@ -1223,7 +1223,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
         kClimateWorldMaxX,
         kClimateWorldMinZ,
         kClimateWorldMaxZ);
-    ShaderSprite3D_CutoutInstanced_SetWindField(frame_context.resources.wind_field.shaderResourceView());
+    ShaderSprite3D_CutoutInstanced_SetWindField(frame_context.resources.meteorograph_field.shaderResourceView());
   }
   BillBoard_SetViewMatrix(frame_context.globals.view_matrix);
 
@@ -1755,7 +1755,7 @@ void MapController::DrawShadow(const RenderFrameContext* frame_context)
         kClimateWorldMaxX,
         kClimateWorldMinZ,
         kClimateWorldMaxZ);
-    ShaderSprite3D_ShadowInstanced_SetWindField(frame_context->resources.wind_field.shaderResourceView());
+    ShaderSprite3D_ShadowInstanced_SetWindField(frame_context->resources.meteorograph_field.shaderResourceView());
     Sprite3D_DrawCutoutShadowInstancedIndirectBuffer(
         m_debug_billboard_tex_id,
         m_terrain_grass_instances.InstanceSRV(),

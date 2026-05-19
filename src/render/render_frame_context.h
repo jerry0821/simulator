@@ -59,7 +59,6 @@ struct RenderFrameResources
 	Backend::RenderShaderResource soil_moisture{};
 	Backend::RenderShaderResource erosion_delta{};
 	Backend::RenderShaderResource compute_noise{};
-	Backend::RenderShaderResource wind_field{};
 	Backend::RenderShaderResource climate_field{};
 	Backend::RenderShaderResource meteorograph_field{};
 	ID3D11Buffer* floating_light_instance_buffer = nullptr;

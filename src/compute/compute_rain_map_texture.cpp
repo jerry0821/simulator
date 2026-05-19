@@ -107,13 +107,12 @@ void ComputeRainMapTexture::Finalize()
 }
 
 void ComputeRainMapTexture::Update(
-	ID3D11ShaderResourceView* climate_srv,
-	ID3D11ShaderResourceView* wind_field_srv,
+	ID3D11ShaderResourceView* meteorograph_srv,
 	float rain_multiplier,
 	float force_rain,
 	float time_seconds) const
 {
-	if (!IsValid() || climate_srv == nullptr || wind_field_srv == nullptr)
+	if (!IsValid() || meteorograph_srv == nullptr)
 	{
 		return;
 	}
@@ -135,14 +134,14 @@ void ComputeRainMapTexture::Update(
 
 	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);
 
-	ID3D11ShaderResourceView* srvs[] = { climate_srv, wind_field_srv };
+	ID3D11ShaderResourceView* srvs[] = { meteorograph_srv };
 	ID3D11UnorderedAccessView* uavs[] = { m_uav };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
 	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 2, srvs);
+	m_context->CSSetShaderResources(0, 1, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -150,11 +149,11 @@ void ComputeRainMapTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 2, null_srvs);
+	m_context->CSSetShaderResources(0, 1, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

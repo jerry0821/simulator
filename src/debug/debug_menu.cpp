@@ -283,6 +283,7 @@ bool DecodeWindFieldPixel(
     const D3D11_MAPPED_SUBRESOURCE& mapped_resource,
     unsigned int x,
     unsigned int y,
+    bool raw_vector_xy,
     XMFLOAT3& out_wind)
 {
     out_wind = { 1.0f, 0.0f, 0.0f };
@@ -315,9 +316,18 @@ bool DecodeWindFieldPixel(
     if (texture_desc.Format == DXGI_FORMAT_R32G32B32A32_FLOAT)
     {
         const float* pixel_ptr = reinterpret_cast<const float*>(row_ptr) + x * 4u;
-        float dir_x = pixel_ptr[0] * 2.0f - 1.0f;
-        float dir_y = pixel_ptr[1] * 2.0f - 1.0f;
-        const float strength = pixel_ptr[2];
+        float dir_x = pixel_ptr[0];
+        float dir_y = pixel_ptr[1];
+        float strength = pixel_ptr[2];
+        if (raw_vector_xy)
+        {
+            strength = std::clamp(std::sqrt(dir_x * dir_x + dir_y * dir_y), 0.0f, 1.0f);
+        }
+        else
+        {
+            dir_x = dir_x * 2.0f - 1.0f;
+            dir_y = dir_y * 2.0f - 1.0f;
+        }
         const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
         if (dir_length > 1.0e-6f)
         {
@@ -338,7 +348,8 @@ bool DecodeWindFieldPixel(
 
 bool RefreshWindFieldPreviewSamples(
     ID3D11ShaderResourceView* wind_field_srv,
-    float time_seconds)
+    float time_seconds,
+    bool raw_vector_xy)
 {
     if (!g_UseAccurateWindPreviewArrows)
     {
@@ -375,6 +386,7 @@ bool RefreshWindFieldPreviewSamples(
                 preview_mapped,
                 sample_x,
                 sample_y,
+                raw_vector_xy,
                 wind);
             g_WindFieldPreviewSamples[row * kWindPreviewCols + col] = wind;
         }
@@ -391,7 +403,8 @@ void DrawWindFieldOverlay(
     const ImVec2& size,
     ID3D11ShaderResourceView* wind_field_srv,
     float time_seconds,
-    const ComputeNoiseSettings& settings)
+    const ComputeNoiseSettings& settings,
+    bool raw_vector_xy)
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     if (draw_list == nullptr)
@@ -405,7 +418,8 @@ void DrawWindFieldOverlay(
     const float world_range_z = kWindPreviewWorldMaxZ - kWindPreviewWorldMinZ;
     const bool using_gpu_preview = RefreshWindFieldPreviewSamples(
         wind_field_srv,
-        time_seconds);
+        time_seconds,
+        raw_vector_xy);
 
     for (int row = 0; row < kWindPreviewRows; ++row)
     {
@@ -642,31 +656,32 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::End();
 
     ImGui::Begin("Wind");
-    ImGui::TextDisabled("Global wind controls");
+    ImGui::TextDisabled("Global wind controls and Meteorograph preview");
     ImGui::SliderFloat("World Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
     ImGui::Text("Current: %.3f", g_ComputeNoiseSettings.wind_strength);
     ImGui::Checkbox("Accurate GPU Arrows", &g_UseAccurateWindPreviewArrows);
-    ImGui::TextDisabled("Off = faster CPU preview. On = read back the GPU wind texture at a limited rate.");
-    if (frame_context == nullptr || !frame_context->resources.wind_field.isValid())
+    ImGui::TextDisabled("Off = approximate CPU preview. On = read back the authoritative Meteorograph state at a limited rate.");
+    if (frame_context == nullptr || !frame_context->resources.meteorograph_field.isValid())
     {
-        ImGui::TextDisabled("WindField Preview: Missing");
+        ImGui::TextDisabled("Meteorograph Wind Preview: Missing");
     }
     else
     {
         ImGui::Separator();
-        ImGui::TextDisabled("WindField Preview");
-        ImGui::TextWrapped("Background = GPU wind field texture. Arrows = sampled flow direction and strength used by the scene.");
+        ImGui::TextDisabled("Meteorograph Wind Preview");
+        ImGui::TextWrapped("Background = authoritative atmosphere state. Arrows = wind vectors decoded from Meteorograph.xy.");
         const ImVec2 preview_size(224.0f, 224.0f);
         const ImVec2 preview_top_left = ImGui::GetCursorScreenPos();
         ImGui::Image(
-            ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.wind_field.shaderResourceView())),
+            ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.meteorograph_field.shaderResourceView())),
             preview_size);
         DrawWindFieldOverlay(
             preview_top_left,
             preview_size,
-            frame_context->resources.wind_field.shaderResourceView(),
+            frame_context->resources.meteorograph_field.shaderResourceView(),
             static_cast<float>(frame_context->globals.time_seconds),
-            g_ComputeNoiseSettings);
+            g_ComputeNoiseSettings,
+            true);
     }
     ImGui::End();
 
@@ -694,7 +709,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
 
         ImGui::Separator();
         ImGui::TextDisabled("Meteorograph Field");
-        ImGui::TextWrapped("Baked atmospheric map: climate background plus wind arrows and camera marker.");
+        ImGui::TextWrapped("Authoritative atmosphere state: RG = wind velocity, B = humidity, A = temperature. Rain influence is folded into the humidity/temperature evolution.");
         if (!frame_context->resources.meteorograph_field.isValid())
         {
             ImGui::TextDisabled("Meteorograph Preview: Missing");

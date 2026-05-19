@@ -26,7 +26,7 @@ cbuffer VS_WIND_CONSTANT_BUFFER : register(b2)
     float world_max_z;
 };
 
-Texture2D g_WindField : register(t0);
+Texture2D<float4> g_Meteorograph : register(t0);
 
 struct GrassInstance
 {
@@ -104,17 +104,20 @@ VS_OUT main(VS_IN vi, uint instance_id : SV_InstanceID)
         saturate((world_origin.x - world_min_x) / max(world_max_x - world_min_x, 1.0e-4f)),
         saturate((world_origin.z - world_min_z) / max(world_max_z - world_min_z, 1.0e-4f)));
 
-    float2 texel_size = float2(1.0f / 256.0f, 1.0f / 256.0f);
-    float4 wind_center = g_WindField.SampleLevel(g_WindSampler, wind_uv, 0.0f);
-    float4 wind_xp = g_WindField.SampleLevel(g_WindSampler, wind_uv + float2(texel_size.x, 0.0f), 0.0f);
-    float4 wind_xm = g_WindField.SampleLevel(g_WindSampler, wind_uv - float2(texel_size.x, 0.0f), 0.0f);
-    float4 wind_yp = g_WindField.SampleLevel(g_WindSampler, wind_uv + float2(0.0f, texel_size.y), 0.0f);
-    float4 wind_ym = g_WindField.SampleLevel(g_WindSampler, wind_uv - float2(0.0f, texel_size.y), 0.0f);
+    uint meteo_width = 0;
+    uint meteo_height = 0;
+    g_Meteorograph.GetDimensions(meteo_width, meteo_height);
+    float2 texel_size = 1.0f / max(float2(meteo_width, meteo_height), 1.0f.xx);
+    float4 wind_center = g_Meteorograph.SampleLevel(g_WindSampler, wind_uv, 0.0f);
+    float4 wind_xp = g_Meteorograph.SampleLevel(g_WindSampler, wind_uv + float2(texel_size.x, 0.0f), 0.0f);
+    float4 wind_xm = g_Meteorograph.SampleLevel(g_WindSampler, wind_uv - float2(texel_size.x, 0.0f), 0.0f);
+    float4 wind_yp = g_Meteorograph.SampleLevel(g_WindSampler, wind_uv + float2(0.0f, texel_size.y), 0.0f);
+    float4 wind_ym = g_Meteorograph.SampleLevel(g_WindSampler, wind_uv - float2(0.0f, texel_size.y), 0.0f);
     float4 wind_sample = wind_center * 0.40f + (wind_xp + wind_xm + wind_yp + wind_ym) * 0.15f;
 
-    float2 sampled_dir = wind_sample.xy * 2.0f - 1.0f;
+    float2 sampled_dir = wind_sample.xy;
+    float sampled_strength = saturate(length(sampled_dir));
     sampled_dir = normalize(sampled_dir + 1.0e-6f.xx);
-    float sampled_strength = wind_sample.z;
 
     float2 wind_dir = normalize(lerp(global_wind_dir, sampled_dir, 0.18f) + 1.0e-6f.xx);
     float local_strength = saturate(lerp(wind_strength, sampled_strength, 0.18f));

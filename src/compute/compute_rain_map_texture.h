@@ -31,8 +31,7 @@ public:
 	ResourceSpan ReadResources() const override
 	{
 		static constexpr ComputeSharedResourceId kReadResources[] = {
-			ComputeSharedResourceId::ClimateField,
-			ComputeSharedResourceId::WindField
+			ComputeSharedResourceId::MeteorographField
 		};
 		return kReadResources;
 	}
@@ -48,8 +47,7 @@ public:
 	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
 	void Finalize() override;
 	void Update(
-		ID3D11ShaderResourceView* climate_srv,
-		ID3D11ShaderResourceView* wind_field_srv,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		float rain_multiplier,
 		float force_rain,
 		float time_seconds) const;

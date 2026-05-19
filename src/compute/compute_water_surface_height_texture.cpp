@@ -296,11 +296,11 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 
 void ComputeWaterSurfaceHeightTexture::InitializeState(
 	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* wind_field_srv,
+	ID3D11ShaderResourceView* meteorograph_srv,
 	float water_surface_height,
 	const SurfaceWaterSimulationSettings& settings) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr || wind_field_srv == nullptr)
+	if (!IsValid() || terrain_height_srv == nullptr || meteorograph_srv == nullptr)
 	{
 		return;
 	}
@@ -352,7 +352,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 		nullptr,
 		m_flow_srvs[previous_index],
 		m_sediment_srvs[previous_index],
-		wind_field_srv,
+		meteorograph_srv,
 		m_soil_moisture_srvs[previous_index]
 	};
 	ID3D11UnorderedAccessView* uavs[] = {
@@ -434,14 +434,14 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 void ComputeWaterSurfaceHeightTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* rain_map_srv,
-	ID3D11ShaderResourceView* wind_field_srv,
+	ID3D11ShaderResourceView* meteorograph_srv,
 	float water_surface_height,
 	const SurfaceWaterSimulationSettings& settings,
 	bool inject_water_pulse,
 	float time_seconds,
 	float delta_time_seconds) const
 {
-	if (!IsValid() || terrain_height_srv == nullptr || rain_map_srv == nullptr || wind_field_srv == nullptr)
+	if (!IsValid() || terrain_height_srv == nullptr || rain_map_srv == nullptr || meteorograph_srv == nullptr)
 	{
 		return;
 	}
@@ -493,7 +493,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 		rain_map_srv,
 		m_flow_srvs[previous_index],
 		m_sediment_srvs[previous_index],
-		wind_field_srv,
+		meteorograph_srv,
 		m_soil_moisture_srvs[previous_index]
 	};
 	ID3D11UnorderedAccessView* uavs[] = {

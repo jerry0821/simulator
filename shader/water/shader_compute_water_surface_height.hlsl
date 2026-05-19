@@ -39,7 +39,7 @@ Texture2D<float4> g_PreviousTerrainWaterHeight : register(t1);
 Texture2D g_RainMap : register(t2);
 Texture2D<float4> g_PreviousWaterFlow : register(t3);
 Texture2D<float4> g_PreviousWaterSediment : register(t4);
-Texture2D g_WindField : register(t5);
+Texture2D<float4> g_Meteorograph : register(t5);
 Texture2D<float4> g_PreviousSoilMoisture : register(t6);
 SamplerState g_TerrainSampler : register(s0);
 RWTexture2D<float4> g_WaterSurfaceHeight : register(u0);
@@ -300,9 +300,10 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
         max(center_surface - SamplePreviousSurfaceHeight(coord + int2(0, -1)), 0.0f));
 
     const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
-    const float4 wind_sample = g_WindField.SampleLevel(g_TerrainSampler, uv, 0.0f);
-    const float2 wind_dir = SafeNormalize(wind_sample.xy * 2.0f - 1.0f);
-    const float wind_strength = saturate(wind_sample.z);
+    const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    const float2 wind_velocity = meteorograph_sample.xy;
+    const float wind_strength = saturate(length(wind_velocity));
+    const float2 wind_dir = SafeNormalize(wind_velocity);
     if (wind_strength > 1.0e-4f)
     {
         const float2 world_pos = ComputeWorldPosition(coord);
@@ -502,9 +503,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float2 flow_vector = float2(outflow.x - outflow.y, outflow.w - outflow.z);
     const float average_depth = max((source_depth + next_depth) * 0.5f, 1.0e-3f);
     const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
-    const float4 wind_sample = g_WindField.SampleLevel(g_TerrainSampler, uv, 0.0f);
-    const float wind_strength = saturate(wind_sample.z);
-    const float2 wind_dir = SafeNormalize(wind_sample.xy * 2.0f - 1.0f);
+    const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    const float2 atmospheric_wind = meteorograph_sample.xy;
+    const float atmospheric_humidity = saturate(meteorograph_sample.z);
+    const float atmospheric_temperature = saturate(meteorograph_sample.w);
+    const float wind_strength = saturate(length(atmospheric_wind));
+    const float2 wind_dir = SafeNormalize(atmospheric_wind);
     const float wind_surface_factor =
         smoothstep(0.01f, 0.12f, next_depth) *
         wind_strength *
@@ -596,7 +600,9 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
                 water_dt *
                 60.0f *
                 lerp(1.08f, 0.58f, basin_factor) *
-                lerp(0.95f, 1.18f, wind_strength));
+                lerp(0.88f, 1.18f, wind_strength) *
+                lerp(0.84f, 1.16f, atmospheric_temperature) *
+                lerp(1.08f, 0.82f, atmospheric_humidity));
     next_depth = max(next_depth - evaporation_loss, 0.0f);
 
     const float seepage_loss =

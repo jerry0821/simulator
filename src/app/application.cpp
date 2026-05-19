@@ -323,7 +323,7 @@ bool Application::InitializeEngineSystems()
 			m_compute_floating_light_points.Update(
 				static_cast<float>(current_time),
 				SimulationTerrainHeightResource().shaderResourceView(),
-				m_compute_wind_field_texture.Resource().shaderResourceView(),
+				m_compute_meteorograph_texture.Resource().shaderResourceView(),
 				camera_position,
 				camera_front,
 				camera_right,
@@ -336,15 +336,15 @@ bool Application::InitializeEngineSystems()
 			m_compute_climate_texture.Update(static_cast<float>(current_time));
 		});
 	m_compute_task_runner.Register(
-		m_compute_wind_field_texture,
+		m_compute_meteorograph_texture,
 		[this](double current_time, double elapsed_time)
 		{
-			m_compute_wind_field_texture.Update(
+			m_compute_meteorograph_texture.Update(
 				static_cast<float>(current_time),
 				static_cast<float>(elapsed_time),
 				DebugMenu_GetComputeNoiseSettings(),
-				m_compute_climate_texture.Resource().shaderResourceView(),
-				SimulationTerrainHeightResource().shaderResourceView());
+				m_compute_climate_texture.Resource(),
+				BaseTerrainHeightResource());
 		});
 	m_compute_task_runner.Register(
 		m_compute_rain_map_texture,
@@ -352,8 +352,7 @@ bool Application::InitializeEngineSystems()
 		{
 			const auto& compute_settings = DebugMenu_GetComputeNoiseSettings();
 			m_compute_rain_map_texture.Update(
-				m_compute_climate_texture.Resource().shaderResourceView(),
-				m_compute_wind_field_texture.Resource().shaderResourceView(),
+				m_compute_meteorograph_texture.Resource().shaderResourceView(),
 				compute_settings.rain_multiplier,
 				compute_settings.force_rain,
 				static_cast<float>(current_time));
@@ -371,7 +370,7 @@ bool Application::InitializeEngineSystems()
 			{
 				m_compute_water_surface_height_texture.InitializeState(
 					BaseTerrainHeightResource().shaderResourceView(),
-					m_compute_wind_field_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					DebugMenu_GetSurfaceWaterSimulationSettings());
 			}
@@ -384,23 +383,13 @@ bool Application::InitializeEngineSystems()
 				m_compute_water_surface_height_texture.Update(
 					BaseTerrainHeightResource().shaderResourceView(),
 					m_compute_rain_map_texture.Resource().shaderResourceView(),
-					m_compute_wind_field_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					water_sim_settings,
 					inject_water_pulse,
 					static_cast<float>(current_time),
 					static_cast<float>(elapsed_time));
 			}
-		});
-	m_compute_task_runner.Register(
-		m_compute_meteorograph_texture,
-		[this](double /*current_time*/, double /*elapsed_time*/)
-		{
-			m_compute_meteorograph_texture.Update(
-				Camera_GetPosition().x,
-				Camera_GetPosition().z,
-				m_compute_climate_texture.Resource(),
-			m_compute_wind_field_texture.Resource());
 		});
 	m_compute_task_runner.InitializeAll(Direct3D_GetDevice(), Direct3D_GetContext());
 	m_compute_floating_light_points.SetSeeds(BuildFloatingWindLightSeeds());
@@ -421,15 +410,20 @@ bool Application::InitializeEngineSystems()
 	m_active_water_surface_desc = ResolveActiveWaterSurfaceDesc();
 	m_active_water_surface_height = m_active_water_surface_desc.height;
 	m_compute_climate_texture.Update(0.0f);
-	m_compute_wind_field_texture.Update(
+	m_compute_meteorograph_texture.Update(
 		0.0f,
 		1.0f / 60.0f,
 		DebugMenu_GetComputeNoiseSettings(),
-		m_compute_climate_texture.Resource().shaderResourceView(),
-		SimulationTerrainHeightResource().shaderResourceView());
+		m_compute_climate_texture.Resource(),
+		BaseTerrainHeightResource());
+	m_compute_rain_map_texture.Update(
+		m_compute_meteorograph_texture.Resource().shaderResourceView(),
+		DebugMenu_GetComputeNoiseSettings().rain_multiplier,
+		DebugMenu_GetComputeNoiseSettings().force_rain,
+		0.0f);
 	m_compute_water_surface_height_texture.InitializeState(
 		BaseTerrainHeightResource().shaderResourceView(),
-		m_compute_wind_field_texture.Resource().shaderResourceView(),
+		m_compute_meteorograph_texture.Resource().shaderResourceView(),
 		m_active_water_surface_height,
 		DebugMenu_GetSurfaceWaterSimulationSettings());
 	m_compute_terrain_normal_texture.Update(SimulationTerrainHeightResource().shaderResourceView());
@@ -445,7 +439,8 @@ bool Application::InitializeEngineSystems()
 	m_compute_grass_data_texture.Update(
 		ActiveTerrainNormalResource().shaderResourceView(),
 		m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
-		m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView());
+		m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView(),
+		m_compute_meteorograph_texture.Resource().shaderResourceView());
 	MeshFieldRenderer::SetRenderHeightSRV(
 		ActiveTerrainHeightResource().shaderResourceView());
 	MeshFieldRenderer::SetRenderNormalSRV(ActiveTerrainNormalResource().shaderResourceView());
@@ -532,9 +527,24 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 		{
 			DebugMenu_SetShaderReloadStatus(false, "Compute meteorograph reload failed");
 		}
-		if (!m_compute_wind_field_texture.IsValid())
+		if (m_compute_climate_texture.IsValid() &&
+			m_compute_meteorograph_texture.IsValid())
 		{
-			DebugMenu_SetShaderReloadStatus(false, "Compute wind field reload failed");
+			m_compute_climate_texture.Update(0.0f);
+			m_compute_meteorograph_texture.Update(
+				0.0f,
+				1.0f / 60.0f,
+				DebugMenu_GetComputeNoiseSettings(),
+				m_compute_climate_texture.Resource(),
+				BaseTerrainHeightResource());
+		}
+		if (m_compute_rain_map_texture.IsValid() && m_compute_meteorograph_texture.IsValid())
+		{
+			m_compute_rain_map_texture.Update(
+				m_compute_meteorograph_texture.Resource().shaderResourceView(),
+				DebugMenu_GetComputeNoiseSettings().rain_multiplier,
+				DebugMenu_GetComputeNoiseSettings().force_rain,
+				0.0f);
 		}
 		if (!m_compute_water_surface_height_texture.IsValid())
 		{
@@ -546,7 +556,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 			{
 				m_compute_water_surface_height_texture.InitializeState(
 					BaseTerrainHeightResource().shaderResourceView(),
-					m_compute_wind_field_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					DebugMenu_GetSurfaceWaterSimulationSettings());
 			}
@@ -555,7 +565,7 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 				m_compute_water_surface_height_texture.Update(
 					BaseTerrainHeightResource().shaderResourceView(),
 					m_compute_rain_map_texture.Resource().shaderResourceView(),
-					m_compute_wind_field_texture.Resource().shaderResourceView(),
+					m_compute_meteorograph_texture.Resource().shaderResourceView(),
 					m_active_water_surface_height,
 					DebugMenu_GetSurfaceWaterSimulationSettings(),
 					false,
@@ -617,7 +627,8 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 				m_compute_grass_data_texture.Update(
 					ActiveTerrainNormalResource().shaderResourceView(),
 					m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
-					m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView());
+					m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView(),
+					m_compute_meteorograph_texture.Resource().shaderResourceView());
 			}
 			m_terrain_classification_last_update_time = current_time;
 			m_last_terrain_material_settings = terrain_material_settings;
@@ -727,10 +738,6 @@ void Application::PublishSharedComputeResources()
 		ComputeSharedResourceId::ComputeNoise,
 		"ComputeNoise",
 		m_compute_noise_texture.Resource());
-	m_compute_shared_resource_registry.PublishShaderResource(
-		ComputeSharedResourceId::WindField,
-		"WindField",
-		m_compute_wind_field_texture.Resource());
 	m_compute_shared_resource_registry.PublishShaderResource(
 		ComputeSharedResourceId::ClimateField,
 		"ClimateField",
@@ -845,8 +852,6 @@ RenderFrameContext Application::BuildFrameContext(double current_time, double el
 	frame_context.resources.erosion_delta = frame_context.resources.terrain_water.erosion_delta;
 	frame_context.resources.compute_noise =
 		m_compute_shared_resource_registry.GetShaderResource(ComputeSharedResourceId::ComputeNoise);
-	frame_context.resources.wind_field =
-		m_compute_shared_resource_registry.GetShaderResource(ComputeSharedResourceId::WindField);
 	frame_context.resources.climate_field =
 		m_compute_shared_resource_registry.GetShaderResource(ComputeSharedResourceId::ClimateField);
 	frame_context.resources.meteorograph_field =

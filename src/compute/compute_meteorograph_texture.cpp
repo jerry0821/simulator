@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <fstream>
 #include <vector>
+#include <cmath>
 
 #include "debug_ostream.h"
 #include "sampler.h"
@@ -57,27 +58,20 @@ bool ComputeMeteorographTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 	texture_desc.Height = kTextureHeight;
 	texture_desc.MipLevels = 1;
 	texture_desc.ArraySize = 1;
-	texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	texture_desc.SampleDesc.Count = 1;
 	texture_desc.Usage = D3D11_USAGE_DEFAULT;
 	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-	if (FAILED(m_device->CreateTexture2D(&texture_desc, nullptr, &m_texture)))
+	for (unsigned int index = 0; index < 2; ++index)
 	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateShaderResourceView(m_texture, nullptr, &m_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateUnorderedAccessView(m_texture, nullptr, &m_uav)))
-	{
-		Finalize();
-		return false;
+		if (FAILED(m_device->CreateTexture2D(&texture_desc, nullptr, &m_textures[index])) ||
+			FAILED(m_device->CreateShaderResourceView(m_textures[index], nullptr, &m_srvs[index])) ||
+			FAILED(m_device->CreateUnorderedAccessView(m_textures[index], nullptr, &m_uavs[index])))
+		{
+			Finalize();
+			return false;
+		}
 	}
 
 	D3D11_BUFFER_DESC buffer_desc{};
@@ -92,29 +86,51 @@ bool ComputeMeteorographTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 		return false;
 	}
 
+	m_current_index = 0u;
+	m_has_state = false;
 	return true;
 }
 
 void ComputeMeteorographTexture::Finalize()
 {
 	SafeRelease(m_constant_buffer);
-	SafeRelease(m_uav);
-	SafeRelease(m_srv);
-	SafeRelease(m_texture);
+	for (unsigned int index = 0; index < 2; ++index)
+	{
+		SafeRelease(m_uavs[index]);
+		SafeRelease(m_srvs[index]);
+		SafeRelease(m_textures[index]);
+	}
 	SafeRelease(m_compute_shader);
 	m_device = nullptr;
 	m_context = nullptr;
+	m_current_index = 0u;
+	m_has_state = false;
 }
 
 void ComputeMeteorographTexture::Update(
-	float camera_world_x,
-	float camera_world_z,
+	float time_seconds,
+	float delta_time_seconds,
+	const ComputeNoiseSettings& settings,
 	Backend::RenderShaderResource climate_field,
-	Backend::RenderShaderResource wind_field) const
+	Backend::RenderShaderResource terrain_height) const
 {
-	if (!IsValid() || !climate_field.isValid() || !wind_field.isValid())
+	if (!IsValid() || !climate_field.isValid() || !terrain_height.isValid())
 	{
 		return;
+	}
+
+	float wind_dir_x = settings.wind_direction_x;
+	float wind_dir_y = settings.wind_direction_y;
+	const float wind_length = std::sqrt(wind_dir_x * wind_dir_x + wind_dir_y * wind_dir_y);
+	if (wind_length > 0.0001f)
+	{
+		wind_dir_x /= wind_length;
+		wind_dir_y /= wind_length;
+	}
+	else
+	{
+		wind_dir_x = 1.0f;
+		wind_dir_y = 0.0f;
 	}
 
 	D3D11_MAPPED_SUBRESOURCE mapped_resource{};
@@ -122,54 +138,71 @@ void ComputeMeteorographTexture::Update(
 	{
 		auto* constants = static_cast<MeteorographConstants*>(mapped_resource.pData);
 		*constants = MeteorographConstants{
-			camera_world_x,
-			camera_world_z,
-			-640.0f,
-			-640.0f,
-			640.0f,
-			640.0f,
-			20.0f,
-			20.0f,
+			time_seconds,
+			delta_time_seconds,
+			wind_dir_x,
+			wind_dir_y,
+			settings.wind_strength,
+			settings.wind_cross_influence,
+			settings.noise_scale,
+			0.085f,
+			0.42f,
+			0.58f,
+			0.20f,
+			0.28f,
+			0.18f,
+			0.16f,
+			0.34f,
+			0.0f,
 			kTextureWidth,
 			kTextureHeight,
-			0u,
-			0u};
+			m_has_state ? 0u : 1u,
+			0u };
 		m_context->Unmap(m_constant_buffer, 0);
 	}
 
-	ID3D11ShaderResourceView* input_srvs[2] = {
+	const unsigned int previous_index = m_current_index;
+	const unsigned int next_index = (m_current_index + 1u) % 2u;
+	ID3D11ShaderResourceView* input_srvs[3] = {
+		m_srvs[previous_index],
 		climate_field.shaderResourceView(),
-		wind_field.shaderResourceView()};
+		terrain_height.shaderResourceView()};
 	ID3D11SamplerState* sampler_state = Backend::DX11::Sampler::GetState();
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, &m_constant_buffer);
-	m_context->CSSetShaderResources(0, 2, input_srvs);
+	m_context->CSSetShaderResources(0, 3, input_srvs);
 	m_context->CSSetSamplers(0, 1, &sampler_state);
-	m_context->CSSetUnorderedAccessViews(0, 1, &m_uav, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 1, &m_uavs[next_index], nullptr);
 	m_context->Dispatch(kTextureWidth / kThreadGroupSize, kTextureHeight / kThreadGroupSize, 1);
 
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_constant_buffer = nullptr;
-	ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
+	ID3D11ShaderResourceView* null_srvs[3] = { nullptr, nullptr, nullptr };
 	ID3D11SamplerState* null_sampler = nullptr;
 	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
-	m_context->CSSetShaderResources(0, 2, null_srvs);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
 	m_context->CSSetShader(nullptr, nullptr, 0);
+
+	m_current_index = next_index;
+	m_has_state = true;
 }
 
 bool ComputeMeteorographTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
-		   m_texture != nullptr &&
-		   m_srv != nullptr &&
-		   m_uav != nullptr &&
+		   m_textures[0] != nullptr &&
+		   m_textures[1] != nullptr &&
+		   m_srvs[0] != nullptr &&
+		   m_srvs[1] != nullptr &&
+		   m_uavs[0] != nullptr &&
+		   m_uavs[1] != nullptr &&
 		   m_constant_buffer != nullptr;
 }
 
 Backend::RenderShaderResource ComputeMeteorographTexture::Resource() const
 {
-	return Backend::RenderShaderResource(m_srv);
+	return Backend::RenderShaderResource(m_srvs[m_current_index]);
 }

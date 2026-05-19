@@ -36,7 +36,7 @@ public:
 		static constexpr ComputeSharedResourceId kReadResources[] = {
 			ComputeSharedResourceId::BaseTerrainHeight,
 			ComputeSharedResourceId::RainMap,
-			ComputeSharedResourceId::WindField
+			ComputeSharedResourceId::MeteorographField
 		};
 		return kReadResources;
 	}
@@ -62,13 +62,13 @@ public:
 	void ResetState();
 	void InitializeState(
 		ID3D11ShaderResourceView* terrain_height_srv,
-		ID3D11ShaderResourceView* wind_field_srv,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		float water_surface_height,
 		const SurfaceWaterSimulationSettings& settings) const;
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* rain_map_srv,
-		ID3D11ShaderResourceView* wind_field_srv,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		float water_surface_height,
 		const SurfaceWaterSimulationSettings& settings,
 		bool inject_water_pulse,

@@ -326,16 +326,16 @@ void UIPass::execute(const RenderFrameContext& frame_context)
 		Sprite_DrawSRV(frame_context.resources.compute_noise.shaderResourceView(), 16.0f, 16.0f, kPreviewSize, kPreviewSize);
 	}
 
-	if (frame_context.resources.wind_field.isValid())
+	if (frame_context.resources.meteorograph_field.isValid())
 	{
-		// Shared global wind field preview.
-		Sprite_DrawSRV(frame_context.resources.wind_field.shaderResourceView(), 216.0f, 16.0f, kPreviewSize, kPreviewSize);
+		// Authoritative meteorograph preview with wind overlay.
+		Sprite_DrawSRV(frame_context.resources.meteorograph_field.shaderResourceView(), 216.0f, 16.0f, kPreviewSize, kPreviewSize);
 		drawWindOverlay(216.0f, 16.0f, kPreviewSize, kPreviewSize, static_cast<float>(frame_context.globals.time_seconds), compute_settings);
 	}
 
-	if (frame_context.resources.meteorograph_field.isValid())
+	if (frame_context.resources.climate_field.isValid())
 	{
-		// Baked meteorograph preview: climate background + wind arrows + current position.
-		Sprite_DrawSRV(frame_context.resources.meteorograph_field.shaderResourceView(), 416.0f, 16.0f, kPreviewSize, kPreviewSize);
+		// Climate input field preview.
+		Sprite_DrawSRV(frame_context.resources.climate_field.shaderResourceView(), 416.0f, 16.0f, kPreviewSize, kPreviewSize);
 	}
 }

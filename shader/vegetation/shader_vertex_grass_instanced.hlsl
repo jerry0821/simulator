@@ -16,7 +16,7 @@ cbuffer VS_GRASS_WIND : register(b2)
     float g_Padding0;
 };
 
-Texture2D g_WindField : register(t0);
+Texture2D<float4> g_Meteorograph : register(t0);
 SamplerState samp : register(s0);
 
 struct VS_IN
@@ -67,9 +67,20 @@ VS_OUT main(VS_IN vi)
 
     const float3 instanceOrigin = float3(vi.world0.w, vi.world1.w, vi.world2.w);
     const float2 windUv = frac(instanceOrigin.xz * g_FieldUvScale);
-    const float4 windSample = g_WindField.SampleLevel(samp, windUv, 0.0f);
-    float2 windDir = windSample.xy * 2.0f - 1.0f;
-    float windStrength = saturate(windSample.z);
+    uint meteoWidth = 0;
+    uint meteoHeight = 0;
+    g_Meteorograph.GetDimensions(meteoWidth, meteoHeight);
+    const float2 texelSize = 1.0f / max(float2(meteoWidth, meteoHeight), 1.0f.xx);
+    const float4 meteoCenter = g_Meteorograph.SampleLevel(samp, windUv, 0.0f);
+    const float4 meteoXp = g_Meteorograph.SampleLevel(samp, windUv + float2(texelSize.x, 0.0f), 0.0f);
+    const float4 meteoXm = g_Meteorograph.SampleLevel(samp, windUv - float2(texelSize.x, 0.0f), 0.0f);
+    const float4 meteoYp = g_Meteorograph.SampleLevel(samp, windUv + float2(0.0f, texelSize.y), 0.0f);
+    const float4 meteoYm = g_Meteorograph.SampleLevel(samp, windUv - float2(0.0f, texelSize.y), 0.0f);
+    const float4 meteoSample =
+        meteoCenter * 0.40f +
+        (meteoXp + meteoXm + meteoYp + meteoYm) * 0.15f;
+    float2 windDir = meteoSample.xy;
+    float windStrength = saturate(length(windDir));
     const float windDirLen = length(windDir);
     if (windDirLen > 0.0001f)
     {
