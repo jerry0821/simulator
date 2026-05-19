@@ -32,20 +32,15 @@ void Sprite3D_DrawAdditiveSRV(
 	const DirectX::XMFLOAT4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
 
 void Sprite3D_DrawWaterSRV(
-	ID3D11ShaderResourceView* texture_srv,
 	ID3D11ShaderResourceView* water_surface_height_srv,
-	ID3D11ShaderResourceView* surface_water_srv,
-	ID3D11ShaderResourceView* flow_field_srv,
-	ID3D11ShaderResourceView* water_interaction_srv,
+	ID3D11ShaderResourceView* water_velocity_srv,
+	ID3D11ShaderResourceView* water_sediment_srv,
+	ID3D11ShaderResourceView* terrain_normal_srv,
 	ID3D11ShaderResourceView* scene_depth_srv,
 	const DirectX::XMMATRIX& world_matrix,
 	const DirectX::XMFLOAT4& color,
 	const DirectX::XMFLOAT3& camera_position,
 	float time_seconds,
-	float surface_center_x,
-	float surface_center_z,
-	float surface_size_x,
-	float surface_size_z,
 	float fresnel_power = 4.5f,
 	float highlight_strength = 0.28f);
 

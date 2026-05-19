@@ -48,7 +48,6 @@ static bool g_SurfaceWaterResetRequested = false;
 static bool g_ShowComputeResourcePreviews = false;
 static bool g_EnableTerrainSurfacePresentation = true;
 static bool g_EnableGrassGpu = true;
-static bool g_EnableWaterSurfaceDeformation = true;
 static ComputeNoiseSettings g_ComputeNoiseSettings{};
 static TerrainSettings g_TerrainSettings = MeshFieldRenderer::GetTerrainSettings();
 static TerrainMaterialSettings g_TerrainMaterialSettings{};
@@ -579,11 +578,6 @@ bool DebugMenu_IsGrassGpuEnabled()
     return g_EnableGrassGpu;
 }
 
-bool DebugMenu_IsWaterSurfaceDeformationEnabled()
-{
-    return g_EnableWaterSurfaceDeformation;
-}
-
 void DebugMenu_Begin()
 {
     ImGui_ImplDX11_NewFrame();
@@ -627,7 +621,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::TextDisabled("Before / After showcase toggles");
     ImGui::Checkbox("Terrain Surface Shading", &g_EnableTerrainSurfacePresentation);
     ImGui::Checkbox("Grass GPU Instances", &g_EnableGrassGpu);
-    ImGui::Checkbox("Water Surface Deformation", &g_EnableWaterSurfaceDeformation);
     ImGui::Separator();
     ImGui::TextWrapped("Use these to record clean portfolio comparisons without changing the underlying pipeline.");
     ImGui::End();
@@ -684,17 +677,10 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::End();
 
     ImGui::Begin("Water");
-    ImGui::SliderFloat("Water Center X", &g_WaterSurfaceSettings.center_x, -80.0f, 80.0f);
-    ImGui::SliderFloat("Water Center Z", &g_WaterSurfaceSettings.center_z, -80.0f, 80.0f);
     ImGui::SliderFloat("Water Height Override", &g_WaterSurfaceSettings.height, -1.0f, 32.0f);
-    ImGui::SliderFloat("Water Size X", &g_WaterSurfaceSettings.size_x, 4.0f, 120.0f);
-    ImGui::SliderFloat("Water Size Z", &g_WaterSurfaceSettings.size_z, 4.0f, 120.0f);
     ImGui::Separator();
     ImGui::ColorEdit4("Base Color", reinterpret_cast<float*>(&g_WaterSurfaceSettings.base_color));
-    ImGui::ColorEdit4("Ripple Color", reinterpret_cast<float*>(&g_WaterSurfaceSettings.ripple_color));
-    ImGui::ColorEdit4("Highlight Color", reinterpret_cast<float*>(&g_WaterSurfaceSettings.highlight_color));
     ImGui::SliderFloat("Ripple Strength", &g_WaterSurfaceSettings.ripple_strength, 0.0f, 3.0f);
-    ImGui::SliderFloat("Wind Influence", &g_WaterSurfaceSettings.wind_influence, 0.0f, 3.0f);
     ImGui::SliderFloat("Edge Emphasis", &g_WaterSurfaceSettings.edge_emphasis, 0.0f, 3.0f);
     ImGui::Separator();
     ImGui::TextDisabled("Surface Water Simulation");
@@ -703,7 +689,6 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Seepage", &g_SurfaceWaterSimulationSettings.seepage_rate, 0.0f, 0.02f);
     ImGui::SliderFloat("Basin Fade", &g_SurfaceWaterSimulationSettings.basin_fade, 2.0f, 12.0f);
     ImGui::SliderFloat("Downhill Flow", &g_SurfaceWaterSimulationSettings.downhill_flow_rate, 0.05f, 0.60f);
-    ImGui::SliderFloat("Flow Damping", &g_SurfaceWaterSimulationSettings.flow_damping, 0.25f, 1.00f);
     ImGui::SliderFloat("Max Outflow", &g_SurfaceWaterSimulationSettings.max_outflow_fraction, 0.10f, 0.95f);
     ImGui::Separator();
     ImGui::TextDisabled("One-shot Water Injection Test");
@@ -733,8 +718,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         g_SurfaceWaterSimulationSettings.debug_injection_x = 46.0f;
         g_SurfaceWaterSimulationSettings.debug_injection_z = 118.0f;
     }
-    ImGui::TextDisabled("Use this to prove downhill flow: drop water on a high ridge and watch SurfaceWater / Flow / WaterMask.");
-    ImGui::TextDisabled("Current world water render is still a flat stable plane, so peak injection is most obvious in the previews.");
+    ImGui::TextDisabled("Use this to prove downhill flow: drop water on a high ridge and watch WaterSurfaceHeight plus the downstream water fields react.");
     ImGui::Separator();
     ImGui::TextDisabled("Height <= 0 uses climate/rain-driven automatic basin water.");
     ImGui::TextDisabled("Shared Compute Inputs");

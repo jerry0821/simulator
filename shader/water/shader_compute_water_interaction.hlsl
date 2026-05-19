@@ -39,8 +39,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             visible_water.b * 0.92f));
     const float retained_wetness = saturate(
         max(
-            soil_moisture.r,
-            soil_moisture.a * 0.78f + soil_moisture.b * 0.12f));
+            soil_moisture.r * 0.72f,
+            soil_moisture.a * 0.38f + soil_moisture.b * 0.08f));
 
     g_WaterInteractionData[dispatch_thread_id.xy] = float4(
         surface_interaction,

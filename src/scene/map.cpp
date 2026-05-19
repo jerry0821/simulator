@@ -1517,10 +1517,7 @@ bool MapController::GetWaterSurfaceDesc(WaterSurfaceDesc& out_desc) const
 	if (out_desc.base_color.w <= 0.0f)
 	{
 		out_desc.base_color = { 0.06f, 0.22f, 0.46f, 0.36f };
-		out_desc.ripple_color = { 0.26f, 0.60f, 0.82f, 0.16f };
-		out_desc.highlight_color = { 0.60f, 0.82f, 0.96f, 0.10f };
 		out_desc.ripple_strength = 1.65f;
-		out_desc.wind_influence = 1.85f;
 		out_desc.edge_emphasis = 1.0f;
 	}
 	return true;

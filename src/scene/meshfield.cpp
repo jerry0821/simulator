@@ -1100,10 +1100,10 @@ float MeshFieldRenderer::GetSuggestedWaterHeight()
 	// Startup-only water level seed. Keep it visibly above the lower terrain band
 	// so the shared water heightfield clearly initializes lowlands.
 	return std::max(
-		18.0f,
-		g_terrain_settings.base_height * 0.38f +
-		g_terrain_settings.continent_height * 0.18f +
-		6.0f);
+		30.0f,
+		g_terrain_settings.base_height * 0.68f +
+		g_terrain_settings.continent_height * 0.32f +
+		10.0f);
 }
 
 float MeshFieldRenderer::FieldWidth()

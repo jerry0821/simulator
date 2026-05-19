@@ -2,6 +2,7 @@ Texture2D MainTex : register(t0);
 Texture2D WaterInteractionTex : register(t1);
 Texture2D BloomTex : register(t2);
 Texture2D SceneDepthTex : register(t3);
+Texture2D<float4> WaterSurfaceHeightTex : register(t4);
 SamplerState Sampler : register(s0);
 
 cbuffer CB_PostProcess : register(b0)
@@ -61,13 +62,34 @@ float SampleWaterPresence(float2 world_xz)
     return water_presence;
 }
 
+float2 SampleTerrainWaterHeights(float2 world_xz)
+{
+    float2 terrain_water_height = float2(0.0f, 0.0f);
+    float2 water_uv = ComputeWaterUV(world_xz);
+    if (!any(water_uv < 0.0f) && !any(water_uv > 1.0f))
+    {
+        terrain_water_height =
+            WaterSurfaceHeightTex.SampleLevel(Sampler, saturate(water_uv), 0.0f).xy;
+    }
+
+    return terrain_water_height;
+}
+
 float ComputeCameraUnderwaterAmount()
 {
     float underwater_amount = 0.0f;
     if (g_UnderwaterEnabled > 0.5f)
     {
-        float water_presence = SampleWaterPresence(g_CameraPosition.xz);
-        float submerge_depth = g_WaterHeight - g_CameraPosition.y;
+        float2 terrain_water_height = SampleTerrainWaterHeights(g_CameraPosition.xz);
+        float local_water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+        float water_presence = max(
+            SampleWaterPresence(g_CameraPosition.xz),
+            smoothstep(0.004f, 0.040f, local_water_depth));
+        float resolved_surface_height =
+            local_water_depth > 1.0e-4f
+                ? terrain_water_height.y
+                : g_WaterHeight;
+        float submerge_depth = resolved_surface_height - g_CameraPosition.y;
         float immediate_contact = smoothstep(-0.01f, 0.06f, submerge_depth);
         float depth_fill = saturate(submerge_depth / max(g_UnderwaterDepthRange, 0.05f));
         float submerge = max(immediate_contact * 0.70f, depth_fill);
@@ -139,8 +161,16 @@ float ComputeHeightFogFactor(float3 world_pos, float scene_distance)
 
 float ComputeUnderwaterScreenFactor(float3 near_world_pos)
 {
-    float water_presence = SampleWaterPresence(near_world_pos.xz);
-    float underwater_height = g_WaterHeight - near_world_pos.y;
+    float2 terrain_water_height = SampleTerrainWaterHeights(near_world_pos.xz);
+    float local_water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+    float water_presence = max(
+        SampleWaterPresence(near_world_pos.xz),
+        smoothstep(0.004f, 0.040f, local_water_depth));
+    float resolved_surface_height =
+        local_water_depth > 1.0e-4f
+            ? terrain_water_height.y
+            : g_WaterHeight;
+    float underwater_height = resolved_surface_height - near_world_pos.y;
     return water_presence * smoothstep(0.0f, 0.018f, underwater_height + 0.010f);
 }
 

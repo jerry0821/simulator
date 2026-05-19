@@ -20,13 +20,11 @@ struct TerrainMaterialSettings;
 struct WaterSurfaceDesc;
 struct SurfaceWaterSimulationSettings
 {
-	bool presentation_only = true;
 	float accumulation_rate = 0.040f;
 	float evaporation_rate = 0.0065f;
 	float seepage_rate = 0.0040f;
 	float basin_fade = 6.0f;
 	float downhill_flow_rate = 0.48f;
-	float flow_damping = 0.70f;
 	float max_outflow_fraction = 0.68f;
 	float debug_injection_x = 46.0f;
 	float debug_injection_z = 118.0f;
@@ -89,7 +87,6 @@ const SurfaceWaterSimulationSettings& DebugMenu_GetSurfaceWaterSimulationSetting
 const PostProcessSettings& DebugMenu_GetPostProcessSettings();
 bool DebugMenu_IsTerrainSurfacePresentationEnabled();
 bool DebugMenu_IsGrassGpuEnabled();
-bool DebugMenu_IsWaterSurfaceDeformationEnabled();
 void DebugMenu_Begin();
 void DebugMenu_Draw(const RenderFrameContext* frame_context = nullptr);
 void DebugMenu_End();

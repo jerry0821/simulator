@@ -296,6 +296,12 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 			: (terrain_water.visible_water.isValid()
 				? terrain_water.visible_water.shaderResourceView()
 				: nullptr);
+	ID3D11ShaderResourceView* water_surface_height_srv =
+		frame_context.resources.water_surface_height.isValid()
+			? frame_context.resources.water_surface_height.shaderResourceView()
+			: (terrain_water.water_surface_height_texture.isValid()
+				? terrain_water.water_surface_height_texture.shaderResourceView()
+				: nullptr);
 	const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&frame_context.globals.view_matrix);
 	const DirectX::XMMATRIX proj = DirectX::XMLoadFloat4x4(&frame_context.globals.projection_matrix);
 	DirectX::XMFLOAT4X4 inverse_view_projection{};
@@ -309,6 +315,7 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr,
+		water_surface_height_srv,
 		static_cast<float>(frame_context.globals.time_seconds),
 		frame_context.globals.glitch_amount,
 		frame_context.globals.camera_position,

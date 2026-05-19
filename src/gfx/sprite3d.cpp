@@ -408,20 +408,15 @@ void Sprite3D_DrawAdditiveSRV(ID3D11ShaderResourceView* texture_srv,
 	Direct3D_SetCullMode(Direct3DCullMode::Back);
 }
 
-void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
-						   ID3D11ShaderResourceView* water_surface_height_srv,
-						   ID3D11ShaderResourceView* surface_water_srv,
-						   ID3D11ShaderResourceView* flow_field_srv,
-						   ID3D11ShaderResourceView* water_interaction_srv,
+void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* water_surface_height_srv,
+						   ID3D11ShaderResourceView* water_velocity_srv,
+						   ID3D11ShaderResourceView* water_sediment_srv,
+						   ID3D11ShaderResourceView* terrain_normal_srv,
 						   ID3D11ShaderResourceView* scene_depth_srv,
 						   const XMMATRIX& world_matrix,
 						   const XMFLOAT4& color,
 						   const XMFLOAT3& camera_position,
 						   float time_seconds,
-						   float surface_center_x,
-						   float surface_center_z,
-						   float surface_size_x,
-						   float surface_size_z,
 						   float fresnel_power,
 						   float highlight_strength)
 {
@@ -442,15 +437,11 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 	ShaderWater_SetSurfaceSettings(
 		fresnel_power,
 		highlight_strength,
-		time_seconds,
-		surface_center_x,
-		surface_center_z,
-		surface_size_x,
-		surface_size_z);
+		time_seconds);
 	ShaderWater_SetWaterSurfaceHeight(water_surface_height_srv);
-	ShaderWater_SetSurfaceWater(surface_water_srv);
-	ShaderWater_SetFlowField(flow_field_srv);
-	ShaderWater_SetWaterInteraction(water_interaction_srv);
+	ShaderWater_SetWaterVelocity(water_velocity_srv);
+	ShaderWater_SetWaterSediment(water_sediment_srv);
+	ShaderWater_SetTerrainNormal(terrain_normal_srv);
 	ShaderWater_SetSceneDepth(scene_depth_srv);
 	ShaderWater_Begin();
 
@@ -471,8 +462,6 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* texture_srv,
 	Direct3D_SetDepthEnable(true);
 	Direct3D_SetDepthWrite(true);
 	Direct3D_SetCullMode(Direct3DCullMode::Back);
-
-	(void)texture_srv;
 }
 
 void Sprite3D_DrawTransparentInstanced(

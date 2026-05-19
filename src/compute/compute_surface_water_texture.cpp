@@ -4,7 +4,6 @@
 #include <fstream>
 #include <vector>
 
-#include "debug_menu.h"
 #include "debug_ostream.h"
 #include "sampler.h"
 
@@ -18,6 +17,50 @@ void SafeRelease(T*& resource)
 		resource->Release();
 		resource = nullptr;
 	}
+}
+
+bool CreateFloat4Texture(
+	ID3D11Device* device,
+	unsigned int width,
+	unsigned int height,
+	ID3D11Texture2D** texture,
+	ID3D11ShaderResourceView** srv,
+	ID3D11UnorderedAccessView** uav)
+{
+	if (device == nullptr || texture == nullptr || srv == nullptr || uav == nullptr)
+	{
+		return false;
+	}
+
+	D3D11_TEXTURE2D_DESC texture_desc{};
+	texture_desc.Width = width;
+	texture_desc.Height = height;
+	texture_desc.MipLevels = 1;
+	texture_desc.ArraySize = 1;
+	texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	texture_desc.SampleDesc.Count = 1;
+	texture_desc.Usage = D3D11_USAGE_DEFAULT;
+	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+	if (FAILED(device->CreateTexture2D(&texture_desc, nullptr, texture)))
+	{
+		return false;
+	}
+
+	if (FAILED(device->CreateShaderResourceView(*texture, nullptr, srv)))
+	{
+		SafeRelease(*texture);
+		return false;
+	}
+
+	if (FAILED(device->CreateUnorderedAccessView(*texture, nullptr, uav)))
+	{
+		SafeRelease(*srv);
+		SafeRelease(*texture);
+		return false;
+	}
+
+	return true;
 }
 }
 
@@ -53,119 +96,41 @@ bool ComputeSurfaceWaterTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 		return false;
 	}
 
-	std::vector<float> zero_pixels(kTextureWidth * kTextureHeight * 4u, 0.0f);
-	D3D11_SUBRESOURCE_DATA init_data{};
-	init_data.pSysMem = zero_pixels.data();
-	init_data.SysMemPitch = sizeof(float) * 4u * kTextureWidth;
-
-	for (int i = 0; i < 2; ++i)
-	{
-		D3D11_TEXTURE2D_DESC texture_desc{};
-		texture_desc.Width = kTextureWidth;
-		texture_desc.Height = kTextureHeight;
-		texture_desc.MipLevels = 1;
-		texture_desc.ArraySize = 1;
-		texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		texture_desc.SampleDesc.Count = 1;
-		texture_desc.Usage = D3D11_USAGE_DEFAULT;
-		texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-
-		if (FAILED(m_device->CreateTexture2D(&texture_desc, &init_data, &m_textures[i])))
-		{
-			Finalize();
-			return false;
-		}
-
-		if (FAILED(m_device->CreateShaderResourceView(m_textures[i], nullptr, &m_srvs[i])))
-		{
-			Finalize();
-			return false;
-		}
-
-		if (FAILED(m_device->CreateUnorderedAccessView(m_textures[i], nullptr, &m_uavs[i])))
-		{
-			Finalize();
-			return false;
-		}
-	}
-
-	D3D11_TEXTURE2D_DESC flow_desc{};
-	flow_desc.Width = kTextureWidth;
-	flow_desc.Height = kTextureHeight;
-	flow_desc.MipLevels = 1;
-	flow_desc.ArraySize = 1;
-	flow_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	flow_desc.SampleDesc.Count = 1;
-	flow_desc.Usage = D3D11_USAGE_DEFAULT;
-	flow_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-
-	if (FAILED(m_device->CreateTexture2D(&flow_desc, &init_data, &m_flow_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateShaderResourceView(m_flow_texture, nullptr, &m_flow_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateUnorderedAccessView(m_flow_texture, nullptr, &m_flow_uav)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateTexture2D(&flow_desc, &init_data, &m_flow_preview_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateShaderResourceView(m_flow_preview_texture, nullptr, &m_flow_preview_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateUnorderedAccessView(m_flow_preview_texture, nullptr, &m_flow_preview_uav)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateTexture2D(&flow_desc, &init_data, &m_velocity_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateShaderResourceView(m_velocity_texture, nullptr, &m_velocity_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateUnorderedAccessView(m_velocity_texture, nullptr, &m_velocity_uav)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateTexture2D(&flow_desc, &init_data, &m_sediment_texture)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateShaderResourceView(m_sediment_texture, nullptr, &m_sediment_srv)))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (FAILED(m_device->CreateUnorderedAccessView(m_sediment_texture, nullptr, &m_sediment_uav)))
+	if (!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_surface_texture,
+			&m_surface_srv,
+			&m_surface_uav) ||
+		!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_flow_texture,
+			&m_flow_srv,
+			&m_flow_uav) ||
+		!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_flow_preview_texture,
+			&m_flow_preview_srv,
+			&m_flow_preview_uav) ||
+		!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_velocity_texture,
+			&m_velocity_srv,
+			&m_velocity_uav) ||
+		!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_sediment_texture,
+			&m_sediment_srv,
+			&m_sediment_uav))
 	{
 		Finalize();
 		return false;
@@ -183,35 +148,30 @@ bool ComputeSurfaceWaterTexture::Initialize(ID3D11Device* device, ID3D11DeviceCo
 		return false;
 	}
 
-	m_current_index = 0;
 	return true;
 }
 
 void ComputeSurfaceWaterTexture::Finalize()
 {
 	SafeRelease(m_constant_buffer);
-	SafeRelease(m_flow_preview_uav);
-	SafeRelease(m_flow_preview_srv);
-	SafeRelease(m_flow_preview_texture);
-	SafeRelease(m_velocity_uav);
-	SafeRelease(m_velocity_srv);
-	SafeRelease(m_velocity_texture);
 	SafeRelease(m_sediment_uav);
 	SafeRelease(m_sediment_srv);
 	SafeRelease(m_sediment_texture);
+	SafeRelease(m_velocity_uav);
+	SafeRelease(m_velocity_srv);
+	SafeRelease(m_velocity_texture);
+	SafeRelease(m_flow_preview_uav);
+	SafeRelease(m_flow_preview_srv);
+	SafeRelease(m_flow_preview_texture);
 	SafeRelease(m_flow_uav);
 	SafeRelease(m_flow_srv);
 	SafeRelease(m_flow_texture);
-	for (int i = 0; i < 2; ++i)
-	{
-		SafeRelease(m_uavs[i]);
-		SafeRelease(m_srvs[i]);
-		SafeRelease(m_textures[i]);
-	}
+	SafeRelease(m_surface_uav);
+	SafeRelease(m_surface_srv);
+	SafeRelease(m_surface_texture);
 	SafeRelease(m_compute_shader);
 	m_device = nullptr;
 	m_context = nullptr;
-	m_current_index = 0;
 }
 
 void ComputeSurfaceWaterTexture::ClearState() const
@@ -222,10 +182,7 @@ void ComputeSurfaceWaterTexture::ClearState() const
 	}
 
 	const float clear_values[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	for (int i = 0; i < 2; ++i)
-	{
-		m_context->ClearUnorderedAccessViewFloat(m_uavs[i], clear_values);
-	}
+	m_context->ClearUnorderedAccessViewFloat(m_surface_uav, clear_values);
 	m_context->ClearUnorderedAccessViewFloat(m_flow_uav, clear_values);
 	m_context->ClearUnorderedAccessViewFloat(m_flow_preview_uav, clear_values);
 	m_context->ClearUnorderedAccessViewFloat(m_velocity_uav, clear_values);
@@ -233,41 +190,25 @@ void ComputeSurfaceWaterTexture::ClearState() const
 }
 
 void ComputeSurfaceWaterTexture::Update(
-	ID3D11ShaderResourceView* terrain_height_srv,
-	ID3D11ShaderResourceView* rain_map_srv,
+	ID3D11ShaderResourceView* water_surface_height_srv,
+	ID3D11ShaderResourceView* authoritative_flow_srv,
 	ID3D11ShaderResourceView* wind_field_srv,
-	float water_height,
-	const SurfaceWaterSimulationSettings& settings,
-	bool inject_water_pulse,
 	float time_seconds)
 {
-	if (!IsValid() || terrain_height_srv == nullptr || rain_map_srv == nullptr || wind_field_srv == nullptr)
+	if (!IsValid() ||
+		water_surface_height_srv == nullptr ||
+		authoritative_flow_srv == nullptr ||
+		wind_field_srv == nullptr)
 	{
 		return;
 	}
 
-	const unsigned int next_index = (m_current_index + 1u) % 2u;
 	const SurfaceWaterConstants constants = {
-		water_height,
-		settings.accumulation_rate,
-		settings.evaporation_rate,
-		settings.seepage_rate,
-		settings.basin_fade,
-		settings.downhill_flow_rate,
-		settings.flow_damping,
-		settings.max_outflow_fraction,
-		512.0f,
-		512.0f,
-		settings.debug_injection_x,
-		settings.debug_injection_z,
-		settings.debug_injection_radius,
-		settings.debug_injection_amount,
 		time_seconds,
+		512.0f,
+		512.0f,
 		kTextureWidth,
 		kTextureHeight,
-		settings.presentation_only ? 1u : 0u,
-		inject_water_pulse ? 1u : 0u,
-		0u,
 		0u,
 		0u,
 		0u
@@ -276,12 +217,12 @@ void ComputeSurfaceWaterTexture::Update(
 	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);
 
 	ID3D11ShaderResourceView* srvs[] = {
-		terrain_height_srv,
-		rain_map_srv,
+		water_surface_height_srv,
+		authoritative_flow_srv,
 		wind_field_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = {
-		m_uavs[next_index],
+		m_surface_uav,
 		m_flow_uav,
 		m_flow_preview_uav,
 		m_velocity_uav,
@@ -309,19 +250,14 @@ void ComputeSurfaceWaterTexture::Update(
 	m_context->CSSetUnorderedAccessViews(0, 5, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
-
-	m_current_index = next_index;
 }
 
 bool ComputeSurfaceWaterTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
-		   m_textures[0] != nullptr &&
-		   m_textures[1] != nullptr &&
-		   m_srvs[0] != nullptr &&
-		   m_srvs[1] != nullptr &&
-		   m_uavs[0] != nullptr &&
-		   m_uavs[1] != nullptr &&
+		   m_surface_texture != nullptr &&
+		   m_surface_srv != nullptr &&
+		   m_surface_uav != nullptr &&
 		   m_flow_texture != nullptr &&
 		   m_flow_srv != nullptr &&
 		   m_flow_uav != nullptr &&
@@ -339,7 +275,7 @@ bool ComputeSurfaceWaterTexture::IsValid() const
 
 Backend::RenderShaderResource ComputeSurfaceWaterTexture::Resource() const
 {
-	return Backend::RenderShaderResource(m_srvs[m_current_index]);
+	return Backend::RenderShaderResource(m_surface_srv);
 }
 
 Backend::RenderShaderResource ComputeSurfaceWaterTexture::FlowResource() const

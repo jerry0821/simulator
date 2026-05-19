@@ -14,7 +14,7 @@ cbuffer VISIBLE_WATER_CONSTANT_BUFFER : register(b0)
     uint padding2;
 };
 
-Texture2D<float2> g_TerrainHeight : register(t0);
+Texture2D<float4> g_TerrainHeight : register(t0);
 Texture2D g_SurfaceWaterFlow : register(t1);
 SamplerState g_SurfaceSampler : register(s0);
 RWTexture2D<float4> g_VisibleWater : register(u0);

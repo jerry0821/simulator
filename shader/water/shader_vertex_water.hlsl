@@ -13,7 +13,7 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
     float4x4 proj;
 };
 
-Texture2D<float2> water_surface_height_tex : register(t0);
+Texture2D<float4> water_surface_height_tex : register(t0);
 
 struct VS_IN
 {
@@ -40,9 +40,13 @@ VS_OUT main(VS_IN vi)
     const uint2 texel = uint2(
         min((uint)round(vi.uv.x * max((int)tex_width - 1, 0)), tex_width - 1),
         min((uint)round(vi.uv.y * max((int)tex_height - 1, 0)), tex_height - 1));
-    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0));
+    const float2 terrain_water_height = water_surface_height_tex.Load(int3(texel, 0)).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
-    posW.y = terrain_water_height.y + (water_depth > 0.0f ? 0.01f : 0.0f);
+    const float surface_lift =
+        water_depth > 0.0f
+            ? (0.008f + min(water_depth * 0.030f, 0.014f))
+            : 0.0f;
+    posW.y = terrain_water_height.y + surface_lift;
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

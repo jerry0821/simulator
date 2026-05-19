@@ -154,10 +154,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float flood_penalty = 1.0f - smoothstep(0.76f, 0.98f, max(surface_wetness, pooled_wetness * 0.92f));
     float erosion_mask = saturate(erosion_delta.r * 1.85f + max(-erosion_delta.b, 0.0f) * 0.65f);
     float wetness = saturate(
-        max(shoreline * (0.60f + shoreline_wetness * 0.40f), retained_moisture * 0.82f) * wetness_gain +
-        surface_wetness * 0.24f +
-        pooled_wetness * 0.18f +
-        climate.g * 0.10f);
+        max(shoreline * (0.68f + shoreline_wetness * 0.32f), retained_moisture * 0.55f) * wetness_gain +
+        surface_wetness * 0.18f +
+        pooled_wetness * 0.12f +
+        climate.g * 0.08f);
     float surface_grass_coverage =
         grass_flatness *
         shoreline *
@@ -187,7 +187,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float slope_amount = saturate(1.0f - normal_y);
     float surface_slope = smoothstep(1.0f - rock_slope_end, 1.0f - rock_slope_start, slope_amount);
     float beach_mask = saturate(max(shoreline_wetness, shoreline * (1.0f - pooled_wetness * 0.25f)));
-    float humidity = saturate(retained_moisture * 0.72f + wetness * 0.18f + climate.g * 0.10f);
+    float humidity = saturate(retained_moisture * 0.48f + wetness * 0.20f + climate.g * 0.08f);
     float roughness = saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
 
     g_TerrainSurfaceData[dispatch_thread_id.xy] = float4(surface_slope, beach_mask, humidity, roughness);

@@ -19,8 +19,9 @@ ID3D11Buffer* g_pVSConstantBuffer2 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer0 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer1 = nullptr;
 ID3D11ShaderResourceView* g_pWaterSurfaceHeightSRV = nullptr;
-ID3D11ShaderResourceView* g_pFlowFieldSRV = nullptr;
-ID3D11ShaderResourceView* g_pWaterInteractionSRV = nullptr;
+ID3D11ShaderResourceView* g_pWaterVelocitySRV = nullptr;
+ID3D11ShaderResourceView* g_pWaterSedimentSRV = nullptr;
+ID3D11ShaderResourceView* g_pTerrainNormalSRV = nullptr;
 ID3D11ShaderResourceView* g_pSceneDepthSRV = nullptr;
 
 struct WaterSurfaceSettings
@@ -29,10 +30,6 @@ struct WaterSurfaceSettings
 	float fresnel_power = 4.5f;
 	float highlight_strength = 0.28f;
 	float time_seconds = 0.0f;
-	float surface_center_x = 0.0f;
-	float surface_center_z = 0.0f;
-	float surface_size_x = 512.0f;
-	float surface_size_z = 512.0f;
 	float padding0 = 0.0f;
 	float padding1 = 0.0f;
 };
@@ -139,8 +136,9 @@ void ShaderWater_Finalize()
 	SAFE_RELEASE(g_pInputLayout);
 	SAFE_RELEASE(g_pVertexShader);
 	g_pWaterSurfaceHeightSRV = nullptr;
-	g_pFlowFieldSRV = nullptr;
-	g_pWaterInteractionSRV = nullptr;
+	g_pWaterVelocitySRV = nullptr;
+	g_pWaterSedimentSRV = nullptr;
+	g_pTerrainNormalSRV = nullptr;
 	g_pSceneDepthSRV = nullptr;
 }
 
@@ -178,19 +176,11 @@ void ShaderWater_SetCameraPosition(const XMFLOAT3& camera_position)
 
 void ShaderWater_SetSurfaceSettings(float fresnel_power,
 									float highlight_strength,
-									float time_seconds,
-									float surface_center_x,
-									float surface_center_z,
-									float surface_size_x,
-									float surface_size_z)
+									float time_seconds)
 {
 	g_surface_settings.fresnel_power = fresnel_power;
 	g_surface_settings.highlight_strength = highlight_strength;
 	g_surface_settings.time_seconds = time_seconds;
-	g_surface_settings.surface_center_x = surface_center_x;
-	g_surface_settings.surface_center_z = surface_center_z;
-	g_surface_settings.surface_size_x = surface_size_x;
-	g_surface_settings.surface_size_z = surface_size_z;
 	Direct3D_GetContext()->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &g_surface_settings, 0, 0);
 }
 
@@ -199,19 +189,19 @@ void ShaderWater_SetWaterSurfaceHeight(ID3D11ShaderResourceView* water_surface_h
 	g_pWaterSurfaceHeightSRV = water_surface_height_srv;
 }
 
-void ShaderWater_SetSurfaceWater(ID3D11ShaderResourceView* surface_water_srv)
+void ShaderWater_SetWaterVelocity(ID3D11ShaderResourceView* water_velocity_srv)
 {
-	(void)surface_water_srv;
+	g_pWaterVelocitySRV = water_velocity_srv;
 }
 
-void ShaderWater_SetFlowField(ID3D11ShaderResourceView* flow_field_srv)
+void ShaderWater_SetWaterSediment(ID3D11ShaderResourceView* water_sediment_srv)
 {
-	g_pFlowFieldSRV = flow_field_srv;
+	g_pWaterSedimentSRV = water_sediment_srv;
 }
 
-void ShaderWater_SetWaterInteraction(ID3D11ShaderResourceView* water_interaction_srv)
+void ShaderWater_SetTerrainNormal(ID3D11ShaderResourceView* terrain_normal_srv)
 {
-	g_pWaterInteractionSRV = water_interaction_srv;
+	g_pTerrainNormalSRV = terrain_normal_srv;
 }
 
 void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv)
@@ -231,16 +221,22 @@ void ShaderWater_Begin()
 	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &g_pPSConstantBuffer1);
 	ID3D11ShaderResourceView* vs_srvs[1] = { g_pWaterSurfaceHeightSRV };
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, vs_srvs);
-	ID3D11ShaderResourceView* ps_srvs[4] = { g_pWaterSurfaceHeightSRV, g_pFlowFieldSRV, g_pSceneDepthSRV, g_pWaterInteractionSRV };
-	Direct3D_GetContext()->PSSetShaderResources(0, 4, ps_srvs);
+	ID3D11ShaderResourceView* ps_srvs[5] = {
+		g_pWaterSurfaceHeightSRV,
+		g_pWaterVelocitySRV,
+		g_pWaterSedimentSRV,
+		g_pTerrainNormalSRV,
+		g_pSceneDepthSRV
+	};
+	Direct3D_GetContext()->PSSetShaderResources(0, 5, ps_srvs);
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 }
 
 void ShaderWater_End()
 {
-	ID3D11ShaderResourceView* null_srvs[4] = { nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_ps_buffer = nullptr;
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, null_srvs);
-	Direct3D_GetContext()->PSSetShaderResources(0, 4, null_srvs);
+	Direct3D_GetContext()->PSSetShaderResources(0, 5, null_srvs);
 	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &null_ps_buffer);
 }
