@@ -98,12 +98,14 @@ VS_OUT main(VS_IN vi)
     VS_OUT vo;
 
     float3 tempWorldPos = mul(float4(vi.posL.xyz, 1.0f), world).xyz;
-    float2 field_size = float2(512.0f, 512.0f); // kFieldMeshWidth * kFieldMeshHCount
-    float2 wrappedUV = frac((tempWorldPos.xz + field_size * 0.5f) / field_size);
+    // AfterglowRender-style: clamp world pos to [−1024, 1024] domain, map to [0,1] UV
+    static const float kWorldSideLength = 2048.0f;
+    static const float kWorldCenterOffset = -1024.0f; // = -worldSideLength * 0.5
+    float2 worldUV = clamp((tempWorldPos.xz - kWorldCenterOffset) / kWorldSideLength, 0.0f, 1.0f);
 
     float4 displacedPosL = vi.posL;
-    displacedPosL.y = SampleTerrainHeight(wrappedUV);
-    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, wrappedUV, 0.0f);
+    displacedPosL.y = SampleTerrainHeight(worldUV);
+    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, worldUV, 0.0f);
     float3 displacedNormalL = normalize(encodedNormal.xyz);
     if (dot(displacedNormalL, displacedNormalL) < 1.0e-4f)
     {
@@ -117,7 +119,7 @@ VS_OUT main(VS_IN vi)
     vo.normalW = mul(float4(displacedNormalL, 0.0f), world);
     vo.posW = mul(displacedPosL, world);
     vo.blend = vi.blend;
-    vo.uv = wrappedUV;
+    vo.uv = worldUV;
     vo.shadowPos = mul(vo.posW, lightViewProj);
 
     const float climateMin = -640.0f;

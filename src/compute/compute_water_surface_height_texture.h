@@ -164,6 +164,7 @@ private:
 	mutable unsigned int m_current_index = 0u;
 	mutable bool m_has_bootstrapped_state = false;
 	mutable bool m_cpu_height_data_ready = false;
+	mutable float m_last_readback_time = -999.0f;
 	mutable std::vector<float> m_terrain_height_samples{};
 	mutable std::vector<float> m_water_height_samples{};
 };

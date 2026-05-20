@@ -13,9 +13,9 @@
 #include <fstream>
 #include <vector>
 
-#define NOMINMAX
 #include <windows.h>
 #include "camera.h"
+#include "compute_texture_dimensions.h"
 #include <d3d11.h>
 #include <DirectXMath.h>
 
@@ -462,8 +462,8 @@ bool InitializeTerrainHeightCompute()
 	}
 
 	if (!CreateFloatTexture(
-			static_cast<unsigned int>(kFieldMeshHVertexCount),
-			static_cast<unsigned int>(kFieldMeshVVertexCount),
+			ComputeTextureDimensions::kHydrologyResolution,
+			ComputeTextureDimensions::kHydrologyResolution,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS,
 			nullptr,
 			&g_height_texture,
@@ -476,8 +476,8 @@ bool InitializeTerrainHeightCompute()
 	}
 
 	D3D11_TEXTURE2D_DESC readback_desc{};
-	readback_desc.Width = static_cast<unsigned int>(kFieldMeshHVertexCount);
-	readback_desc.Height = static_cast<unsigned int>(kFieldMeshVVertexCount);
+	readback_desc.Width = ComputeTextureDimensions::kHydrologyResolution;
+	readback_desc.Height = ComputeTextureDimensions::kHydrologyResolution;
 	readback_desc.MipLevels = 1;
 	readback_desc.ArraySize = 1;
 	readback_desc.Format = DXGI_FORMAT_R32_FLOAT;
@@ -524,8 +524,8 @@ bool UpdateTerrainHeightTexture()
 		return false;
 	}
 
-	const float field_width = kFieldMeshHCount * kFieldMeshWidth;
-	const float field_depth = kFieldMeshVCount * kFieldMeshDepth;
+	const float field_width = ComputeTextureDimensions::kWorldSideLength;
+	const float field_depth = ComputeTextureDimensions::kWorldSideLength;
 	const TerrainHeightConstants constants = {
 		g_terrain_settings.base_frequency,
 		g_terrain_settings.base_height,
@@ -540,15 +540,19 @@ bool UpdateTerrainHeightTexture()
 		g_terrain_settings.lake_depth,
 		field_width,
 		field_depth,
-		kFieldMeshWidth,
-		kFieldMeshDepth,
+		ComputeTextureDimensions::kDataInterval,
+		ComputeTextureDimensions::kDataInterval,
 		g_has_height_map ? 1u : 0u,
-		static_cast<unsigned int>(kFieldMeshHVertexCount),
-		static_cast<unsigned int>(kFieldMeshVVertexCount),
+		ComputeTextureDimensions::kHydrologyResolution,
+		ComputeTextureDimensions::kHydrologyResolution,
 		0.0f,
 		0.0f
 	};
 	g_context->UpdateSubresource(g_height_constant_buffer, 0, nullptr, &constants, 0, 0);
+
+	// The authored height map is only a terrain-generation seed.
+	// Once this pass writes the base heightfield, all later systems use
+	// the generated terrain texture rather than the original imported map.
 
 	ID3D11ShaderResourceView* null_vs_srv = nullptr;
 	g_context->VSSetShaderResources(0, 1, &null_vs_srv);
@@ -564,8 +568,8 @@ bool UpdateTerrainHeightTexture()
 	g_context->CSSetSamplers(0, 1, samplers);
 	g_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	g_context->Dispatch(
-		(kFieldMeshHVertexCount + 7) / 8,
-		(kFieldMeshVVertexCount + 7) / 8,
+		(ComputeTextureDimensions::kHydrologyResolution + 7) / 8,
+		(ComputeTextureDimensions::kHydrologyResolution + 7) / 8,
 		1);
 
 	ID3D11ShaderResourceView* null_srvs[] = { nullptr };
@@ -586,15 +590,17 @@ bool UpdateTerrainHeightTexture()
 		return false;
 	}
 
-	g_original_heights.assign(static_cast<size_t>(kNumVertex), 0.0f);
-	for (int row = 0; row < kFieldMeshVVertexCount; ++row)
+	g_original_heights.assign(
+		static_cast<size_t>(ComputeTextureDimensions::kHydrologyResolution * ComputeTextureDimensions::kHydrologyResolution),
+		0.0f);
+	for (unsigned int row = 0; row < ComputeTextureDimensions::kHydrologyResolution; ++row)
 	{
 		const float* source_row = reinterpret_cast<const float*>(
 			static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * row);
 		std::memcpy(
-			g_original_heights.data() + static_cast<size_t>(row) * kFieldMeshHVertexCount,
+			g_original_heights.data() + static_cast<size_t>(row) * ComputeTextureDimensions::kHydrologyResolution,
 			source_row,
-			sizeof(float) * kFieldMeshHVertexCount);
+			sizeof(float) * ComputeTextureDimensions::kHydrologyResolution);
 	}
 	g_context->Unmap(g_height_readback_texture, 0);
 	return true;
@@ -1020,14 +1026,13 @@ void MeshFieldRenderer::Draw()
 	g_context->IASetIndexBuffer(g_index_buffer, DXGI_FORMAT_R32_UINT, 0);
 	g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	const float offset_x = kFieldMeshHCount * kFieldMeshWidth * 0.5f;
-	const float offset_z = kFieldMeshVCount * kFieldMeshDepth * 0.5f;
-
+	// Clipmap: snap mesh origin to camera, centered on the mesh half-size
+	const float half_mesh_x = kFieldMeshHCount * kFieldMeshWidth * 0.5f;
+	const float half_mesh_z = kFieldMeshVCount * kFieldMeshDepth * 0.5f;
 	const DirectX::XMFLOAT3& cam_pos = Camera_GetPosition();
 	const float snapped_x = std::floor(cam_pos.x / kFieldMeshWidth) * kFieldMeshWidth;
 	const float snapped_z = std::floor(cam_pos.z / kFieldMeshDepth) * kFieldMeshDepth;
-
-	ShaderField_SetWorldMatrix(XMMatrixTranslation(snapped_x - offset_x, 0.0f, snapped_z - offset_z));
+	ShaderField_SetWorldMatrix(XMMatrixTranslation(snapped_x - half_mesh_x, 0.0f, snapped_z - half_mesh_z));
 	ShaderField_SetMaterialColor({1.0f, 1.0f, 1.0f, 1.0f});
 
 	g_context->DrawIndexed(static_cast<UINT>(g_mesh_indices.size()), 0, 0);
@@ -1048,39 +1053,44 @@ void MeshFieldRenderer::DrawMeshOnly()
 
 float MeshFieldRenderer::GetHeight(float x, float z)
 {
-	if (g_is_flat_mesh_field || g_original_heights.size() != static_cast<size_t>(kNumVertex))
+	if (g_is_flat_mesh_field || g_original_heights.empty())
 	{
 		return 0.0f;
 	}
 
-	const float width = kFieldMeshHCount * kFieldMeshWidth;
-	const float depth = kFieldMeshVCount * kFieldMeshDepth;
-
-	float local_x = std::fmod(x + width * 0.5f, width);
-	if (local_x < 0.0f) local_x += width;
-	float local_z = std::fmod(z + depth * 0.5f, depth);
-	if (local_z < 0.0f) local_z += depth;
-
-	const int grid_x = static_cast<int>(local_x / kFieldMeshWidth);
-	const int grid_z = static_cast<int>(local_z / kFieldMeshDepth);
-
-	if (grid_x < 0 || grid_x >= kFieldMeshHCount || grid_z < 0 || grid_z >= kFieldMeshVCount)
+	// World-space clamp: data covers kWorldSideLength x kWorldSideLength centered at origin
+	const float world_half = ComputeTextureDimensions::kWorldSideLength * 0.5f;
+	if (x < -world_half || x > world_half || z < -world_half || z > world_half)
 	{
 		return 0.0f;
 	}
 
-	const int idx_tl = grid_x + kFieldMeshHVertexCount * grid_z;
-	const int idx_tr = (grid_x + 1) + kFieldMeshHVertexCount * grid_z;
-	const int idx_bl = grid_x + kFieldMeshHVertexCount * (grid_z + 1);
-	const int idx_br = (grid_x + 1) + kFieldMeshHVertexCount * (grid_z + 1);
+	// Map world pos to 1024x1024 hydrology data array
+	const float local_x = std::clamp(x + world_half, 0.0f, ComputeTextureDimensions::kWorldSideLength - 1e-4f);
+	const float local_z = std::clamp(z + world_half, 0.0f, ComputeTextureDimensions::kWorldSideLength - 1e-4f);
+
+	const float cell_size = ComputeTextureDimensions::kDataInterval;
+	const int grid_x = static_cast<int>(local_x / cell_size);
+	const int grid_z = static_cast<int>(local_z / cell_size);
+
+	const int res = static_cast<int>(ComputeTextureDimensions::kHydrologyResolution);
+	if (grid_x < 0 || grid_x >= res - 1 || grid_z < 0 || grid_z >= res - 1)
+	{
+		return 0.0f;
+	}
+
+	const int idx_tl = grid_x + res * grid_z;
+	const int idx_tr = (grid_x + 1) + res * grid_z;
+	const int idx_bl = grid_x + res * (grid_z + 1);
+	const int idx_br = (grid_x + 1) + res * (grid_z + 1);
 
 	const float y_tl = g_original_heights[static_cast<size_t>(idx_tl)];
 	const float y_tr = g_original_heights[static_cast<size_t>(idx_tr)];
 	const float y_bl = g_original_heights[static_cast<size_t>(idx_bl)];
 	const float y_br = g_original_heights[static_cast<size_t>(idx_br)];
 
-	const float ratio_x = (local_x - static_cast<float>(grid_x) * kFieldMeshWidth) / kFieldMeshWidth;
-	const float ratio_z = (local_z - static_cast<float>(grid_z) * kFieldMeshDepth) / kFieldMeshDepth;
+	const float ratio_x = (local_x - static_cast<float>(grid_x) * cell_size) / cell_size;
+	const float ratio_z = (local_z - static_cast<float>(grid_z) * cell_size) / cell_size;
 
 	if (ratio_x + ratio_z <= 1.0f)
 	{
@@ -1119,12 +1129,14 @@ float MeshFieldRenderer::GetSuggestedWaterHeight()
 
 float MeshFieldRenderer::FieldWidth()
 {
-	return kFieldMeshHCount * kFieldMeshWidth;
+	// Returns the world simulation domain size (not the render mesh window size)
+	return ComputeTextureDimensions::kWorldSideLength;
 }
 
 float MeshFieldRenderer::FieldDepth()
 {
-	return kFieldMeshVCount * kFieldMeshDepth;
+	// Returns the world simulation domain size (not the render mesh window size)
+	return ComputeTextureDimensions::kWorldSideLength;
 }
 
 Backend::RenderShaderResource MeshFieldRenderer::HeightResource()

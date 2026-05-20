@@ -227,6 +227,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 void ComputeWaterSurfaceHeightTexture::Finalize()
 {
 	m_cpu_height_data_ready = false;
+	m_last_readback_time = -999.0f;
 	m_terrain_height_samples.clear();
 	m_water_height_samples.clear();
 	SafeRelease(m_constant_buffer);
@@ -290,6 +291,7 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
 	m_cpu_height_data_ready = false;
+	m_last_readback_time = -999.0f;
 	m_terrain_height_samples.clear();
 	m_water_height_samples.clear();
 }
@@ -531,6 +533,12 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
+
+	if (time_seconds - m_last_readback_time < 2.0f)
+	{
+		return;
+	}
+	m_last_readback_time = time_seconds;
 
 	if (m_readback_texture == nullptr)
 	{

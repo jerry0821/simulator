@@ -45,8 +45,10 @@ VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    float2 field_size = float2(512.0f, 512.0f);
-    float2 worldUV = frac((posW.xz + field_size * 0.5f) / field_size);
+    // AfterglowRender-style: absolute world-pos clamp sampling
+    static const float kWorldSideLength = 2048.0f;
+    static const float kWorldCenterOffset = -1024.0f;
+    float2 worldUV = clamp((posW.xz - kWorldCenterOffset) / kWorldSideLength, 0.0f, 1.0f);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
@@ -58,6 +60,6 @@ VS_OUT main(VS_IN vi)
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;
-    vo.uv = vi.uv;
+    vo.uv = worldUV;
     return vo;
 }

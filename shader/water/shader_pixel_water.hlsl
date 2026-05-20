@@ -55,8 +55,10 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     water_surface_height_tex.GetDimensions(tex_width, tex_height);
     const float2 texel_size = 1.0f / max(float2(tex_width, tex_height), 1.0f.xx);
 
-    float2 field_size = float2(512.0f, 512.0f);
-    float2 worldUV = frac((ps_in.posW.xz + field_size * 0.5f) / field_size);
+    // AfterglowRender-style: absolute world-pos clamp sampling
+    static const float kWorldSideLength = 2048.0f;
+    static const float kWorldCenterOffset = -1024.0f;
+    float2 worldUV = clamp((ps_in.posW.xz - kWorldCenterOffset) / kWorldSideLength, 0.0f, 1.0f);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float height_right = water_surface_height_tex.SampleLevel(samp, sample_uv + float2(texel_size.x, 0.0f), 0.0f).y;

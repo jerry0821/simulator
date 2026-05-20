@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 
 #include "cube.h"
+#include "compute_texture_dimensions.h"
 #include "direct3d.h"
 #include "render_backend_dx11.h"
 #include "render_frame_context.h"
@@ -143,13 +144,14 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
-	const float snapped_x = std::floor(frame_context.globals.camera_position.x / 2.0f) * 2.0f;
-	const float snapped_z = std::floor(frame_context.globals.camera_position.z / 2.0f) * 2.0f;
-
+	// Water quad covers the full 2048m world domain, fixed at world origin.
+	// UV sampling uses absolute world-pos clamp (AfterglowRender-style).
 	const XMMATRIX water_world =
-		XMMatrixScaling(512.0f, 512.0f, 1.0f) *
+		XMMatrixScaling(ComputeTextureDimensions::kWorldSideLength,
+		                ComputeTextureDimensions::kWorldSideLength,
+		                1.0f) *
 		XMMatrixRotationX(XM_PIDIV2) *
-		XMMatrixTranslation(snapped_x, water_desc.height, snapped_z);
+		XMMatrixTranslation(0.0f, water_desc.height, 0.0f);
 	XMFLOAT4 base_color = water_desc.base_color;
 	base_color.x *= 0.92f;
 	base_color.y *= 0.95f;

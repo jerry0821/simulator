@@ -26,6 +26,25 @@ Texture2D g_AuthoredHeightMap : register(t0);
 SamplerState g_TerrainSampler : register(s0);
 RWTexture2D<float> g_TerrainHeight : register(u0);
 
+float2 WorldToFieldUv(float2 worldXZ)
+{
+    return saturate(float2(
+        worldXZ.x / max(g_FieldWidth, 1.0e-4f) + 0.5f,
+        worldXZ.y / max(g_FieldDepth, 1.0e-4f) + 0.5f));
+}
+
+float SampleAuthoredHeight01(float2 worldXZ)
+{
+    float authoredHeight = 0.0f;
+    if (g_HasAuthoredHeightMap == 0u)
+    {
+        return authoredHeight;
+    }
+
+    authoredHeight = g_AuthoredHeightMap.SampleLevel(g_TerrainSampler, WorldToFieldUv(worldXZ), 0.0f).r;
+    return authoredHeight;
+}
+
 float Hash21(float2 p)
 {
     float value = sin(dot(p, float2(127.1f, 311.7f))) * 43758.5453f;
@@ -126,6 +145,11 @@ float2 DomainWarp(float2 p, float frequency, float amplitude, float2 offset)
 
 float GenerateTerrainHeight(float2 worldXZ)
 {
+    const float authoredHeight01 = SampleAuthoredHeight01(worldXZ);
+    const float authoredMacro = Smoothstep01(authoredHeight01);
+    const float authoredMassif = pow(saturate(authoredMacro), 1.75f);
+    const float authoredLowland = pow(saturate(1.0f - authoredMacro), 1.35f);
+
     float nx = worldXZ.x * g_BaseFrequency;
     float nz = worldXZ.y * g_BaseFrequency;
     float2 coarseWarp = DomainWarp(float2(nx, nz), 0.65f, 1.35f, float2(13.0f, -17.0f));
@@ -166,6 +190,10 @@ float GenerateTerrainHeight(float2 worldXZ)
             (worldXZ.x - rangeCenterB.x) / 268.0f,
             (worldXZ.y - rangeCenterB.y) / 214.0f)));
     float globalTrend = max(pow(rangeA, 2.35f), pow(rangeB, 2.85f));
+    if (g_HasAuthoredHeightMap != 0u)
+    {
+        globalTrend = lerp(globalTrend, max(globalTrend, authoredMassif), 0.88f);
+    }
     float massifMacro = globalTrend;
 
     float rollingBase = Fbm(worldXZ * 0.0045f + float2(7.0f, -5.0f), 4);
@@ -233,6 +261,10 @@ float GenerateTerrainHeight(float2 worldXZ)
     float lowlandNoise = Fbm(worldXZ * 0.0068f + float2(-33.0f, 15.0f), 4) - 0.5f;
     float valleyCarveMask = saturate(max(trunkValley, branchValley * 0.62f) * (1.0f - saturate(heroPeakCore * 0.85f + ridgeMask * 0.28f)));
     float wetlandMask = saturate((1.0f - massifMacro) * 0.95f + trunkValley * 0.38f - ridgeMask * 0.24f);
+    if (g_HasAuthoredHeightMap != 0u)
+    {
+        wetlandMask = saturate(max(wetlandMask, authoredLowland * 0.55f) - authoredMassif * 0.10f);
+    }
 
     float height = (rollingBase - 0.5f) * (g_BaseHeight * 0.10f);
     height += macroWarpDetail * g_DetailHeight * 0.18f;
@@ -253,6 +285,16 @@ float GenerateTerrainHeight(float2 worldXZ)
     height += lowlandNoise * g_DetailHeight * 0.32f * wetlandMask;
     height -= wetlandMask * (g_BaseHeight * 0.10f);
     height += massifMacro * g_ContinentHeight * 0.90f;
+
+    if (g_HasAuthoredHeightMap != 0u)
+    {
+        // Treat the authored map as a low-frequency terrain seed.
+        // Procedural noise still supplies most of the local structure.
+        height += (authoredMacro - 0.5f) * (g_BaseHeight * 1.10f);
+        height += authoredMassif * (g_ContinentHeight * 1.15f + g_RidgeHeight * 0.90f);
+        height -= authoredLowland * (g_BaseHeight * 0.18f);
+        height += (fractalSimplex - 0.5f) * g_DetailHeight * lerp(0.18f, 0.50f, authoredMacro);
+    }
 
     return height;
 }
