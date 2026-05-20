@@ -13,6 +13,9 @@
 #include <fstream>
 #include <vector>
 
+#define NOMINMAX
+#include <windows.h>
+#include "camera.h"
 #include <d3d11.h>
 #include <DirectXMath.h>
 
@@ -1019,7 +1022,12 @@ void MeshFieldRenderer::Draw()
 
 	const float offset_x = kFieldMeshHCount * kFieldMeshWidth * 0.5f;
 	const float offset_z = kFieldMeshVCount * kFieldMeshDepth * 0.5f;
-	ShaderField_SetWorldMatrix(XMMatrixTranslation(-offset_x, 0.0f, -offset_z));
+
+	const DirectX::XMFLOAT3& cam_pos = Camera_GetPosition();
+	const float snapped_x = std::floor(cam_pos.x / kFieldMeshWidth) * kFieldMeshWidth;
+	const float snapped_z = std::floor(cam_pos.z / kFieldMeshDepth) * kFieldMeshDepth;
+
+	ShaderField_SetWorldMatrix(XMMatrixTranslation(snapped_x - offset_x, 0.0f, snapped_z - offset_z));
 	ShaderField_SetMaterialColor({1.0f, 1.0f, 1.0f, 1.0f});
 
 	g_context->DrawIndexed(static_cast<UINT>(g_mesh_indices.size()), 0, 0);
@@ -1047,8 +1055,11 @@ float MeshFieldRenderer::GetHeight(float x, float z)
 
 	const float width = kFieldMeshHCount * kFieldMeshWidth;
 	const float depth = kFieldMeshVCount * kFieldMeshDepth;
-	const float local_x = x + (width * 0.5f);
-	const float local_z = z + (depth * 0.5f);
+
+	float local_x = std::fmod(x + width * 0.5f, width);
+	if (local_x < 0.0f) local_x += width;
+	float local_z = std::fmod(z + depth * 0.5f, depth);
+	if (local_z < 0.0f) local_z += depth;
 
 	const int grid_x = static_cast<int>(local_x / kFieldMeshWidth);
 	const int grid_z = static_cast<int>(local_z / kFieldMeshDepth);

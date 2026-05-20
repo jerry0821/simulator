@@ -143,10 +143,13 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
+	const float snapped_x = std::floor(frame_context.globals.camera_position.x / 2.0f) * 2.0f;
+	const float snapped_z = std::floor(frame_context.globals.camera_position.z / 2.0f) * 2.0f;
+
 	const XMMATRIX water_world =
-		XMMatrixScaling(water_desc.size_x, water_desc.size_z, 1.0f) *
+		XMMatrixScaling(512.0f, 512.0f, 1.0f) *
 		XMMatrixRotationX(XM_PIDIV2) *
-		XMMatrixTranslation(water_desc.center_x, water_desc.height, water_desc.center_z);
+		XMMatrixTranslation(snapped_x, water_desc.height, snapped_z);
 	XMFLOAT4 base_color = water_desc.base_color;
 	base_color.x *= 0.92f;
 	base_color.y *= 0.95f;

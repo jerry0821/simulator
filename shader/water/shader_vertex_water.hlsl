@@ -45,7 +45,9 @@ VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    const float2 sample_uv = ComputeWaterSampleUv(saturate(vi.uv));
+    float2 field_size = float2(512.0f, 512.0f);
+    float2 worldUV = frac((posW.xz + field_size * 0.5f) / field_size);
+    const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     const float surface_lift =

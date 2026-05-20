@@ -97,9 +97,13 @@ VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
 
+    float3 tempWorldPos = mul(float4(vi.posL.xyz, 1.0f), world).xyz;
+    float2 field_size = float2(512.0f, 512.0f); // kFieldMeshWidth * kFieldMeshHCount
+    float2 wrappedUV = frac((tempWorldPos.xz + field_size * 0.5f) / field_size);
+
     float4 displacedPosL = vi.posL;
-    displacedPosL.y = SampleTerrainHeight(vi.uv);
-    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, saturate(vi.uv), 0.0f);
+    displacedPosL.y = SampleTerrainHeight(wrappedUV);
+    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, wrappedUV, 0.0f);
     float3 displacedNormalL = normalize(encodedNormal.xyz);
     if (dot(displacedNormalL, displacedNormalL) < 1.0e-4f)
     {
@@ -113,7 +117,7 @@ VS_OUT main(VS_IN vi)
     vo.normalW = mul(float4(displacedNormalL, 0.0f), world);
     vo.posW = mul(displacedPosL, world);
     vo.blend = vi.blend;
-    vo.uv = vi.uv;
+    vo.uv = wrappedUV;
     vo.shadowPos = mul(vo.posW, lightViewProj);
 
     const float climateMin = -640.0f;
