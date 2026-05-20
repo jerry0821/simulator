@@ -211,8 +211,8 @@ ID3D11ShaderResourceView* PostProcessPass::RenderBloom(
 		return nullptr;
 	}
 
-	const unsigned int width = Direct3D_GetBackBufferWidth();
-	const unsigned int height = Direct3D_GetBackBufferHeight();
+	const unsigned int width = std::max(Direct3D_GetBackBufferWidth() / 2u, 1u);
+	const unsigned int height = std::max(Direct3D_GetBackBufferHeight() / 2u, 1u);
 	if (!EnsureBloomShaders() || !EnsureBloomTargets(width, height))
 	{
 		return nullptr;

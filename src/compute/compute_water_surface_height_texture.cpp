@@ -14,6 +14,8 @@
 
 namespace
 {
+constexpr float kCpuReadbackIntervalSeconds = 0.5f;
+
 template <typename T>
 void SafeRelease(T*& resource)
 {
@@ -220,6 +222,8 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
+	m_cpu_readback_pending = false;
+	m_last_cpu_readback_request_time = -1000.0f;
 
 	return true;
 }
@@ -266,6 +270,8 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 	m_context = nullptr;
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
+	m_cpu_readback_pending = false;
+	m_last_cpu_readback_request_time = -1000.0f;
 }
 
 void ComputeWaterSurfaceHeightTexture::ResetState()
@@ -289,7 +295,9 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 	m_context->ClearUnorderedAccessViewFloat(m_erosion_delta_uav, clear_values);
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
+	m_cpu_readback_pending = false;
 	m_cpu_height_data_ready = false;
+	m_last_cpu_readback_request_time = -1000.0f;
 	m_terrain_height_samples.clear();
 	m_water_height_samples.clear();
 }
@@ -392,43 +400,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	// CPU readback is only for debug/range inspection and must not gate render usage.
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
-
-	if (m_readback_texture == nullptr)
-	{
-		m_cpu_height_data_ready = false;
-		return;
-	}
-
-	m_context->CopyResource(m_readback_texture, m_textures[next_index]);
-	m_context->Flush();
-
-	D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-	const HRESULT map_result = m_context->Map(m_readback_texture, 0, D3D11_MAP_READ, 0, &mapped_resource);
-	if (FAILED(map_result))
-	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Update(): staging readback Map failed -> 0x"
-				  << std::hex << static_cast<unsigned long>(map_result) << std::dec << std::endl;
-		m_cpu_height_data_ready = false;
-		return;
-	}
-
-	const size_t sample_count = static_cast<size_t>(kTextureWidth) * static_cast<size_t>(kTextureHeight);
-	m_terrain_height_samples.assign(sample_count, 0.0f);
-	m_water_height_samples.assign(sample_count, 0.0f);
-	for (unsigned int row = 0; row < kTextureHeight; ++row)
-	{
-		const float* source_row = reinterpret_cast<const float*>(
-			static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * row);
-		for (unsigned int col = 0; col < kTextureWidth; ++col)
-		{
-			const size_t sample_index = static_cast<size_t>(row) * kTextureWidth + col;
-			m_terrain_height_samples[sample_index] = source_row[col * 4 + 0];
-			m_water_height_samples[sample_index] = source_row[col * 4 + 1];
-		}
-	}
-
-	m_context->Unmap(m_readback_texture, 0);
-	m_cpu_height_data_ready = true;
+	UpdateCpuReadback(0.0f);
 }
 
 void ComputeWaterSurfaceHeightTexture::Update(
@@ -531,29 +503,64 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
+	UpdateCpuReadback(time_seconds);
+}
 
+void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) const
+{
 	if (m_readback_texture == nullptr)
 	{
 		m_cpu_height_data_ready = false;
+		m_cpu_readback_pending = false;
 		return;
 	}
 
-	m_context->CopyResource(m_readback_texture, m_textures[next_index]);
-	m_context->Flush();
-
-	D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-	const HRESULT map_result = m_context->Map(m_readback_texture, 0, D3D11_MAP_READ, 0, &mapped_resource);
-	if (FAILED(map_result))
+	if (m_cpu_readback_pending)
 	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Update(): staging readback Map failed -> 0x"
-				  << std::hex << static_cast<unsigned long>(map_result) << std::dec << std::endl;
-		m_cpu_height_data_ready = false;
+		D3D11_MAPPED_SUBRESOURCE mapped_resource{};
+		const HRESULT map_result = m_context->Map(
+			m_readback_texture,
+			0,
+			D3D11_MAP_READ,
+			D3D11_MAP_FLAG_DO_NOT_WAIT,
+			&mapped_resource);
+		if (map_result == DXGI_ERROR_WAS_STILL_DRAWING)
+		{
+			return;
+		}
+
+		if (FAILED(map_result))
+		{
+			hal::dout << "ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(): staging readback Map failed -> 0x"
+					  << std::hex << static_cast<unsigned long>(map_result) << std::dec << std::endl;
+			m_cpu_readback_pending = false;
+			m_cpu_height_data_ready = false;
+			return;
+		}
+
+		ConsumeMappedReadback(mapped_resource);
+		m_context->Unmap(m_readback_texture, 0);
+		m_cpu_readback_pending = false;
+		m_cpu_height_data_ready = true;
 		return;
 	}
 
+	if ((time_seconds - m_last_cpu_readback_request_time) < kCpuReadbackIntervalSeconds)
+	{
+		return;
+	}
+
+	m_context->CopyResource(m_readback_texture, m_textures[m_current_index]);
+	m_last_cpu_readback_request_time = time_seconds;
+	m_cpu_readback_pending = true;
+}
+
+void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
+	const D3D11_MAPPED_SUBRESOURCE& mapped_resource) const
+{
 	const size_t sample_count = static_cast<size_t>(kTextureWidth) * static_cast<size_t>(kTextureHeight);
-	m_terrain_height_samples.assign(sample_count, 0.0f);
-	m_water_height_samples.assign(sample_count, 0.0f);
+	m_terrain_height_samples.resize(sample_count);
+	m_water_height_samples.resize(sample_count);
 	for (unsigned int row = 0; row < kTextureHeight; ++row)
 	{
 		const float* source_row = reinterpret_cast<const float*>(
@@ -565,9 +572,6 @@ void ComputeWaterSurfaceHeightTexture::Update(
 			m_water_height_samples[sample_index] = source_row[col * 4 + 1];
 		}
 	}
-
-	m_context->Unmap(m_readback_texture, 0);
-	m_cpu_height_data_ready = true;
 }
 
 bool ComputeWaterSurfaceHeightTexture::IsValid() const

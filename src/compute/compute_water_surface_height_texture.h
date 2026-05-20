@@ -1,6 +1,7 @@
 #ifndef COMPUTE_WATER_SURFACE_HEIGHT_TEXTURE_H
 #define COMPUTE_WATER_SURFACE_HEIGHT_TEXTURE_H
 
+#include <d3d11.h>
 #include "compute_task.h"
 #include "compute_texture_dimensions.h"
 #include "render_shadow_map_resource.h"
@@ -92,6 +93,9 @@ public:
 	bool ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const;
 
 private:
+	void UpdateCpuReadback(float time_seconds) const;
+	void ConsumeMappedReadback(const D3D11_MAPPED_SUBRESOURCE& mapped_resource) const;
+
 	struct WaterSurfaceHeightConstants
 	{
 		float water_surface_height = 0.0f;
@@ -102,8 +106,8 @@ private:
 		float accumulation_rate = 0.0f;
 		float seepage_rate = 0.004f;
 		float basin_fade = 6.0f;
-		float field_width = 512.0f;
-		float field_depth = 512.0f;
+		float field_width = ComputeTextureDimensions::kWorldSideLength;
+		float field_depth = ComputeTextureDimensions::kWorldSideLength;
 		float injection_center_x = 46.0f;
 		float injection_center_z = 118.0f;
 		float injection_radius = 14.0f;
@@ -163,7 +167,9 @@ private:
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	mutable unsigned int m_current_index = 0u;
 	mutable bool m_has_bootstrapped_state = false;
+	mutable bool m_cpu_readback_pending = false;
 	mutable bool m_cpu_height_data_ready = false;
+	mutable float m_last_cpu_readback_request_time = -1000.0f;
 	mutable std::vector<float> m_terrain_height_samples{};
 	mutable std::vector<float> m_water_height_samples{};
 };

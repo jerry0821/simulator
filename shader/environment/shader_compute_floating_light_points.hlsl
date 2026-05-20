@@ -88,8 +88,8 @@ float SampleTerrainHeightWorld(float2 world_xz)
     g_TerrainHeight.GetDimensions(width, height);
 
     float2 uv = float2(
-        saturate(world_xz.x / 512.0f + 0.5f),
-        saturate(world_xz.y / 512.0f + 0.5f));
+        saturate((world_xz.x - world_min_x) / max(world_max_x - world_min_x, 1.0e-4f)),
+        saturate((world_xz.y - world_min_z) / max(world_max_z - world_min_z, 1.0e-4f)));
     int2 coord = int2(uv * float2(max(int(width) - 1, 0), max(int(height) - 1, 0)) + 0.5f.xx);
     return g_TerrainHeight.Load(int3(coord, 0)).r;
 }

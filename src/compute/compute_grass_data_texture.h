@@ -28,8 +28,8 @@ public:
 private:
 	struct GrassDataConstants
 	{
-		float field_width = 512.0f;
-		float field_depth = 512.0f;
+		float field_width = ComputeTextureDimensions::kWorldSideLength;
+		float field_depth = ComputeTextureDimensions::kWorldSideLength;
 		unsigned int width = 0;
 		unsigned int height = 0;
 	};

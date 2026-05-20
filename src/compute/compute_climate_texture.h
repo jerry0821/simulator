@@ -30,7 +30,7 @@ public:
 
 	double FixedFrequencySeconds() const override
 	{
-		return 0.20;
+		return 0.50;
 	}
 
 	ResourceSpan WriteResources() const override
@@ -66,8 +66,8 @@ private:
 		unsigned int padding1 = 0;
 	};
 
-	static constexpr unsigned int kTextureWidth = 128;
-	static constexpr unsigned int kTextureHeight = 128;
+	static constexpr unsigned int kTextureWidth = 64;
+	static constexpr unsigned int kTextureHeight = 64;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

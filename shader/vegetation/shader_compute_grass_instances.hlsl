@@ -112,7 +112,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float ty = ground_y + sy * visual_root_pivot - 0.5f;
     const float tz = world_xz.y;
 
-    const uint quad_count = use_billboard_lod ? 1u : 3u;
+    const uint quad_count = use_billboard_lod ? 1u : max(quads_per_seed, 1u);
     const float billboard_angle = atan2(camera_xz.x - tx, camera_xz.y - tz);
 
     [unroll]

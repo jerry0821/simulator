@@ -41,7 +41,7 @@ struct PostProcessSettings
 	float atmospheric_dust = 0.0f;
 	float vignette_intensity = 0.18f;
 	float vignette_softness = 0.42f;
-	float bloom_intensity = 0.22f;
+	float bloom_intensity = 0.12f;
 	float bloom_threshold = 0.74f;
 	float bloom_soft_knee = 0.16f;
 	float bloom_blur_scale = 1.65f;

@@ -5,6 +5,7 @@
 #include <DirectXMath.h>
 #include <vector>
 
+#include "compute_texture_dimensions.h"
 #include "compute_task.h"
 #include "render_shadow_map_resource.h"
 
@@ -26,7 +27,12 @@ public:
 
 	ComputeTaskDispatchMode DispatchMode() const override
 	{
-		return ComputeTaskDispatchMode::EveryFrame;
+		return ComputeTaskDispatchMode::FixedFrequency;
+	}
+
+	double FixedFrequencySeconds() const override
+	{
+		return 1.0 / 15.0;
 	}
 
 	ResourceSpan ReadResources() const override
@@ -61,10 +67,10 @@ private:
 	struct FloatingLightConstants
 	{
 		float time_seconds = 0.0f;
-		float world_min_x = -640.0f;
-		float world_max_x = 640.0f;
-		float world_min_z = -640.0f;
-		float world_max_z = 640.0f;
+		float world_min_x = -ComputeTextureDimensions::kWorldHalfExtent;
+		float world_max_x = ComputeTextureDimensions::kWorldHalfExtent;
+		float world_min_z = -ComputeTextureDimensions::kWorldHalfExtent;
+		float world_max_z = ComputeTextureDimensions::kWorldHalfExtent;
 		unsigned int seed_count = 0;
 		float padding0 = 0.0f;
 		float padding1 = 0.0f;

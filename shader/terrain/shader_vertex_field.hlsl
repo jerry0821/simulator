@@ -23,6 +23,9 @@ Texture2D g_TerrainNormalMap : register(t1);
 Texture2D g_ClimateMap : register(t2);
 SamplerState g_Sampler : register(s0);
 
+static const float kWorldSideLength = 2048.0f;
+static const float kWorldHalfExtent = kWorldSideLength * 0.5f;
+
 float Hash21(float2 p)
 {
     p = frac(p * float2(123.34f, 345.45f));
@@ -93,18 +96,31 @@ float SampleTerrainHeight(float2 uv)
     return g_HeightMap.Load(int3(coord, 0)).x;
 }
 
+float2 WorldToFieldUv(float2 world_xz)
+{
+    return float2(
+        saturate((world_xz.x + kWorldHalfExtent) / kWorldSideLength),
+        saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
+}
+
+float3 DecodeUpNormal(float2 encoded)
+{
+    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
+    const float y = sqrt(saturate(1.0f - dot(xz, xz)));
+    return float3(xz.x, y, xz.y);
+}
+
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
 
     float3 tempWorldPos = mul(float4(vi.posL.xyz, 1.0f), world).xyz;
-    float2 field_size = float2(512.0f, 512.0f); // kFieldMeshWidth * kFieldMeshHCount
-    float2 wrappedUV = frac((tempWorldPos.xz + field_size * 0.5f) / field_size);
+    float2 fieldUV = WorldToFieldUv(tempWorldPos.xz);
 
     float4 displacedPosL = vi.posL;
-    displacedPosL.y = SampleTerrainHeight(wrappedUV);
-    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, wrappedUV, 0.0f);
-    float3 displacedNormalL = normalize(encodedNormal.xyz);
+    displacedPosL.y = SampleTerrainHeight(fieldUV);
+    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, fieldUV, 0.0f);
+    float3 displacedNormalL = DecodeUpNormal(encodedNormal.xy);
     if (dot(displacedNormalL, displacedNormalL) < 1.0e-4f)
     {
         displacedNormalL = float3(0.0f, 1.0f, 0.0f);
@@ -117,12 +133,10 @@ VS_OUT main(VS_IN vi)
     vo.normalW = mul(float4(displacedNormalL, 0.0f), world);
     vo.posW = mul(displacedPosL, world);
     vo.blend = vi.blend;
-    vo.uv = wrappedUV;
+    vo.uv = fieldUV;
     vo.shadowPos = mul(vo.posW, lightViewProj);
 
-    const float climateMin = -640.0f;
-    const float climateMax = 640.0f;
-    float2 climateUV = saturate((vo.posW.xz - climateMin.xx) / (climateMax - climateMin));
+    float2 climateUV = WorldToFieldUv(vo.posW.xz);
     uint climateWidth = 0;
     uint climateHeight = 0;
     g_ClimateMap.GetDimensions(climateWidth, climateHeight);

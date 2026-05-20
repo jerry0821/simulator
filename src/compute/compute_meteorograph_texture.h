@@ -84,8 +84,8 @@ private:
 		unsigned int padding0 = 0u;
 	};
 
-	static constexpr unsigned int kTextureWidth = 256;
-	static constexpr unsigned int kTextureHeight = 256;
+	static constexpr unsigned int kTextureWidth = 128;
+	static constexpr unsigned int kTextureHeight = 128;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

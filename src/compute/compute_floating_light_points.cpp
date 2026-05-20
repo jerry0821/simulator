@@ -200,10 +200,10 @@ void ComputeFloatingLightPoints::Update(
 		auto* constants = static_cast<FloatingLightConstants*>(mapped_resource.pData);
 		*constants = FloatingLightConstants{
 			time_seconds,
-			-640.0f,
-			640.0f,
-			-640.0f,
-			640.0f,
+			-ComputeTextureDimensions::kWorldHalfExtent,
+			ComputeTextureDimensions::kWorldHalfExtent,
+			-ComputeTextureDimensions::kWorldHalfExtent,
+			ComputeTextureDimensions::kWorldHalfExtent,
 			m_seed_count,
 			0.0f,
 			0.0f,

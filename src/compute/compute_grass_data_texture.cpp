@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "debug_ostream.h"
+#include "meshfield.h"
 #include "sampler.h"
 
 namespace
@@ -128,8 +129,8 @@ void ComputeGrassDataTexture::Update(
 	}
 
 	const GrassDataConstants constants = {
-		512.0f,
-		512.0f,
+		MeshFieldRenderer::FieldWidth(),
+		MeshFieldRenderer::FieldDepth(),
 		kTextureWidth,
 		kTextureHeight };
 	m_context->UpdateSubresource(m_constant_buffer, 0, nullptr, &constants, 0, 0);

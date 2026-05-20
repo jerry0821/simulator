@@ -19,7 +19,7 @@
 #include <d3d11.h>
 #include <DirectXMath.h>
 
-#include "DirectXTex.h"
+#include "compute_texture_dimensions.h"
 #include "debug_ostream.h"
 #include "direct3d.h"
 #include "sampler.h"
@@ -30,16 +30,22 @@ using namespace DirectX;
 
 namespace
 {
-constexpr float kFieldMeshWidth = 2.0f;
-constexpr float kFieldMeshDepth = 2.0f;
-constexpr int kFieldMeshHCount = 256;
-constexpr int kFieldMeshVCount = 256;
+constexpr int kFieldMeshHCount = static_cast<int>(ComputeTextureDimensions::kTerrainMeshResolution);
+constexpr int kFieldMeshVCount = static_cast<int>(ComputeTextureDimensions::kTerrainMeshResolution);
+constexpr float kFieldMeshWidth =
+	ComputeTextureDimensions::kWorldSideLength / static_cast<float>(kFieldMeshHCount);
+constexpr float kFieldMeshDepth =
+	ComputeTextureDimensions::kWorldSideLength / static_cast<float>(kFieldMeshVCount);
 
 constexpr int kFieldMeshHVertexCount = kFieldMeshHCount + 1;
 constexpr int kFieldMeshVVertexCount = kFieldMeshVCount + 1;
 
 constexpr int kNumVertex = kFieldMeshHVertexCount * kFieldMeshVVertexCount;
 constexpr int kNumIndex = 6 * kFieldMeshHCount * kFieldMeshVCount;
+constexpr unsigned int kTerrainHeightTextureWidth = ComputeTextureDimensions::kTerrainHeightResolution;
+constexpr unsigned int kTerrainHeightTextureHeight = ComputeTextureDimensions::kTerrainHeightResolution;
+constexpr size_t kTerrainHeightSampleCount =
+	static_cast<size_t>(kTerrainHeightTextureWidth) * static_cast<size_t>(kTerrainHeightTextureHeight);
 
 struct Vertex3D
 {
@@ -62,23 +68,17 @@ bool g_is_flat_mesh_field = false;
 std::vector<Vertex3D> g_mesh_vertices;
 std::vector<unsigned int> g_mesh_indices;
 std::vector<float> g_original_heights;
-std::vector<float> g_height_map_samples;
 ID3D11ComputeShader* g_height_compute_shader = nullptr;
 ID3D11Texture2D* g_height_texture = nullptr;
 ID3D11ShaderResourceView* g_height_texture_srv = nullptr;
 ID3D11UnorderedAccessView* g_height_texture_uav = nullptr;
 ID3D11Texture2D* g_height_readback_texture = nullptr;
 ID3D11Buffer* g_height_constant_buffer = nullptr;
-ID3D11Texture2D* g_authored_height_texture = nullptr;
-ID3D11ShaderResourceView* g_authored_height_texture_srv = nullptr;
 ID3D11Texture2D* g_flat_height_texture = nullptr;
 ID3D11ShaderResourceView* g_flat_height_texture_srv = nullptr;
 ID3D11ShaderResourceView* g_render_height_override_srv = nullptr;
 ID3D11ShaderResourceView* g_render_normal_override_srv = nullptr;
 TerrainSettings g_terrain_settings{};
-size_t g_height_map_width = 0;
-size_t g_height_map_height = 0;
-bool g_has_height_map = false;
 
 struct TerrainHeightConstants
 {
@@ -97,11 +97,11 @@ struct TerrainHeightConstants
 	float field_depth = 0.0f;
 	float cell_size_x = 0.0f;
 	float cell_size_z = 0.0f;
-	unsigned int has_authored_height_map = 0u;
 	unsigned int width = 0u;
 	unsigned int height = 0u;
 	float padding0 = 0.0f;
 	float padding1 = 0.0f;
+	float padding2 = 0.0f;
 };
 
 float Hash21(float x, float z)
@@ -224,83 +224,6 @@ DirectX::XMFLOAT2 DomainWarp(float x, float z, float frequency, float amplitude,
 	return { warp_x * amplitude, warp_z * amplitude };
 }
 
-bool LoadTerrainHeightMap()
-{
-	DirectX::TexMetadata metadata{};
-	DirectX::ScratchImage image;
-	HRESULT hr = DirectX::LoadFromWICFile(
-		L"resource/texture/height_map.png",
-		DirectX::WIC_FLAGS_NONE,
-		&metadata,
-		image);
-	if (FAILED(hr))
-	{
-		OutputDebugStringA("[MeshField] Failed to load height_map.png. Falling back to procedural terrain.\n");
-		g_height_map_samples.clear();
-		g_height_map_width = 0;
-		g_height_map_height = 0;
-		g_has_height_map = false;
-		return false;
-	}
-
-	const DirectX::Image* source_image = image.GetImage(0, 0, 0);
-	DirectX::ScratchImage converted_image;
-	if (metadata.format != DXGI_FORMAT_R8G8B8A8_UNORM)
-	{
-		hr = DirectX::Convert(
-			image.GetImages(),
-			image.GetImageCount(),
-			metadata,
-			DXGI_FORMAT_R8G8B8A8_UNORM,
-			DirectX::TEX_FILTER_DEFAULT,
-			0.0f,
-			converted_image);
-		if (FAILED(hr))
-		{
-			OutputDebugStringA("[MeshField] Failed to convert height_map.png. Falling back to procedural terrain.\n");
-			g_height_map_samples.clear();
-			g_height_map_width = 0;
-			g_height_map_height = 0;
-			g_has_height_map = false;
-			return false;
-		}
-
-		source_image = converted_image.GetImage(0, 0, 0);
-		metadata = converted_image.GetMetadata();
-	}
-
-	if (source_image == nullptr || metadata.width == 0 || metadata.height == 0)
-	{
-		OutputDebugStringA("[MeshField] height_map.png produced no readable image data.\n");
-		g_height_map_samples.clear();
-		g_height_map_width = 0;
-		g_height_map_height = 0;
-		g_has_height_map = false;
-		return false;
-	}
-
-	g_height_map_width = metadata.width;
-	g_height_map_height = metadata.height;
-	g_height_map_samples.assign(g_height_map_width * g_height_map_height, 0.0f);
-
-	for (size_t y = 0; y < g_height_map_height; ++y)
-	{
-		const unsigned char* row = source_image->pixels + (source_image->rowPitch * y);
-		for (size_t x = 0; x < g_height_map_width; ++x)
-		{
-			const unsigned char* pixel = row + x * 4;
-			const float red = static_cast<float>(pixel[0]) / 255.0f;
-			const float green = static_cast<float>(pixel[1]) / 255.0f;
-			const float blue = static_cast<float>(pixel[2]) / 255.0f;
-			g_height_map_samples[x + y * g_height_map_width] = (red + green + blue) / 3.0f;
-		}
-	}
-
-	g_has_height_map = true;
-	OutputDebugStringA("[MeshField] Loaded hand-authored height map.\n");
-	return true;
-}
-
 bool CreateFloatTexture(
 	unsigned int width,
 	unsigned int height,
@@ -377,10 +300,10 @@ bool CreateFlatHeightTexture()
 	SAFE_RELEASE(g_flat_height_texture_srv);
 	SAFE_RELEASE(g_flat_height_texture);
 
-	std::vector<float> flat_heights(static_cast<size_t>(kNumVertex), 0.0f);
+	std::vector<float> flat_heights(kTerrainHeightSampleCount, 0.0f);
 	if (!CreateFloatTexture(
-			static_cast<unsigned int>(kFieldMeshHVertexCount),
-			static_cast<unsigned int>(kFieldMeshVVertexCount),
+			kTerrainHeightTextureWidth,
+			kTerrainHeightTextureHeight,
 			D3D11_BIND_SHADER_RESOURCE,
 			flat_heights.data(),
 			&g_flat_height_texture,
@@ -388,41 +311,6 @@ bool CreateFlatHeightTexture()
 			nullptr))
 	{
 		OutputDebugStringA("[MeshField] Failed to create flat terrain height texture.\n");
-		return false;
-	}
-
-	return true;
-}
-
-bool CreateAuthoredHeightTexture()
-{
-	SAFE_RELEASE(g_authored_height_texture_srv);
-	SAFE_RELEASE(g_authored_height_texture);
-
-	const unsigned int width = g_has_height_map ? static_cast<unsigned int>(g_height_map_width) : 1u;
-	const unsigned int height = g_has_height_map ? static_cast<unsigned int>(g_height_map_height) : 1u;
-	std::vector<float> fallback_samples;
-	const float* sample_data = nullptr;
-	if (g_has_height_map && !g_height_map_samples.empty())
-	{
-		sample_data = g_height_map_samples.data();
-	}
-	else
-	{
-		fallback_samples.assign(1, 0.0f);
-		sample_data = fallback_samples.data();
-	}
-
-	if (!CreateFloatTexture(
-			width,
-			height,
-			D3D11_BIND_SHADER_RESOURCE,
-			sample_data,
-			&g_authored_height_texture,
-			&g_authored_height_texture_srv,
-			nullptr))
-	{
-		OutputDebugStringA("[MeshField] Failed to create authored terrain height texture.\n");
 		return false;
 	}
 
@@ -462,8 +350,8 @@ bool InitializeTerrainHeightCompute()
 	}
 
 	if (!CreateFloatTexture(
-			static_cast<unsigned int>(kFieldMeshHVertexCount),
-			static_cast<unsigned int>(kFieldMeshVVertexCount),
+			kTerrainHeightTextureWidth,
+			kTerrainHeightTextureHeight,
 			D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS,
 			nullptr,
 			&g_height_texture,
@@ -476,8 +364,8 @@ bool InitializeTerrainHeightCompute()
 	}
 
 	D3D11_TEXTURE2D_DESC readback_desc{};
-	readback_desc.Width = static_cast<unsigned int>(kFieldMeshHVertexCount);
-	readback_desc.Height = static_cast<unsigned int>(kFieldMeshVVertexCount);
+	readback_desc.Width = kTerrainHeightTextureWidth;
+	readback_desc.Height = kTerrainHeightTextureHeight;
 	readback_desc.MipLevels = 1;
 	readback_desc.ArraySize = 1;
 	readback_desc.Format = DXGI_FORMAT_R32_FLOAT;
@@ -526,6 +414,8 @@ bool UpdateTerrainHeightTexture()
 
 	const float field_width = kFieldMeshHCount * kFieldMeshWidth;
 	const float field_depth = kFieldMeshVCount * kFieldMeshDepth;
+	const float height_cell_size_x = field_width / static_cast<float>(kTerrainHeightTextureWidth - 1u);
+	const float height_cell_size_z = field_depth / static_cast<float>(kTerrainHeightTextureHeight - 1u);
 	const TerrainHeightConstants constants = {
 		g_terrain_settings.base_frequency,
 		g_terrain_settings.base_height,
@@ -540,11 +430,11 @@ bool UpdateTerrainHeightTexture()
 		g_terrain_settings.lake_depth,
 		field_width,
 		field_depth,
-		kFieldMeshWidth,
-		kFieldMeshDepth,
-		g_has_height_map ? 1u : 0u,
-		static_cast<unsigned int>(kFieldMeshHVertexCount),
-		static_cast<unsigned int>(kFieldMeshVVertexCount),
+		height_cell_size_x,
+		height_cell_size_z,
+		kTerrainHeightTextureWidth,
+		kTerrainHeightTextureHeight,
+		0.0f,
 		0.0f,
 		0.0f
 	};
@@ -553,27 +443,21 @@ bool UpdateTerrainHeightTexture()
 	ID3D11ShaderResourceView* null_vs_srv = nullptr;
 	g_context->VSSetShaderResources(0, 1, &null_vs_srv);
 
-	ID3D11ShaderResourceView* authored_srvs[] = { g_authored_height_texture_srv };
-	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
 	ID3D11UnorderedAccessView* uavs[] = { g_height_texture_uav };
 	ID3D11Buffer* constant_buffers[] = { g_height_constant_buffer };
 
 	g_context->CSSetShader(g_height_compute_shader, nullptr, 0);
 	g_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	g_context->CSSetShaderResources(0, 1, authored_srvs);
-	g_context->CSSetSamplers(0, 1, samplers);
 	g_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	g_context->Dispatch(
-		(kFieldMeshHVertexCount + 7) / 8,
-		(kFieldMeshVVertexCount + 7) / 8,
+		(kTerrainHeightTextureWidth + 7) / 8,
+		(kTerrainHeightTextureHeight + 7) / 8,
 		1);
 
 	ID3D11ShaderResourceView* null_srvs[] = { nullptr };
 	ID3D11UnorderedAccessView* null_uav = nullptr;
 	ID3D11Buffer* null_cb = nullptr;
-	ID3D11SamplerState* null_sampler = nullptr;
 	g_context->CSSetShaderResources(0, 1, null_srvs);
-	g_context->CSSetSamplers(0, 1, &null_sampler);
 	g_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
 	g_context->CSSetConstantBuffers(0, 1, &null_cb);
 	g_context->CSSetShader(nullptr, nullptr, 0);
@@ -586,49 +470,18 @@ bool UpdateTerrainHeightTexture()
 		return false;
 	}
 
-	g_original_heights.assign(static_cast<size_t>(kNumVertex), 0.0f);
-	for (int row = 0; row < kFieldMeshVVertexCount; ++row)
+	g_original_heights.assign(kTerrainHeightSampleCount, 0.0f);
+	for (unsigned int row = 0; row < kTerrainHeightTextureHeight; ++row)
 	{
 		const float* source_row = reinterpret_cast<const float*>(
 			static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * row);
 		std::memcpy(
-			g_original_heights.data() + static_cast<size_t>(row) * kFieldMeshHVertexCount,
+			g_original_heights.data() + static_cast<size_t>(row) * kTerrainHeightTextureWidth,
 			source_row,
-			sizeof(float) * kFieldMeshHVertexCount);
+			sizeof(float) * kTerrainHeightTextureWidth);
 	}
 	g_context->Unmap(g_height_readback_texture, 0);
 	return true;
-}
-
-float SampleHeightMap01(float world_x, float world_z)
-{
-	if (!g_has_height_map || g_height_map_width < 2 || g_height_map_height < 2)
-	{
-		return 0.0f;
-	}
-
-	const float field_width = kFieldMeshHCount * kFieldMeshWidth;
-	const float field_depth = kFieldMeshVCount * kFieldMeshDepth;
-	const float u = std::clamp((world_x + field_width * 0.5f) / field_width, 0.0f, 1.0f);
-	const float v = std::clamp((world_z + field_depth * 0.5f) / field_depth, 0.0f, 1.0f);
-
-	const float sample_x = u * static_cast<float>(g_height_map_width - 1);
-	const float sample_y = v * static_cast<float>(g_height_map_height - 1);
-	const int x0 = static_cast<int>(std::floor(sample_x));
-	const int y0 = static_cast<int>(std::floor(sample_y));
-	const int x1 = std::min(x0 + 1, static_cast<int>(g_height_map_width - 1));
-	const int y1 = std::min(y0 + 1, static_cast<int>(g_height_map_height - 1));
-	const float tx = sample_x - static_cast<float>(x0);
-	const float ty = sample_y - static_cast<float>(y0);
-
-	const float h00 = g_height_map_samples[static_cast<size_t>(x0) + static_cast<size_t>(y0) * g_height_map_width];
-	const float h10 = g_height_map_samples[static_cast<size_t>(x1) + static_cast<size_t>(y0) * g_height_map_width];
-	const float h01 = g_height_map_samples[static_cast<size_t>(x0) + static_cast<size_t>(y1) * g_height_map_width];
-	const float h11 = g_height_map_samples[static_cast<size_t>(x1) + static_cast<size_t>(y1) * g_height_map_width];
-
-	const float hx0 = std::lerp(h00, h10, tx);
-	const float hx1 = std::lerp(h01, h11, tx);
-	return std::lerp(hx0, hx1, ty);
 }
 
 float GenerateTerrainHeight(float world_x, float world_z)
@@ -881,7 +734,6 @@ void SmoothHeightField(int passes)
 	for (size_t i = 0; i < g_mesh_vertices.size(); ++i)
 	{
 		g_mesh_vertices[i].position.y = heights[i];
-		g_original_heights[i] = heights[i];
 	}
 }
 
@@ -889,7 +741,7 @@ void BuildProceduralTerrain()
 {
 	g_mesh_vertices.resize(kNumVertex);
 	g_mesh_indices.resize(kNumIndex);
-	g_original_heights.assign(kNumVertex, 0.0f);
+	g_original_heights.assign(kTerrainHeightSampleCount, 0.0f);
 
 	for (int z = 0; z < kFieldMeshVVertexCount; ++z)
 	{
@@ -960,8 +812,6 @@ void MeshFieldRenderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
 	g_device = device;
 	g_context = context;
 
-	LoadTerrainHeightMap();
-	CreateAuthoredHeightTexture();
 	CreateFlatHeightTexture();
 	InitializeTerrainHeightCompute();
 	BuildProceduralTerrain();
@@ -991,8 +841,6 @@ void MeshFieldRenderer::Finalize()
 	SAFE_RELEASE(g_index_buffer);
 	SAFE_RELEASE(g_flat_height_texture_srv);
 	SAFE_RELEASE(g_flat_height_texture);
-	SAFE_RELEASE(g_authored_height_texture_srv);
-	SAFE_RELEASE(g_authored_height_texture);
 	SAFE_RELEASE(g_height_constant_buffer);
 	SAFE_RELEASE(g_height_readback_texture);
 	SAFE_RELEASE(g_height_texture_uav);
@@ -1023,11 +871,10 @@ void MeshFieldRenderer::Draw()
 	const float offset_x = kFieldMeshHCount * kFieldMeshWidth * 0.5f;
 	const float offset_z = kFieldMeshVCount * kFieldMeshDepth * 0.5f;
 
-	const DirectX::XMFLOAT3& cam_pos = Camera_GetPosition();
-	const float snapped_x = std::floor(cam_pos.x / kFieldMeshWidth) * kFieldMeshWidth;
-	const float snapped_z = std::floor(cam_pos.z / kFieldMeshDepth) * kFieldMeshDepth;
-
-	ShaderField_SetWorldMatrix(XMMatrixTranslation(snapped_x - offset_x, 0.0f, snapped_z - offset_z));
+	// Finite-world terrain should stay anchored in world space. Camera-snapping
+	// was useful for the old repeating patch, but makes the terrain appear to
+	// slide under the camera after switching to a clamped heightfield.
+	ShaderField_SetWorldMatrix(XMMatrixTranslation(-offset_x, 0.0f, -offset_z));
 	ShaderField_SetMaterialColor({1.0f, 1.0f, 1.0f, 1.0f});
 
 	g_context->DrawIndexed(static_cast<UINT>(g_mesh_indices.size()), 0, 0);
@@ -1048,7 +895,7 @@ void MeshFieldRenderer::DrawMeshOnly()
 
 float MeshFieldRenderer::GetHeight(float x, float z)
 {
-	if (g_is_flat_mesh_field || g_original_heights.size() != static_cast<size_t>(kNumVertex))
+	if (g_is_flat_mesh_field || g_original_heights.size() != kTerrainHeightSampleCount)
 	{
 		return 0.0f;
 	}
@@ -1056,38 +903,26 @@ float MeshFieldRenderer::GetHeight(float x, float z)
 	const float width = kFieldMeshHCount * kFieldMeshWidth;
 	const float depth = kFieldMeshVCount * kFieldMeshDepth;
 
-	float local_x = std::fmod(x + width * 0.5f, width);
-	if (local_x < 0.0f) local_x += width;
-	float local_z = std::fmod(z + depth * 0.5f, depth);
-	if (local_z < 0.0f) local_z += depth;
+	const float u = std::clamp((x + width * 0.5f) / width, 0.0f, 1.0f);
+	const float v = std::clamp((z + depth * 0.5f) / depth, 0.0f, 1.0f);
+	const float sample_x = u * static_cast<float>(kTerrainHeightTextureWidth - 1u);
+	const float sample_z = v * static_cast<float>(kTerrainHeightTextureHeight - 1u);
 
-	const int grid_x = static_cast<int>(local_x / kFieldMeshWidth);
-	const int grid_z = static_cast<int>(local_z / kFieldMeshDepth);
+	const unsigned int x0 = static_cast<unsigned int>(std::floor(sample_x));
+	const unsigned int z0 = static_cast<unsigned int>(std::floor(sample_z));
+	const unsigned int x1 = std::min(x0 + 1u, kTerrainHeightTextureWidth - 1u);
+	const unsigned int z1 = std::min(z0 + 1u, kTerrainHeightTextureHeight - 1u);
+	const float tx = sample_x - static_cast<float>(x0);
+	const float tz = sample_z - static_cast<float>(z0);
 
-	if (grid_x < 0 || grid_x >= kFieldMeshHCount || grid_z < 0 || grid_z >= kFieldMeshVCount)
-	{
-		return 0.0f;
-	}
+	const float h00 = g_original_heights[static_cast<size_t>(x0) + static_cast<size_t>(z0) * kTerrainHeightTextureWidth];
+	const float h10 = g_original_heights[static_cast<size_t>(x1) + static_cast<size_t>(z0) * kTerrainHeightTextureWidth];
+	const float h01 = g_original_heights[static_cast<size_t>(x0) + static_cast<size_t>(z1) * kTerrainHeightTextureWidth];
+	const float h11 = g_original_heights[static_cast<size_t>(x1) + static_cast<size_t>(z1) * kTerrainHeightTextureWidth];
 
-	const int idx_tl = grid_x + kFieldMeshHVertexCount * grid_z;
-	const int idx_tr = (grid_x + 1) + kFieldMeshHVertexCount * grid_z;
-	const int idx_bl = grid_x + kFieldMeshHVertexCount * (grid_z + 1);
-	const int idx_br = (grid_x + 1) + kFieldMeshHVertexCount * (grid_z + 1);
-
-	const float y_tl = g_original_heights[static_cast<size_t>(idx_tl)];
-	const float y_tr = g_original_heights[static_cast<size_t>(idx_tr)];
-	const float y_bl = g_original_heights[static_cast<size_t>(idx_bl)];
-	const float y_br = g_original_heights[static_cast<size_t>(idx_br)];
-
-	const float ratio_x = (local_x - static_cast<float>(grid_x) * kFieldMeshWidth) / kFieldMeshWidth;
-	const float ratio_z = (local_z - static_cast<float>(grid_z) * kFieldMeshDepth) / kFieldMeshDepth;
-
-	if (ratio_x + ratio_z <= 1.0f)
-	{
-		return y_tl + (y_tr - y_tl) * ratio_x + (y_bl - y_tl) * ratio_z;
-	}
-
-	return y_br + (y_bl - y_br) * (1.0f - ratio_x) + (y_tr - y_br) * (1.0f - ratio_z);
+	const float hx0 = std::lerp(h00, h10, tx);
+	const float hx1 = std::lerp(h01, h11, tx);
+	return std::lerp(hx0, hx1, tz);
 }
 
 void MeshFieldRenderer::ApplyTerrainSettings(const TerrainSettings& settings)

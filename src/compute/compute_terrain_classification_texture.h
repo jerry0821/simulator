@@ -47,8 +47,8 @@ private:
 		float lowland_height_end = 58.0f;
 		float grass_coverage_min = 0.28f;
 		float water_height = 0.0f;
-		float field_width = 512.0f;
-		float field_depth = 512.0f;
+		float field_width = ComputeTextureDimensions::kWorldSideLength;
+		float field_depth = ComputeTextureDimensions::kWorldSideLength;
 		float sample_offset = 2.2f;
 		float wetness_gain = 1.0f;
 		unsigned int width = 0;

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "debug_ostream.h"
+#include "meshfield.h"
 #include "sampler.h"
 
 namespace
@@ -113,8 +114,8 @@ void ComputeTerrainNormalTexture::Update(ID3D11ShaderResourceView* terrain_heigh
 	}
 
 	const TerrainNormalConstants constants = {
-		512.0f,
-		512.0f,
+		MeshFieldRenderer::FieldWidth(),
+		MeshFieldRenderer::FieldDepth(),
 		kTextureWidth,
 		kTextureHeight
 	};

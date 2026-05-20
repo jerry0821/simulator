@@ -14,6 +14,7 @@
 #include "camera.h"
 #include "compute_noise_texture.h"
 #include "compute_shared_resource_registry.h"
+#include "compute_texture_dimensions.h"
 #include "direct3d.h"
 #include "frustum_culling_debug.h"
 #include "imgui/imgui.h"
@@ -62,10 +63,10 @@ static XMFLOAT3 g_WindFieldPreviewSamples[18 * 18]{};
 
 namespace
 {
-constexpr float kWindPreviewWorldMinX = -640.0f;
-constexpr float kWindPreviewWorldMaxX = 640.0f;
-constexpr float kWindPreviewWorldMinZ = -640.0f;
-constexpr float kWindPreviewWorldMaxZ = 640.0f;
+constexpr float kWindPreviewWorldMinX = -ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kWindPreviewWorldMaxX = ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kWindPreviewWorldMinZ = -ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kWindPreviewWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr int kWindPreviewCols = 18;
 constexpr int kWindPreviewRows = 18;
 
@@ -737,8 +738,16 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Max Outflow", &g_SurfaceWaterSimulationSettings.max_outflow_fraction, 0.10f, 0.95f);
     ImGui::Separator();
     ImGui::TextDisabled("One-shot Water Injection Test");
-    ImGui::SliderFloat("Drop X", &g_SurfaceWaterSimulationSettings.debug_injection_x, -256.0f, 256.0f);
-    ImGui::SliderFloat("Drop Z", &g_SurfaceWaterSimulationSettings.debug_injection_z, -256.0f, 256.0f);
+    ImGui::SliderFloat(
+        "Drop X",
+        &g_SurfaceWaterSimulationSettings.debug_injection_x,
+        -ComputeTextureDimensions::kWorldHalfExtent,
+        ComputeTextureDimensions::kWorldHalfExtent);
+    ImGui::SliderFloat(
+        "Drop Z",
+        &g_SurfaceWaterSimulationSettings.debug_injection_z,
+        -ComputeTextureDimensions::kWorldHalfExtent,
+        ComputeTextureDimensions::kWorldHalfExtent);
     ImGui::SliderFloat("Drop Radius", &g_SurfaceWaterSimulationSettings.debug_injection_radius, 2.0f, 36.0f);
     ImGui::SliderFloat("Drop Amount", &g_SurfaceWaterSimulationSettings.debug_injection_amount, 0.05f, 2.50f);
     if (ImGui::Button("Use Hero Peak"))

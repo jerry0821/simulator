@@ -136,7 +136,6 @@ private:
   int m_cube_tex_id = -1;
   int m_debug_billboard_tex_id = -1;
   int m_cube_grass_tex_id = -1;
-  int m_height_map_tex_id = -1;
   int m_floating_light_tex_id = -1;
   int m_white_tex_id = -1;
   struct MODEL *m_grass_model = nullptr;

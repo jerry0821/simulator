@@ -321,19 +321,16 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
             SamplePreviousDepth(coord + int2(-1, 0)),
             SamplePreviousDepth(coord + int2(0, 1)),
             SamplePreviousDepth(coord + int2(0, -1)));
-        if ((coord.x % 16) == 0 && (coord.y % 16) == 0)
-        {
-            const float disturbance_scale =
-                wind_strength *
-                (0.10f + gust * 0.16f) * 12.0f *
-                max(length(surface_delta_heights), 0.001f);
-            const float4 wind_effect =
-                float4(wind_dir.x, -wind_dir.x, wind_dir.y, -wind_dir.y) * disturbance_scale;
-            const float4 max_disturbance =
-                max(min(neighbor_depth, available_water.xxxx) * 0.22f, 0.001f.xxxx);
-            surface_delta_heights =
-                max(surface_delta_heights + clamp(wind_effect, -max_disturbance, max_disturbance), 0.0f.xxxx);
-        }
+        const float disturbance_scale =
+            wind_strength *
+            (0.012f + gust * 0.028f) *
+            max(length(surface_delta_heights), 0.001f);
+        const float4 wind_effect =
+            float4(wind_dir.x, -wind_dir.x, wind_dir.y, -wind_dir.y) * disturbance_scale;
+        const float4 max_disturbance =
+            max(min(neighbor_depth, available_water.xxxx) * 0.06f, 0.00025f.xxxx);
+        surface_delta_heights =
+            max(surface_delta_heights + clamp(wind_effect, -max_disturbance, max_disturbance), 0.0f.xxxx);
     }
 
     float4 candidate = max(previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);

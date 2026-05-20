@@ -6,6 +6,7 @@
 #include <string>
 
 #include "compute_task.h"
+#include "compute_texture_dimensions.h"
 #include "meshfield.h"
 
 class ComputeGrassInstances : public ComputeTask
@@ -70,8 +71,8 @@ private:
 		DirectX::XMFLOAT4X4 view_proj{};
 		float quad_scale_x = 1.0f;
 		float quad_scale_y = 1.0f;
-		float world_min_x = -256.0f;
-		float world_min_z = -256.0f;
+		float world_min_x = -ComputeTextureDimensions::kWorldHalfExtent;
+		float world_min_z = -ComputeTextureDimensions::kWorldHalfExtent;
 		float spacing = 6.5f;
 		float sample_offset = 2.2f;
 		float water_height = 0.35f;
@@ -86,7 +87,7 @@ private:
 		unsigned int padding0 = 0;
 	};
 
-	static constexpr unsigned int kQuadsPerSeed = 3;
+	static constexpr unsigned int kQuadsPerSeed = 2;
 	static constexpr unsigned int kThreadGroupSize = 64;
 
 	ID3D11Device* m_device = nullptr;
@@ -107,12 +108,13 @@ private:
 	unsigned int m_grid_cols = 0;
 	unsigned int m_grid_rows = 0;
 	unsigned int m_instance_count = 0;
-	float m_world_min_x = -256.0f;
-	float m_world_min_z = -256.0f;
+	float m_world_min_x = -ComputeTextureDimensions::kWorldHalfExtent;
+	float m_world_min_z = -ComputeTextureDimensions::kWorldHalfExtent;
 	float m_spacing = 6.5f;
 	TerrainSettings m_terrain_settings{};
 	mutable bool m_dispatch_dirty = true;
 	mutable unsigned int m_last_visible_instance_count = 0;
+	mutable bool m_args_readback_pending = false;
 	mutable float m_last_readback_time_seconds = -1000.0f;
 	std::string m_last_error = "Not configured";
 };

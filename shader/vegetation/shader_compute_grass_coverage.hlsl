@@ -85,8 +85,8 @@ float Fbm(float2 p)
 
 float SampleTerrainHeight(float2 world_xz)
 {
-    const float field_width = 512.0f;
-    const float field_depth = 512.0f;
+    const float field_width = 2048.0f;
+    const float field_depth = 2048.0f;
     float2 uv = float2(
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
@@ -105,8 +105,8 @@ float GenerateSmoothedTerrainHeight(float2 world_xz)
 
 float4 SampleGrassData(float2 world_xz)
 {
-    const float field_width = 512.0f;
-    const float field_depth = 512.0f;
+    const float field_width = 2048.0f;
+    const float field_depth = 2048.0f;
     float2 uv = float2(
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));

@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 
+#include "compute_texture_dimensions.h"
 #include "compute_noise_texture.h"
 #include "debug_menu.h"
 #include "render_frame_context.h"
@@ -18,10 +19,10 @@ namespace
 	constexpr float kPreviewSize = 192.0f;
 	constexpr int kWindOverlayCols = 20;
 	constexpr int kWindOverlayRows = 20;
-	constexpr float kClimateWorldMinX = -640.0f;
-	constexpr float kClimateWorldMaxX = 640.0f;
-	constexpr float kClimateWorldMinZ = -640.0f;
-	constexpr float kClimateWorldMaxZ = 640.0f;
+	constexpr float kClimateWorldMinX = -ComputeTextureDimensions::kWorldHalfExtent;
+	constexpr float kClimateWorldMaxX = ComputeTextureDimensions::kWorldHalfExtent;
+	constexpr float kClimateWorldMinZ = -ComputeTextureDimensions::kWorldHalfExtent;
+	constexpr float kClimateWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 
 	int getArrowTextureId()
 	{

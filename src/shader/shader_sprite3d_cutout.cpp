@@ -8,6 +8,7 @@
 #include <fstream>
 #include <vector>
 
+#include "compute_texture_dimensions.h"
 #include "debug_ostream.h"
 #include "direct3d.h"
 #include "sampler.h"
@@ -32,10 +33,10 @@ struct Sprite3DWindConstants
 	float wind_dir_x = 1.0f;
 	float wind_dir_y = 0.0f;
 	float wind_strength = 0.0f;
-	float world_min_x = -640.0f;
-	float world_max_x = 640.0f;
-	float world_min_z = -640.0f;
-	float world_max_z = 640.0f;
+	float world_min_x = -ComputeTextureDimensions::kWorldHalfExtent;
+	float world_max_x = ComputeTextureDimensions::kWorldHalfExtent;
+	float world_min_z = -ComputeTextureDimensions::kWorldHalfExtent;
+	float world_max_z = ComputeTextureDimensions::kWorldHalfExtent;
 };
 }
 

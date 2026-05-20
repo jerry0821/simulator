@@ -27,6 +27,12 @@ float2 WorldToUv(float2 world_xz)
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
 }
 
+float TerrainNormalYFromPacked(float2 encoded)
+{
+    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
+    return sqrt(saturate(1.0f - dot(xz, xz)));
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 {
@@ -41,7 +47,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         uv.y * field_depth - field_depth * 0.5f);
 
     float4 normal_sample = g_TerrainNormal.SampleLevel(g_GrassDataSampler, uv, 0.0f);
-    float normal_y = saturate(normal_sample.w);
+    float normal_y = saturate(TerrainNormalYFromPacked(normal_sample.xy));
     float vegetation_suitability = g_TerrainVegetationSuitability.SampleLevel(g_GrassDataSampler, uv, 0.0f).r;
     float4 surface_data = g_TerrainSurfaceData.SampleLevel(g_GrassDataSampler, uv, 0.0f);
     float slope = saturate(surface_data.r);

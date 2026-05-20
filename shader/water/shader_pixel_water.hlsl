@@ -27,6 +27,9 @@ Texture2D<float4> terrain_normal_tex : register(t3);
 Texture2D scene_depth_tex : register(t4);
 SamplerState samp : register(s0);
 
+static const float kWorldSideLength = 2048.0f;
+static const float kWorldHalfExtent = kWorldSideLength * 0.5f;
+
 float2 SafeNormalize2(float2 value)
 {
     const float len_sq = dot(value, value);
@@ -48,25 +51,33 @@ float2 ComputeWaterSampleUv(float2 uv)
     return clamp(uv, half_texel, 1.0f.xx - half_texel);
 }
 
+float2 WorldToFieldUv(float2 world_xz)
+{
+    return float2(
+        saturate((world_xz.x + kWorldHalfExtent) / kWorldSideLength),
+        saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
+}
+
+float3 DecodeUpNormal(float2 encoded)
+{
+    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
+    const float y = sqrt(saturate(1.0f - dot(xz, xz)));
+    return float3(xz.x, y, xz.y);
+}
+
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
-    uint tex_width = 0;
-    uint tex_height = 0;
-    water_surface_height_tex.GetDimensions(tex_width, tex_height);
-    const float2 texel_size = 1.0f / max(float2(tex_width, tex_height), 1.0f.xx);
-
-    float2 field_size = float2(512.0f, 512.0f);
-    float2 worldUV = frac((ps_in.posW.xz + field_size * 0.5f) / field_size);
+    float2 worldUV = WorldToFieldUv(ps_in.posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
-    const float height_right = water_surface_height_tex.SampleLevel(samp, sample_uv + float2(texel_size.x, 0.0f), 0.0f).y;
-    const float height_up = water_surface_height_tex.SampleLevel(samp, sample_uv + float2(0.0f, texel_size.y), 0.0f).y;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     const float depth_visibility = smoothstep(0.003f, 0.014f, water_depth);
 
     const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
     const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
-    const float3 terrain_normal = normalize(terrain_normal_tex.SampleLevel(samp, sample_uv, 0.0f).xyz);
+    const float4 packed_normal_sample = terrain_normal_tex.SampleLevel(samp, sample_uv, 0.0f);
+    const float3 terrain_normal = DecodeUpNormal(packed_normal_sample.xy);
+    const float3 water_normal = DecodeUpNormal(packed_normal_sample.zw);
 
     const float2 flow_velocity = velocity_sample.xy;
     const float water_speed = saturate(velocity_sample.z);
@@ -76,21 +87,9 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float erosion = saturate(sediment_sample.z);
     const float sediment_capacity = saturate(sediment_sample.w);
 
-    const float2 flow_dir = SafeNormalize2(flow_velocity);
-    const float2 wave_dir_a = SafeWaveDir(float2(0.86f, 0.52f), flow_dir, 0.55f);
-    const float2 wave_dir_b = SafeWaveDir(float2(-0.31f, 0.95f), float2(-flow_dir.y, flow_dir.x), 0.26f);
-    const float grid_spacing = 2.0f; // kFieldMeshWidth
-    const float normal_strength = 20.0f; // Boost physical wave visibility
-    const float3 macro_water_normal = normalize(float3(
-        (terrain_water_height.y - height_right) * normal_strength,
-        grid_spacing,
-        (terrain_water_height.y - height_up) * normal_strength));
-
-    // Pure physics-driven normal (no fake ripples)
-    float3 surface_normal = normalize(float3(
-        macro_water_normal.x + flow_velocity.x * 0.02f,
-        macro_water_normal.y,
-        macro_water_normal.z + flow_velocity.y * 0.02f));
+    float3 surface_normal = water_normal;
+    surface_normal.xz += flow_velocity * 0.01f;
+    surface_normal = normalize(surface_normal);
     surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.35f - water_depth * 4.0f)));
 
     const float3 view_dir = normalize(camera_position - ps_in.posW);

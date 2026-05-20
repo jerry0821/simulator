@@ -81,6 +81,12 @@ float2 WorldToUv(float2 world_xz)
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
 }
 
+float TerrainNormalYFromPacked(float2 encoded)
+{
+    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
+    return sqrt(saturate(1.0f - dot(xz, xz)));
+}
+
 float SampleTerrainHeight(float2 world_xz)
 {
     return g_TerrainHeight.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).r;
@@ -104,7 +110,7 @@ float3 SampleClimate(float2 world_xz)
 float SampleNormalY(float2 world_xz)
 {
     float4 normal_sample = g_TerrainNormal.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
-    return saturate(normal_sample.w);
+    return saturate(TerrainNormalYFromPacked(normal_sample.xy));
 }
 
 [numthreads(8, 8, 1)]

@@ -71,8 +71,8 @@ SamplerState shadowSamp : register(s1);
 
 float4 SampleTerrainSurfaceData(float2 world_xz)
 {
-    const float field_width = 512.0f;
-    const float field_depth = 512.0f;
+    const float field_width = 2048.0f;
+    const float field_depth = 2048.0f;
     float2 uv = float2(
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));

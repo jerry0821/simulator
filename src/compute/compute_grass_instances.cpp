@@ -21,9 +21,10 @@ void SafeRelease(T*& resource)
 	}
 }
 
-constexpr float kGrassLodFullDistance = 78.0f;
-constexpr float kGrassLodMaxDistance = 168.0f;
-constexpr float kGrassFarKeepProbability = 0.18f;
+constexpr float kGrassLodFullDistance = 46.0f;
+constexpr float kGrassLodMaxDistance = 104.0f;
+constexpr float kGrassFarKeepProbability = 0.08f;
+constexpr float kGrassArgsReadbackIntervalSeconds = 0.5f;
 }
 
 bool ComputeGrassInstances::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
@@ -117,9 +118,10 @@ void ComputeGrassInstances::Finalize()
 	m_grid_rows = 0;
 	m_instance_count = 0;
 	m_last_visible_instance_count = 0;
+	m_args_readback_pending = false;
 	m_last_readback_time_seconds = -1000.0f;
-	m_world_min_x = -256.0f;
-	m_world_min_z = -256.0f;
+	m_world_min_x = -ComputeTextureDimensions::kWorldHalfExtent;
+	m_world_min_z = -ComputeTextureDimensions::kWorldHalfExtent;
 	m_spacing = 6.5f;
 	m_terrain_height_srv = nullptr;
 	m_grass_data_srv = nullptr;
@@ -164,6 +166,7 @@ bool ComputeGrassInstances::ConfigureCoverage(
 	m_grid_rows = 0;
 	m_instance_count = 0;
 	m_last_visible_instance_count = 0;
+	m_args_readback_pending = false;
 	m_last_readback_time_seconds = -1000.0f;
 	m_world_min_x = world_min_x;
 	m_world_min_z = world_min_z;
@@ -423,19 +426,36 @@ void ComputeGrassInstances::Update(
 	m_context->CSSetConstantBuffers(0, 1, &null_constant_buffer);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 
-	if (m_args_readback_buffer != nullptr &&
-		current_time_seconds - m_last_readback_time_seconds >= 0.25f)
+	if (m_args_readback_buffer != nullptr)
 	{
-		m_context->CopyResource(m_args_readback_buffer, m_args_buffer);
-
-		D3D11_MAPPED_SUBRESOURCE readback_mapped_resource{};
-		if (SUCCEEDED(m_context->Map(m_args_readback_buffer, 0, D3D11_MAP_READ, 0, &readback_mapped_resource)))
+		if (m_args_readback_pending)
 		{
-			const auto* args =
-				static_cast<const D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS*>(readback_mapped_resource.pData);
-			m_last_visible_instance_count = args->InstanceCount;
-			m_last_readback_time_seconds = current_time_seconds;
-			m_context->Unmap(m_args_readback_buffer, 0);
+			D3D11_MAPPED_SUBRESOURCE readback_mapped_resource{};
+			const HRESULT map_result = m_context->Map(
+				m_args_readback_buffer,
+				0,
+				D3D11_MAP_READ,
+				D3D11_MAP_FLAG_DO_NOT_WAIT,
+				&readback_mapped_resource);
+			if (map_result != DXGI_ERROR_WAS_STILL_DRAWING)
+			{
+				if (SUCCEEDED(map_result))
+				{
+					const auto* args =
+						static_cast<const D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS*>(readback_mapped_resource.pData);
+					m_last_visible_instance_count = args->InstanceCount;
+					m_last_readback_time_seconds = current_time_seconds;
+					m_context->Unmap(m_args_readback_buffer, 0);
+				}
+				m_args_readback_pending = false;
+			}
+		}
+
+		if (!m_args_readback_pending &&
+			current_time_seconds - m_last_readback_time_seconds >= kGrassArgsReadbackIntervalSeconds)
+		{
+			m_context->CopyResource(m_args_readback_buffer, m_args_buffer);
+			m_args_readback_pending = true;
 		}
 	}
 }

@@ -79,6 +79,7 @@ private:
 	double m_exec_last_time = 0.0;
 	double m_fps_last_time = 0.0;
 	double m_fps = 0.0;
+	double m_terrain_normal_last_update_time = -1000.0;
 	double m_terrain_classification_last_update_time = -1000.0;
 	unsigned long m_frame_count = 0;
 	WaterSurfaceDesc m_active_water_surface_desc{};

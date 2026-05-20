@@ -16,6 +16,9 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
 Texture2D<float4> water_surface_height_tex : register(t0);
 SamplerState samp : register(s0);
 
+static const float kWorldSideLength = 2048.0f;
+static const float kWorldHalfExtent = kWorldSideLength * 0.5f;
+
 struct VS_IN
 {
     float4 posL : POSITION0;
@@ -41,12 +44,18 @@ float2 ComputeWaterSampleUv(float2 uv)
     return clamp(uv, half_texel, 1.0f.xx - half_texel);
 }
 
+float2 WorldToFieldUv(float2 world_xz)
+{
+    return float2(
+        saturate((world_xz.x + kWorldHalfExtent) / kWorldSideLength),
+        saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
+}
+
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    float2 field_size = float2(512.0f, 512.0f);
-    float2 worldUV = frac((posW.xz + field_size * 0.5f) / field_size);
+    float2 worldUV = WorldToFieldUv(posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);

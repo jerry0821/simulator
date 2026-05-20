@@ -25,6 +25,7 @@ using namespace DirectX;
 #include "compute_grass_instances.h"
 #include "compute_noise_texture.h"
 #include "compute_shared_resource_registry.h"
+#include "compute_texture_dimensions.h"
 #include "cube.h"
 #include "cylinder.h"
 #include "debug_menu.h"
@@ -74,29 +75,31 @@ constexpr int kInstancedGrassCount = 192;
 constexpr int kInstancedBirdCount = 24;
 constexpr int kClimateOverlayCols = 18;
 constexpr int kClimateOverlayRows = 18;
-constexpr float kClimateWorldMinX = -640.0f;
-constexpr float kClimateWorldMaxX = 640.0f;
-constexpr float kClimateWorldMinZ = -640.0f;
-constexpr float kClimateWorldMaxZ = 640.0f;
+constexpr float kClimateWorldMinX = -ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kClimateWorldMaxX = ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kClimateWorldMinZ = -ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kClimateWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr float kDebugQuadScaleX = 2.2f;
 constexpr float kDebugQuadScaleY = 3.4f;
 constexpr float kTerrainGrassMargin = 14.0f;
-constexpr float kTerrainGrassSpacing = 2.4f;
-constexpr float kTerrainGrassLodFullDistance = 64.0f;
-constexpr float kTerrainGrassLodMaxDistance = 132.0f;
+constexpr float kTerrainGrassSpacing = 3.8f;
+constexpr float kTerrainGrassLodFullDistance = 46.0f;
+constexpr float kTerrainGrassLodMaxDistance = 104.0f;
 constexpr float kTerrainGrassAreaCenterX = 0.0f;
 constexpr float kTerrainGrassAreaCenterZ = 0.0f;
-constexpr float kTerrainGrassAreaHalfExtentX = 220.0f;
-constexpr float kTerrainGrassAreaHalfExtentZ = 220.0f;
+constexpr float kTerrainGrassAreaHalfExtentX = 132.0f;
+constexpr float kTerrainGrassAreaHalfExtentZ = 132.0f;
 constexpr float kTerrainGrassSlopeSampleOffset = 2.2f;
-constexpr float kTerrainWorldHalfWidth = 256.0f;
-constexpr float kTerrainWorldHalfDepth = 256.0f;
+constexpr float kTerrainWorldHalfWidth = ComputeTextureDimensions::kWorldHalfExtent;
+constexpr float kTerrainWorldHalfDepth = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr int kFloatingDustParticleCount = 96;
 constexpr bool kDrawMeteorographPanelDebug = false;
 constexpr bool kDrawGrass = true;
 constexpr bool kDrawTerrainGrassCompute = true;
+constexpr bool kDrawTerrainGrassComputeShadow = false;
 constexpr bool kDrawFloatingDustParticles = false;
 constexpr double kGrassCoverageProbeIntervalSeconds = 0.75;
+constexpr double kTerrainGrassUpdateIntervalSeconds = 1.0 / 15.0;
 constexpr float kGrassCoverageClassificationSignatureThreshold = 0.020f;
 ID3D11Buffer* g_tiled_vertex_buffer = nullptr;
 
@@ -987,7 +990,6 @@ void MapController::Initialize()
   m_debug_billboard_tex_id = ResourceManager::GetTexture(L"resource/texture/grass_bill.png");
   m_cube_grass_tex_id = ResourceManager::GetTexture(L"resource/texture/grass_bill.png");
   m_floating_light_tex_id = ResourceManager::GetTexture(L"resource/texture/glow.png");
-  m_height_map_tex_id = TextureManager::Load(L"resource/texture/height_map.png");
   m_white_tex_id = ResourceManager::GetTexture(L"resource/texture/white.png");
   m_grass_model = nullptr;
   m_slime01 = ResourceManager::GetModel("resource/model/slime.fbx", 0.5f);
@@ -1433,7 +1435,11 @@ void MapController::Draw(const RenderFrameContext& frame_context)
             m_terrain_grass_instances.MarkCoverageDirty();
             m_terrain_grass_last_coverage_refresh_time_seconds = frame_context.globals.time_seconds;
           }
-          if (m_terrain_grass_last_update_time_seconds != frame_context.globals.time_seconds)
+          const bool first_grass_update = m_terrain_grass_last_update_time_seconds < 0.0;
+          const bool grass_update_interval_elapsed =
+              frame_context.globals.time_seconds - m_terrain_grass_last_update_time_seconds >=
+              kTerrainGrassUpdateIntervalSeconds;
+          if (first_grass_update || grass_update_interval_elapsed)
           {
             m_terrain_grass_instances.Update(
                 kDebugQuadScaleX,
@@ -1720,6 +1726,7 @@ void MapController::DrawShadow(const RenderFrameContext* frame_context)
       frame_context != nullptr &&
       kDrawGrass &&
       kDrawTerrainGrassCompute &&
+      kDrawTerrainGrassComputeShadow &&
       DebugMenu_IsGrassGpuEnabled() &&
       m_debug_billboard_tex_id >= 0 &&
       m_terrain_grass_instances.HasSeeds())

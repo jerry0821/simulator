@@ -13,6 +13,7 @@
 #include "render_resource_usage.h"
 #include "render_water_surface.h"
 #include "debug_menu.h"
+#include "meshfield.h"
 #include "shader_water.h"
 #include "shader3d.h"
 #include "shader3d_unlit.h"
@@ -24,6 +25,7 @@ using namespace DirectX;
 namespace
 {
 constexpr bool kEnableWaterSurfaceRender = true;
+constexpr float kWaterPatchCoverage = 0.5f; // Match Afterglow-style local patch coverage.
 }
 
 WaterPass::WaterPass(RenderBackendDX11& backend)
@@ -143,11 +145,19 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
-	const float snapped_x = std::floor(frame_context.globals.camera_position.x / 2.0f) * 2.0f;
-	const float snapped_z = std::floor(frame_context.globals.camera_position.z / 2.0f) * 2.0f;
+	const float world_width = MeshFieldRenderer::FieldWidth();
+	const float world_depth = MeshFieldRenderer::FieldDepth();
+	const float patch_width = world_width * kWaterPatchCoverage;
+	const float patch_depth = world_depth * kWaterPatchCoverage;
+	const float patch_cell_width = patch_width / 256.0f;
+	const float patch_cell_depth = patch_depth / 256.0f;
+	const float snapped_x =
+		std::floor(frame_context.globals.camera_position.x / patch_cell_width) * patch_cell_width;
+	const float snapped_z =
+		std::floor(frame_context.globals.camera_position.z / patch_cell_depth) * patch_cell_depth;
 
 	const XMMATRIX water_world =
-		XMMatrixScaling(512.0f, 512.0f, 1.0f) *
+		XMMatrixScaling(patch_width, patch_depth, 1.0f) *
 		XMMatrixRotationX(XM_PIDIV2) *
 		XMMatrixTranslation(snapped_x, water_desc.height, snapped_z);
 	XMFLOAT4 base_color = water_desc.base_color;

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "debug_ostream.h"
+#include "meshfield.h"
 #include "sampler.h"
 
 namespace
@@ -149,8 +150,8 @@ void ComputeTerrainClassificationTexture::Update(
 		material_settings.lowland_height_end,
 		material_settings.grass_coverage_min,
 		material_settings.water_height,
-		512.0f,
-		512.0f,
+		MeshFieldRenderer::FieldWidth(),
+		MeshFieldRenderer::FieldDepth(),
 		2.2f,
 		1.0f,
 		kTextureWidth,
