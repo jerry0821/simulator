@@ -1185,7 +1185,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
   ShaderField_SetViewMatrix(view);
   ShaderField_SetProjectionMatrix(proj);
   ShaderField_SetShadowMap(frame_context.resources.shadow_map);
-  ShaderField_SetClimateMap(frame_context.resources.climate_field.shaderResourceView());
+  ShaderField_SetMeteorographMap(frame_context.resources.meteorograph_field.shaderResourceView());
   ShaderField_SetTerrainSurfacePresentationEnabled(DebugMenu_IsTerrainSurfacePresentationEnabled());
   ShaderField_SetTerrainSurfaceDataMap(
       terrain_water.terrain_surface_data.isValid()

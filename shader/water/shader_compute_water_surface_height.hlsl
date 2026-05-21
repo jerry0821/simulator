@@ -36,7 +36,7 @@ cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
 
 Texture2D g_TerrainHeight : register(t0);
 Texture2D<float4> g_PreviousTerrainWaterHeight : register(t1);
-Texture2D g_RainMap : register(t2);
+Texture2D<float> g_RainMap : register(t2);
 Texture2D<float4> g_PreviousWaterFlow : register(t3);
 Texture2D<float4> g_PreviousWaterSediment : register(t4);
 Texture2D<float4> g_Meteorograph : register(t5);
@@ -52,7 +52,7 @@ RWTexture2D<float4> g_WaterInteractionOut : register(u6);
 RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u7);
 
 static const float kWaterDeltaTime = 1.0f / 60.0f;
-static const float kWaterFlowDamping = 0.005f;
+static const float kWaterFlowDamping = 0.020f;
 static const float kHydrologicalCycleRate = 0.5f;
 static const float kWaterBaseHeight = 0.0f;
 static const float kHydraulicErosionRate = 0.020f;
@@ -61,6 +61,8 @@ static const float kThermalErosionRate = 0.030f;
 static const float kThermalSlopeThreshold = 0.42f;
 static const float kMaxHydraulicErosion = 0.020f;
 static const float kMaxHydraulicDeposition = 0.014f;
+static const float kPolarTemperature = -10.0f;
+static const float kEquatorialTemperature = 30.0f;
 
 bool InBounds(int2 coord)
 {
@@ -87,6 +89,11 @@ float Smoothstep01(float v)
 {
     const float t = saturate(v);
     return t * t * (3.0f - 2.0f * t);
+}
+
+float NormalizeClimateTemperature(float temperature_celsius)
+{
+    return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
 }
 
 float4 ComputeVisibleWaterSample(
@@ -232,13 +239,7 @@ float SamplePreviousDepth(int2 coord)
 float SampleRainAmount(int2 coord)
 {
     const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
-    return max(g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f).r, 0.0f);
-}
-
-float4 SampleRainState(int2 coord)
-{
-    const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
-    return g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    return max(g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f), 0.0f);
 }
 
 float4 SamplePreviousSoilMoistureState(int2 coord)
@@ -287,10 +288,12 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
 
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
     const float4 previous_flow = max(g_PreviousWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
+    const float previous_flow_retention = saturate(1.0f - water_dt * 2.2f);
+    const float4 retained_previous_flow = previous_flow * previous_flow_retention;
     const float available_water = SamplePreviousDepth(coord);
     if (available_water <= 1.0e-5f)
     {
-        outflow = max(previous_flow * saturate(1.0f - water_dt * 4.0f), 0.0f.xxxx);
+        outflow = max(retained_previous_flow * saturate(1.0f - water_dt * 6.0f), 0.0f.xxxx);
         return outflow;
     }
 
@@ -323,21 +326,21 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
             SamplePreviousDepth(coord + int2(0, -1)));
         const float disturbance_scale =
             wind_strength *
-            (0.012f + gust * 0.028f) *
-            max(length(surface_delta_heights), 0.001f);
+            (0.0035f + gust * 0.010f) *
+            max(length(surface_delta_heights), 0.0006f);
         const float4 wind_effect =
             float4(wind_dir.x, -wind_dir.x, wind_dir.y, -wind_dir.y) * disturbance_scale;
         const float4 max_disturbance =
-            max(min(neighbor_depth, available_water.xxxx) * 0.06f, 0.00025f.xxxx);
+            max(min(neighbor_depth, available_water.xxxx) * 0.018f, 0.00008f.xxxx);
         surface_delta_heights =
             max(surface_delta_heights + clamp(wind_effect, -max_disturbance, max_disturbance), 0.0f.xxxx);
     }
 
-    float4 candidate = max(previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
+    float4 candidate = max(retained_previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
     const float total_candidate = dot(candidate, 1.0f.xxxx);
     if (total_candidate <= 1.0e-5f)
     {
-        outflow = max(previous_flow * saturate(1.0f - water_dt * 4.0f), 0.0f.xxxx);
+        outflow = max(retained_previous_flow * saturate(1.0f - water_dt * 5.0f), 0.0f.xxxx);
         return outflow;
     }
 
@@ -368,7 +371,7 @@ float4 ComputeApproxVisibleWaterAtCoord(int2 coord)
 float4 ComputeSoilMoistureSample(
     int2 coord,
     float water_dt,
-    float4 rain_state,
+    float rain_amount,
     float next_depth,
     float4 water_mask)
 {
@@ -389,8 +392,9 @@ float4 ComputeSoilMoistureSample(
          SamplePreviousSoilMoistureState(coord + int2(0, 1)).r +
          SamplePreviousSoilMoistureState(coord + int2(0, -1)).r) * 0.25f;
 
-    const float rain_amount = max(rain_state.r, 0.0f);
-    const float rain_wet_hint = saturate(rain_state.g);
+    rain_amount = max(rain_amount, 0.0f);
+    const float rain_wet_hint =
+        saturate(rain_amount * 0.92f + saturate(next_depth) * 0.24f);
     const float water_coverage = saturate(water_mask.r);
     const float shoreline_contact = saturate(water_mask.g);
     const float pooled_contact = saturate(water_mask.b);
@@ -469,11 +473,11 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float terrain_height = SampleWorkingTerrainHeight(coord);
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
     const float basin_factor = ComputeBasinFactor(terrain_height);
-    const float4 rain_state = SampleRainState(coord);
+    const float rain_amount = SampleRainAmount(coord);
 
     const float previous_depth = SamplePreviousDepth(coord);
     const float rain_input =
-        max(rain_state.r, 0.0f) *
+        rain_amount *
         accumulation_rate *
         kHydrologicalCycleRate *
         water_dt *
@@ -508,7 +512,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
     const float2 atmospheric_wind = meteorograph_sample.xy;
     const float atmospheric_humidity = saturate(meteorograph_sample.z);
-    const float atmospheric_temperature = saturate(meteorograph_sample.w);
+    const float atmospheric_temperature = NormalizeClimateTemperature(meteorograph_sample.w);
     const float wind_strength = saturate(length(atmospheric_wind));
     const float2 wind_dir = SafeNormalize(atmospheric_wind);
     const float wind_surface_factor =
@@ -516,10 +520,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         wind_strength *
         (0.55f + basin_factor * 0.45f);
     float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
-    water_velocity_xy += wind_dir * ((0.008f + next_depth * 0.035f) * wind_surface_factor);
-    float water_speed = saturate(length(water_velocity_xy) * 3.5f);
+    water_velocity_xy += wind_dir * ((0.0035f + next_depth * 0.014f) * wind_surface_factor);
+    float water_speed = saturate(length(water_velocity_xy) * 2.8f);
     float transport_energy =
-        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f + wind_surface_factor * 0.12f));
+        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f + wind_surface_factor * 0.05f));
 
     const float east_terrain = SampleWorkingTerrainHeight(coord + int2(1, 0));
     const float west_terrain = SampleWorkingTerrainHeight(coord + int2(-1, 0));
@@ -665,7 +669,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float4 soil_moisture = ComputeSoilMoistureSample(
         coord,
         water_dt,
-        rain_state,
+        rain_amount,
         next_depth,
         water_mask);
     const float4 water_interaction =

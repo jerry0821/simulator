@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 
 #include "compute_texture_dimensions.h"
 #include "compute_noise_texture.h"
 #include "debug_menu.h"
+#include "direct3d.h"
 #include "render_frame_context.h"
 #include "render_resource_usage.h"
 #include "render_scene.h"
@@ -15,14 +18,29 @@
 
 namespace
 {
-	constexpr bool kDrawComputePreviews = false;
+	constexpr bool kDrawAtmospherePreview = true;
 	constexpr float kPreviewSize = 192.0f;
+	constexpr float kPreviewMargin = 16.0f;
 	constexpr int kWindOverlayCols = 20;
 	constexpr int kWindOverlayRows = 20;
 	constexpr float kClimateWorldMinX = -ComputeTextureDimensions::kWorldHalfExtent;
 	constexpr float kClimateWorldMaxX = ComputeTextureDimensions::kWorldHalfExtent;
 	constexpr float kClimateWorldMinZ = -ComputeTextureDimensions::kWorldHalfExtent;
 	constexpr float kClimateWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
+	ID3D11Texture2D* g_MeteorographPreviewStagingTexture = nullptr;
+	float g_MeteorographPreviewLastReadbackTime = -1000.0f;
+	bool g_MeteorographPreviewSamplesValid = false;
+	DirectX::XMFLOAT3 g_MeteorographPreviewSamples[kWindOverlayCols * kWindOverlayRows]{};
+
+	template <typename T>
+	void SafeReleaseLocal(T*& resource)
+	{
+		if (resource != nullptr)
+		{
+			resource->Release();
+			resource = nullptr;
+		}
+	}
 
 	int getArrowTextureId()
 	{
@@ -166,12 +184,230 @@ namespace
 		return { local_dir.x, local_dir.y, strength };
 	}
 
+	bool MapMeteorographPreviewTexture(
+		ID3D11ShaderResourceView* meteorograph_srv,
+		D3D11_TEXTURE2D_DESC& out_desc,
+		D3D11_MAPPED_SUBRESOURCE& out_mapped)
+	{
+		if (meteorograph_srv == nullptr)
+		{
+			return false;
+		}
+
+		ID3D11Resource* resource = nullptr;
+		meteorograph_srv->GetResource(&resource);
+		if (resource == nullptr)
+		{
+			return false;
+		}
+
+		ID3D11Texture2D* source_texture = nullptr;
+		const HRESULT query_result = resource->QueryInterface(
+			__uuidof(ID3D11Texture2D),
+			reinterpret_cast<void**>(&source_texture));
+		resource->Release();
+		if (FAILED(query_result) || source_texture == nullptr)
+		{
+			return false;
+		}
+
+		source_texture->GetDesc(&out_desc);
+
+		bool needs_recreate = g_MeteorographPreviewStagingTexture == nullptr;
+		if (!needs_recreate)
+		{
+			D3D11_TEXTURE2D_DESC staging_desc{};
+			g_MeteorographPreviewStagingTexture->GetDesc(&staging_desc);
+			needs_recreate =
+				staging_desc.Width != out_desc.Width ||
+				staging_desc.Height != out_desc.Height ||
+				staging_desc.Format != out_desc.Format;
+		}
+
+		if (needs_recreate)
+		{
+			SafeReleaseLocal(g_MeteorographPreviewStagingTexture);
+
+			D3D11_TEXTURE2D_DESC staging_desc = out_desc;
+			staging_desc.BindFlags = 0;
+			staging_desc.MiscFlags = 0;
+			staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			staging_desc.Usage = D3D11_USAGE_STAGING;
+			staging_desc.MipLevels = 1;
+			staging_desc.ArraySize = 1;
+			if (FAILED(Direct3D_GetDevice()->CreateTexture2D(
+					&staging_desc,
+					nullptr,
+					&g_MeteorographPreviewStagingTexture)))
+			{
+				source_texture->Release();
+				return false;
+			}
+		}
+
+		Direct3D_GetContext()->CopyResource(g_MeteorographPreviewStagingTexture, source_texture);
+		source_texture->Release();
+		return SUCCEEDED(Direct3D_GetContext()->Map(
+			g_MeteorographPreviewStagingTexture,
+			0,
+			D3D11_MAP_READ,
+			0,
+			&out_mapped));
+	}
+
+	void UnmapMeteorographPreviewTexture()
+	{
+		if (g_MeteorographPreviewStagingTexture != nullptr)
+		{
+			Direct3D_GetContext()->Unmap(g_MeteorographPreviewStagingTexture, 0);
+		}
+	}
+
+	bool DecodeMeteorographWindPixel(
+		const D3D11_TEXTURE2D_DESC& texture_desc,
+		const D3D11_MAPPED_SUBRESOURCE& mapped_resource,
+		unsigned int x,
+		unsigned int y,
+		DirectX::XMFLOAT3& out_wind)
+	{
+		out_wind = { 1.0f, 0.0f, 0.0f };
+		x = std::min(x, texture_desc.Width - 1u);
+		y = std::min(y, texture_desc.Height - 1u);
+
+		const unsigned char* row_ptr =
+			static_cast<const unsigned char*>(mapped_resource.pData) + mapped_resource.RowPitch * y;
+
+		auto half_to_float = [](unsigned short value) -> float
+		{
+			const uint32_t sign = (static_cast<uint32_t>(value & 0x8000u)) << 16;
+			uint32_t exponent = (value & 0x7C00u) >> 10;
+			uint32_t mantissa = value & 0x03FFu;
+			uint32_t bits = 0u;
+
+			if (exponent == 0u)
+			{
+				if (mantissa == 0u)
+				{
+					bits = sign;
+				}
+				else
+				{
+					exponent = 1u;
+					while ((mantissa & 0x0400u) == 0u)
+					{
+						mantissa <<= 1u;
+						--exponent;
+					}
+					mantissa &= 0x03FFu;
+					bits = sign | ((exponent + (127u - 15u)) << 23) | (mantissa << 13);
+				}
+			}
+			else if (exponent == 0x1Fu)
+			{
+				bits = sign | 0x7F800000u | (mantissa << 13);
+			}
+			else
+			{
+				bits = sign | ((exponent + (127u - 15u)) << 23) | (mantissa << 13);
+			}
+
+			float result = 0.0f;
+			std::memcpy(&result, &bits, sizeof(result));
+			return result;
+		};
+
+		if (texture_desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT)
+		{
+			const unsigned short* pixel_ptr = reinterpret_cast<const unsigned short*>(row_ptr) + x * 4u;
+			float dir_x = half_to_float(pixel_ptr[0]);
+			float dir_y = half_to_float(pixel_ptr[1]);
+			float strength = std::clamp(std::sqrt(dir_x * dir_x + dir_y * dir_y), 0.0f, 1.0f);
+			const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+			if (dir_length > 1.0e-6f)
+			{
+				dir_x /= dir_length;
+				dir_y /= dir_length;
+			}
+			else
+			{
+				dir_x = 1.0f;
+				dir_y = 0.0f;
+			}
+			out_wind = { dir_x, dir_y, strength };
+			return true;
+		}
+
+		if (texture_desc.Format == DXGI_FORMAT_R32G32B32A32_FLOAT)
+		{
+			const float* pixel_ptr = reinterpret_cast<const float*>(row_ptr) + x * 4u;
+			float dir_x = pixel_ptr[0];
+			float dir_y = pixel_ptr[1];
+			float strength = std::clamp(std::sqrt(dir_x * dir_x + dir_y * dir_y), 0.0f, 1.0f);
+			const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+			if (dir_length > 1.0e-6f)
+			{
+				dir_x /= dir_length;
+				dir_y /= dir_length;
+			}
+			else
+			{
+				dir_x = 1.0f;
+				dir_y = 0.0f;
+			}
+			out_wind = { dir_x, dir_y, strength };
+			return true;
+		}
+
+		return false;
+	}
+
+	bool RefreshMeteorographPreviewSamples(
+		ID3D11ShaderResourceView* meteorograph_srv,
+		float time_seconds)
+	{
+		if (g_MeteorographPreviewSamplesValid &&
+			(time_seconds - g_MeteorographPreviewLastReadbackTime) < 0.18f)
+		{
+			return true;
+		}
+
+		D3D11_TEXTURE2D_DESC preview_desc{};
+		D3D11_MAPPED_SUBRESOURCE preview_mapped{};
+		if (!MapMeteorographPreviewTexture(meteorograph_srv, preview_desc, preview_mapped))
+		{
+			g_MeteorographPreviewSamplesValid = false;
+			return false;
+		}
+
+		for (int row = 0; row < kWindOverlayRows; ++row)
+		{
+			for (int col = 0; col < kWindOverlayCols; ++col)
+			{
+				const float u = (static_cast<float>(col) + 0.5f) / static_cast<float>(kWindOverlayCols);
+				const float v = (static_cast<float>(row) + 0.5f) / static_cast<float>(kWindOverlayRows);
+				const unsigned int sample_x = static_cast<unsigned int>(
+					std::clamp(u * static_cast<float>(preview_desc.Width), 0.0f, static_cast<float>(preview_desc.Width - 1u)));
+				const unsigned int sample_y = static_cast<unsigned int>(
+					std::clamp(v * static_cast<float>(preview_desc.Height), 0.0f, static_cast<float>(preview_desc.Height - 1u)));
+				DirectX::XMFLOAT3 wind{};
+				DecodeMeteorographWindPixel(preview_desc, preview_mapped, sample_x, sample_y, wind);
+				g_MeteorographPreviewSamples[row * kWindOverlayCols + col] = wind;
+			}
+		}
+
+		UnmapMeteorographPreviewTexture();
+		g_MeteorographPreviewLastReadbackTime = time_seconds;
+		g_MeteorographPreviewSamplesValid = true;
+		return true;
+	}
+
 	void drawWindOverlay(
 		float origin_x,
 		float origin_y,
 		float width,
 		float height,
 		float time_seconds,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		const ComputeNoiseSettings& settings)
 	{
 		const int arrow_texture_id = getArrowTextureId();
@@ -180,13 +416,19 @@ namespace
 			return;
 		}
 
+		const bool using_gpu_preview =
+			meteorograph_srv != nullptr && RefreshMeteorographPreviewSamples(meteorograph_srv, time_seconds);
+
 		for (int row = 0; row < kWindOverlayRows; ++row)
 		{
 			for (int col = 0; col < kWindOverlayCols; ++col)
 			{
 				const float uv_x = (static_cast<float>(col) + 0.5f) / static_cast<float>(kWindOverlayCols);
 				const float uv_y = (static_cast<float>(row) + 0.5f) / static_cast<float>(kWindOverlayRows);
-				const DirectX::XMFLOAT3 wind = sampleWindFieldCpu(uv_x, uv_y, time_seconds, settings);
+				const DirectX::XMFLOAT3 wind =
+					using_gpu_preview
+						? g_MeteorographPreviewSamples[row * kWindOverlayCols + col]
+						: sampleWindFieldCpu(uv_x, uv_y, time_seconds, settings);
 
 				const float center_x = origin_x + uv_x * width;
 				const float center_y = origin_y + uv_y * height;
@@ -316,27 +558,38 @@ void UIPass::execute(const RenderFrameContext& frame_context)
 		frame_context.render_scene->drawUI(frame_context);
 	}
 
-	if (!kDrawComputePreviews)
+	if (!kDrawAtmospherePreview)
 	{
 		return;
 	}
 
-	if (frame_context.resources.compute_noise.isValid())
+	if (!frame_context.resources.meteorograph_field.isValid())
 	{
-		// Compute preview for the first GPU noise workflow.
-		Sprite_DrawSRV(frame_context.resources.compute_noise.shaderResourceView(), 16.0f, 16.0f, kPreviewSize, kPreviewSize);
+		return;
 	}
 
-	if (frame_context.resources.meteorograph_field.isValid())
-	{
-		// Authoritative meteorograph preview with wind overlay.
-		Sprite_DrawSRV(frame_context.resources.meteorograph_field.shaderResourceView(), 216.0f, 16.0f, kPreviewSize, kPreviewSize);
-		drawWindOverlay(216.0f, 16.0f, kPreviewSize, kPreviewSize, static_cast<float>(frame_context.globals.time_seconds), compute_settings);
-	}
+	Sprite_Draw(
+		kPreviewMargin - 4.0f,
+		kPreviewMargin - 4.0f,
+		kPreviewSize + 8.0f,
+		kPreviewSize + 8.0f,
+		DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.55f));
 
-	if (frame_context.resources.climate_field.isValid())
-	{
-		// Climate input field preview.
-		Sprite_DrawSRV(frame_context.resources.climate_field.shaderResourceView(), 416.0f, 16.0f, kPreviewSize, kPreviewSize);
-	}
+	Sprite_DrawSRV(
+		frame_context.resources.atmosphere_preview.isValid()
+			? frame_context.resources.atmosphere_preview.shaderResourceView()
+			: frame_context.resources.meteorograph_field.shaderResourceView(),
+		kPreviewMargin,
+		kPreviewMargin,
+		kPreviewSize,
+		kPreviewSize);
+	drawWindOverlay(
+		kPreviewMargin,
+		kPreviewMargin,
+		kPreviewSize,
+		kPreviewSize,
+		static_cast<float>(frame_context.globals.time_seconds),
+		frame_context.resources.meteorograph_field.shaderResourceView(),
+		compute_settings);
+
 }

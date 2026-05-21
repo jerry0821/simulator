@@ -11,9 +11,6 @@ struct TerrainWaterFrameState
 	Backend::RenderShaderResource terrain_height{};
 	Backend::RenderShaderResource terrain_normal{};
 	Backend::RenderShaderResource terrain_surface_data{};
-	Backend::RenderShaderResource terrain_vegetation_suitability{};
-	Backend::RenderShaderResource grass_data{};
-	Backend::RenderShaderResource surface_water{};
 	Backend::RenderShaderResource water_surface_height_texture{};
 	Backend::RenderShaderResource surface_water_flow{};
 	Backend::RenderShaderResource water_velocity{};
@@ -24,7 +21,7 @@ struct TerrainWaterFrameState
 
 	bool HasHydrologyData() const
 	{
-		return surface_water.isValid() ||
+		return water_surface_height_texture.isValid() ||
 			water_velocity.isValid() ||
 			water_sediment.isValid() ||
 			water_interaction_data.isValid();
@@ -48,10 +45,6 @@ struct TerrainWaterFrameState
 			erosion_delta.isValid();
 	}
 
-	bool HasVegetationData() const
-	{
-		return terrain_vegetation_suitability.isValid() || grass_data.isValid();
-	}
 };
 
 class TerrainWaterState
@@ -68,9 +61,6 @@ public:
 		Backend::RenderShaderResource terrain_height,
 		Backend::RenderShaderResource terrain_normal,
 		Backend::RenderShaderResource terrain_surface_data,
-		Backend::RenderShaderResource terrain_vegetation_suitability,
-		Backend::RenderShaderResource grass_data,
-		Backend::RenderShaderResource surface_water,
 		Backend::RenderShaderResource water_surface_height_texture,
 		Backend::RenderShaderResource surface_water_flow,
 		Backend::RenderShaderResource water_velocity,
@@ -84,9 +74,6 @@ public:
 		frame_state_.terrain_height = terrain_height;
 		frame_state_.terrain_normal = terrain_normal;
 		frame_state_.terrain_surface_data = terrain_surface_data;
-		frame_state_.terrain_vegetation_suitability = terrain_vegetation_suitability;
-		frame_state_.grass_data = grass_data;
-		frame_state_.surface_water = surface_water;
 		frame_state_.water_surface_height_texture = water_surface_height_texture;
 		frame_state_.surface_water_flow = surface_water_flow;
 		frame_state_.water_velocity = water_velocity;
@@ -115,18 +102,6 @@ public:
 			ComputeSharedResourceId::TerrainSurfaceData,
 			"TerrainSurfaceData",
 			frame_state_.terrain_surface_data);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::TerrainVegetationSuitability,
-			"TerrainVegetationSuitability",
-			frame_state_.terrain_vegetation_suitability);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::GrassData,
-			"GrassData",
-			frame_state_.grass_data);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::SurfaceWater,
-			"SurfaceWater",
-			frame_state_.surface_water);
 		registry.PublishShaderResource(
 			ComputeSharedResourceId::WaterSurfaceHeight,
 			"WaterSurfaceHeight",

@@ -5,7 +5,7 @@
 
 #include <DirectXMath.h>
 
-#include "meshfield.h"
+#include "terrain_height_field.h"
 
 namespace
 {
@@ -93,13 +93,13 @@ void TerrainDataModel::SetMaterialSettings(const TerrainMaterialSettings& materi
 	g_material_settings = material_settings;
 	if (g_material_settings.water_height <= 0.0f)
 	{
-		g_material_settings.water_height = MeshFieldRenderer::GetSuggestedWaterHeight();
+		g_material_settings.water_height = TerrainHeightField::GetSuggestedWaterHeight();
 	}
 }
 
 Backend::RenderShaderResource TerrainDataModel::HeightResource()
 {
-	return MeshFieldRenderer::HeightResource();
+	return TerrainHeightField::HeightResource();
 }
 
 ID3D11ShaderResourceView* TerrainDataModel::HeightSRV()
@@ -109,7 +109,7 @@ ID3D11ShaderResourceView* TerrainDataModel::HeightSRV()
 
 float TerrainDataModel::SampleHeightWorld(float world_x, float world_z)
 {
-	return MeshFieldRenderer::GetHeight(world_x, world_z);
+	return TerrainHeightField::GetHeight(world_x, world_z);
 }
 
 DirectX::XMFLOAT3 TerrainDataModel::SampleNormalWorld(float world_x, float world_z, float sample_offset)
@@ -229,5 +229,5 @@ float TerrainDataModel::ActiveWaterSurfaceHeight()
 
 float TerrainDataModel::SuggestedWaterHeight()
 {
-	return MeshFieldRenderer::GetSuggestedWaterHeight();
+	return TerrainHeightField::GetSuggestedWaterHeight();
 }

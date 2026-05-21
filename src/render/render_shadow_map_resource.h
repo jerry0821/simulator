@@ -9,13 +9,12 @@ class TransparencyPass;
 class PostProcessPass;
 class ComputeNoiseTexture;
 class ComputeTerrainClassificationTexture;
-class ComputeTerrainNormalTexture;
-class ComputeClimateTexture;
 class ComputeGrassDataTexture;
 class ComputeMeteorographTexture;
 class ComputeRainMapTexture;
 class ComputeWaterSurfaceHeightTexture;
 class MeshFieldRenderer;
+class TerrainHeightField;
 
 namespace Backend
 {
@@ -49,13 +48,12 @@ private:
 	friend class ::PostProcessPass;
 	friend class ::ComputeNoiseTexture;
 	friend class ::ComputeTerrainClassificationTexture;
-	friend class ::ComputeTerrainNormalTexture;
-	friend class ::ComputeClimateTexture;
 	friend class ::ComputeGrassDataTexture;
 	friend class ::ComputeMeteorographTexture;
 	friend class ::ComputeRainMapTexture;
 	friend class ::ComputeWaterSurfaceHeightTexture;
 	friend class ::MeshFieldRenderer;
+	friend class ::TerrainHeightField;
 };
 
 class RenderDepthResource

@@ -55,7 +55,7 @@ struct PS_INPUT
     float4 blend : COLOR0;
     float2 uv : TEXCOORD0;
     float4 shadowPos : TEXCOORD1;
-    float3 climateData : TEXCOORD2;
+    float4 meteorographData : TEXCOORD2;
     float2 macroData : TEXCOORD3;
 };
 
@@ -63,11 +63,13 @@ Texture2D texRock : register(t0);
 Texture2D texStone : register(t1);
 Texture2D g_ShadowMap : register(t2);
 Texture2D texGrass : register(t3);
-Texture2D texClimate : register(t4);
 Texture2D g_TerrainSurfaceData : register(t5);
 
 SamplerState samp : register(s0);
 SamplerState shadowSamp : register(s1);
+
+static const float kPolarTemperature = -10.0f;
+static const float kEquatorialTemperature = 30.0f;
 
 float4 SampleTerrainSurfaceData(float2 world_xz)
 {
@@ -77,6 +79,11 @@ float4 SampleTerrainSurfaceData(float2 world_xz)
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
     return g_TerrainSurfaceData.SampleLevel(samp, uv, 0.0f);
+}
+
+float NormalizeClimateTemperature(float temperature_celsius)
+{
+    return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
 }
 
 float3 ApplySurfaceVariant(float3 srcColor, float beachMask, float humidity, float temperature)
@@ -103,8 +110,8 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     float humidity = saturate(surface_data.b);
     float roughness = saturate(surface_data.a);
 
-    float climateHumidity = saturate(ps_in.climateData.g);
-    float temperature = saturate(ps_in.climateData.r);
+    float climateHumidity = saturate(ps_in.meteorographData.z);
+    float temperature = NormalizeClimateTemperature(ps_in.meteorographData.w);
     float humidityMask = saturate(max(humidity, climateHumidity * 0.55f));
     float slopeBlend = smoothstep(0.06f, 0.72f, slopeMask);
     float beachBlend = saturate(beachMask * (1.0f - slopeBlend * 0.55f));

@@ -41,6 +41,7 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kWriteResources[] = {
 			ComputeSharedResourceId::RainMap,
+			ComputeSharedResourceId::AtmospherePreview,
 			ComputeSharedResourceId::MeteorographField
 		};
 		return kWriteResources;
@@ -58,6 +59,7 @@ public:
 	bool IsValid() const override;
 	Backend::RenderShaderResource Resource() const;
 	Backend::RenderShaderResource RainResource() const;
+	Backend::RenderShaderResource PreviewResource() const;
 
 private:
 	struct MeteorographConstants
@@ -97,6 +99,9 @@ private:
 	ID3D11Texture2D* m_rain_texture = nullptr;
 	ID3D11ShaderResourceView* m_rain_srv = nullptr;
 	ID3D11UnorderedAccessView* m_rain_uav = nullptr;
+	ID3D11Texture2D* m_preview_texture = nullptr;
+	ID3D11ShaderResourceView* m_preview_srv = nullptr;
+	ID3D11UnorderedAccessView* m_preview_uav = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	mutable unsigned int m_current_index = 0u;
 	mutable bool m_has_state = false;

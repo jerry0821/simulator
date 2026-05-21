@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -69,6 +71,21 @@ constexpr float kWindPreviewWorldMinZ = -ComputeTextureDimensions::kWorldHalfExt
 constexpr float kWindPreviewWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr int kWindPreviewCols = 18;
 constexpr int kWindPreviewRows = 18;
+
+void ApplyAfterglowMeteorographPreset()
+{
+    g_ComputeNoiseSettings.noise_scale = 12.0f;
+    g_ComputeNoiseSettings.wind_direction_x = 1.0f;
+    g_ComputeNoiseSettings.wind_direction_y = 0.0f;
+    g_ComputeNoiseSettings.wind_strength = 0.08f;
+    g_ComputeNoiseSettings.wind_cross_influence = 0.12f;
+    g_ComputeNoiseSettings.flow_speed_x0 = 0.02f;
+    g_ComputeNoiseSettings.flow_speed_y0 = 0.00f;
+    g_ComputeNoiseSettings.flow_speed_x1 = -0.01f;
+    g_ComputeNoiseSettings.flow_speed_y1 = 0.01f;
+    g_ComputeNoiseSettings.band_strength = 0.04f;
+    g_ComputeNoiseSettings.contrast = 1.0f;
+}
 
 ImVec4 ToColor(RenderResourceId resource_id)
 {
@@ -153,8 +170,8 @@ const char* ToString(ComputeSharedResourceId id)
         return "GrassData";
     case ComputeSharedResourceId::RainMap:
         return "RainMap";
-    case ComputeSharedResourceId::SurfaceWater:
-        return "SurfaceWater";
+    case ComputeSharedResourceId::AtmospherePreview:
+        return "AtmospherePreview";
     case ComputeSharedResourceId::WaterSurfaceHeight:
         return "WaterSurfaceHeight";
     case ComputeSharedResourceId::SurfaceWaterFlow:
@@ -171,8 +188,6 @@ const char* ToString(ComputeSharedResourceId id)
         return "ErosionDelta";
     case ComputeSharedResourceId::ComputeNoise:
         return "ComputeNoise";
-    case ComputeSharedResourceId::ClimateField:
-        return "ClimateField";
     case ComputeSharedResourceId::MeteorographField:
         return "MeteorographField";
     case ComputeSharedResourceId::GrassInstances:
@@ -326,6 +341,76 @@ bool DecodeWindFieldPixel(
         {
             dir_x = dir_x * 2.0f - 1.0f;
             dir_y = dir_y * 2.0f - 1.0f;
+        }
+        const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+        if (dir_length > 1.0e-6f)
+        {
+            dir_x /= dir_length;
+            dir_y /= dir_length;
+        }
+        else
+        {
+            dir_x = 1.0f;
+            dir_y = 0.0f;
+        }
+        out_wind = { dir_x, dir_y, strength };
+        return true;
+    }
+
+    if (texture_desc.Format == DXGI_FORMAT_R16G16B16A16_FLOAT)
+    {
+        auto half_to_float = [](unsigned short value) -> float
+        {
+            const uint32_t sign = (static_cast<uint32_t>(value & 0x8000u)) << 16;
+            uint32_t exponent = (value & 0x7C00u) >> 10;
+            uint32_t mantissa = value & 0x03FFu;
+            uint32_t bits = 0u;
+
+            if (exponent == 0u)
+            {
+                if (mantissa == 0u)
+                {
+                    bits = sign;
+                }
+                else
+                {
+                    exponent = 1u;
+                    while ((mantissa & 0x0400u) == 0u)
+                    {
+                        mantissa <<= 1u;
+                        --exponent;
+                    }
+                    mantissa &= 0x03FFu;
+                    bits = sign | ((exponent + (127u - 15u)) << 23) | (mantissa << 13);
+                }
+            }
+            else if (exponent == 0x1Fu)
+            {
+                bits = sign | 0x7F800000u | (mantissa << 13);
+            }
+            else
+            {
+                bits = sign | ((exponent + (127u - 15u)) << 23) | (mantissa << 13);
+            }
+
+            float result = 0.0f;
+            std::memcpy(&result, &bits, sizeof(result));
+            return result;
+        };
+
+        const unsigned short* pixel_ptr = reinterpret_cast<const unsigned short*>(row_ptr) + x * 4u;
+        float dir_x = half_to_float(pixel_ptr[0]);
+        float dir_y = half_to_float(pixel_ptr[1]);
+        float strength = 0.0f;
+        if (raw_vector_xy)
+        {
+            strength = std::clamp(std::sqrt(dir_x * dir_x + dir_y * dir_y), 0.0f, 1.0f);
+        }
+        else
+        {
+            dir_x = dir_x * 2.0f - 1.0f;
+            dir_y = dir_y * 2.0f - 1.0f;
+            strength = std::clamp(half_to_float(pixel_ptr[2]), 0.0f, 1.0f);
         }
         const float dir_length = std::sqrt(dir_x * dir_x + dir_y * dir_y);
         if (dir_length > 1.0e-6f)
@@ -633,6 +718,12 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::End();
 
     ImGui::Begin("Compute Noise");
+    if (ImGui::Button("Apply Afterglow Meteo Preset"))
+    {
+        ApplyAfterglowMeteorographPreset();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Bias the active weather settings toward Afterglow-style broad, stable flow.");
     ImGui::SliderFloat("Scale", &g_ComputeNoiseSettings.noise_scale, 4.0f, 96.0f);
     ImGui::Separator();
     ImGui::TextDisabled("Wind");
@@ -649,9 +740,8 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Band Strength", &g_ComputeNoiseSettings.band_strength, 0.0f, 0.35f);
     ImGui::SliderFloat("Contrast", &g_ComputeNoiseSettings.contrast, 0.35f, 2.25f);
     ImGui::Separator();
-    ImGui::TextDisabled("Rain Debug");
-    ImGui::SliderFloat("Rain Multiplier", &g_ComputeNoiseSettings.rain_multiplier, 0.0f, 4.0f);
-    ImGui::SliderFloat("Force Rain", &g_ComputeNoiseSettings.force_rain, 0.0f, 1.0f);
+    ImGui::TextDisabled("Rain");
+    ImGui::TextWrapped("Rainfall now follows Afterglow-style humidity overflow inside Meteorograph. Higher local humidity and converging airflow create brighter rain zones.");
     ImGui::End();
 
     ImGui::Begin("Wind");
@@ -668,11 +758,14 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     {
         ImGui::Separator();
         ImGui::TextDisabled("Meteorograph Wind Preview");
-        ImGui::TextWrapped("Background = authoritative atmosphere state. Arrows = wind vectors decoded from Meteorograph.xy.");
+        ImGui::TextWrapped("Background = Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Arrows = wind vectors decoded from Meteorograph.xy.");
         const ImVec2 preview_size(224.0f, 224.0f);
         const ImVec2 preview_top_left = ImGui::GetCursorScreenPos();
         ImGui::Image(
-            ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.meteorograph_field.shaderResourceView())),
+            ImTextureRef(reinterpret_cast<ImTextureID>(
+                frame_context->resources.atmosphere_preview.isValid()
+                    ? frame_context->resources.atmosphere_preview.shaderResourceView()
+                    : frame_context->resources.meteorograph_field.shaderResourceView())),
             preview_size);
         DrawWindFieldOverlay(
             preview_top_left,
@@ -693,30 +786,17 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     {
         const ImVec2 preview_size(224.0f, 224.0f);
 
-        ImGui::TextDisabled("Climate Field");
-        ImGui::TextWrapped("RGB = temperature / humidity / rainfall field used by rain and atmospheric coupling.");
-        if (!frame_context->resources.climate_field.isValid())
+        ImGui::TextDisabled("Atmosphere Preview");
+        ImGui::TextWrapped("Preview follows an Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Wind arrows are shown in the Wind panel.");
+        ImGui::TextDisabled("Afterglow-like tuning now biases toward weaker random source, wrap-around transport, humidity capacity 1.0, and slower broad weather motion.");
+        if (!frame_context->resources.atmosphere_preview.isValid())
         {
-            ImGui::TextDisabled("ClimateField Preview: Missing");
+            ImGui::TextDisabled("Atmosphere Preview: Missing");
         }
         else
         {
             ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.climate_field.shaderResourceView())),
-                preview_size);
-        }
-
-        ImGui::Separator();
-        ImGui::TextDisabled("Meteorograph Field");
-        ImGui::TextWrapped("Authoritative atmosphere state: RG = wind velocity, B = humidity, A = temperature. Rain influence is folded into the humidity/temperature evolution.");
-        if (!frame_context->resources.meteorograph_field.isValid())
-        {
-            ImGui::TextDisabled("Meteorograph Preview: Missing");
-        }
-        else
-        {
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.meteorograph_field.shaderResourceView())),
+                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.atmosphere_preview.shaderResourceView())),
                 preview_size);
         }
     }

@@ -13,6 +13,9 @@ Texture2D<float4> g_Meteorograph : register(t3);
 SamplerState g_GrassDataSampler : register(s0);
 RWTexture2D<float4> g_GrassData : register(u0);
 
+static const float kPolarTemperature = -10.0f;
+static const float kEquatorialTemperature = 30.0f;
+
 float Hash21(float2 p)
 {
     p = frac(p * float2(123.34f, 345.45f));
@@ -31,6 +34,11 @@ float TerrainNormalYFromPacked(float2 encoded)
 {
     const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
     return sqrt(saturate(1.0f - dot(xz, xz)));
+}
+
+float NormalizeClimateTemperature(float temperature_celsius)
+{
+    return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
 }
 
 [numthreads(8, 8, 1)]
@@ -56,7 +64,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float roughness = saturate(surface_data.a);
     float4 meteorograph = g_Meteorograph.SampleLevel(g_GrassDataSampler, uv, 0.0f);
     float climate_humidity = saturate(meteorograph.z);
-    float climate_temperature = saturate(meteorograph.w);
+    float climate_temperature = NormalizeClimateTemperature(meteorograph.w);
     float wind_strength = saturate(length(meteorograph.xy));
 
     float slope_support = smoothstep(0.42f, 0.76f, normal_y);

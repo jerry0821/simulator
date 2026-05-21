@@ -32,7 +32,7 @@ void ShaderField_SetTerrainSurfaceDataMap(ID3D11ShaderResourceView* pSRV);
 
 void ShaderField_SetLightViewProj(const DirectX::XMMATRIX& matrix); // 太陽の行列用
 void ShaderField_SetShadowMap(const Backend::RenderShadowMapResource& shadow_map_resource);
-void ShaderField_SetClimateMap(ID3D11ShaderResourceView* pSRV);
+void ShaderField_SetMeteorographMap(ID3D11ShaderResourceView* pSRV);
 void ShaderField_SetTerrainMaterialSettings(const TerrainMaterialSettings& settings);
 void ShaderField_SetTerrainSurfacePresentationEnabled(bool enabled);
 

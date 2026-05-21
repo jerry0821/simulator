@@ -23,7 +23,7 @@ public:
 		ID3D11ShaderResourceView* terrain_normal_srv,
 		ID3D11ShaderResourceView* water_interaction_srv,
 		ID3D11ShaderResourceView* erosion_delta_srv,
-		ID3D11ShaderResourceView* climate_srv,
+		ID3D11ShaderResourceView* meteorograph_srv,
 		const TerrainMaterialSettings& material_settings);
 	bool IsValid() const;
 	Backend::RenderShaderResource VegetationSuitabilityResource() const;

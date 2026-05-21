@@ -88,16 +88,16 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float sediment_capacity = saturate(sediment_sample.w);
 
     float3 surface_normal = water_normal;
-    surface_normal.xz += flow_velocity * 0.01f;
+    surface_normal.xz += flow_velocity * 0.0008f;
     surface_normal = normalize(surface_normal);
-    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.35f - water_depth * 4.0f)));
+    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.55f - water_depth * 5.0f)));
 
     const float3 view_dir = normalize(camera_position - ps_in.posW);
     const float3 light_dir = normalize(float3(-0.34f, 0.88f, 0.24f));
     const float fresnel = pow(1.0f - saturate(dot(surface_normal, view_dir)), fresnel_power);
     const float ndotl = saturate(dot(surface_normal, light_dir));
-    const float specular = pow(saturate(dot(reflect(-light_dir, surface_normal), view_dir)), 42.0f) *
-        (0.18f + highlight_strength * 0.90f);
+    const float specular = pow(saturate(dot(reflect(-light_dir, surface_normal), view_dir)), 28.0f) *
+        (0.12f + highlight_strength * 0.56f);
 
     const float depth_factor = smoothstep(0.008f, 0.22f, water_depth);
     const float deep_factor = smoothstep(0.04f, 0.34f, water_depth);

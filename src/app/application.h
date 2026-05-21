@@ -6,7 +6,6 @@
 #include <Windows.h>
 
 #include "debug_text.h"
-#include "compute_climate_texture.h"
 #include "compute_floating_light_points.h"
 #include "compute_grass_data_texture.h"
 #include "compute_meteorograph_texture.h"
@@ -14,7 +13,6 @@
 #include "compute_shared_resource_registry.h"
 #include "compute_task_runner.h"
 #include "compute_terrain_classification_texture.h"
-#include "compute_terrain_normal_texture.h"
 #include "compute_water_surface_height_texture.h"
 #include "render_backend_dx11.h"
 #include "render_water_surface.h"
@@ -61,14 +59,12 @@ private:
 	std::unique_ptr<SceneRenderAdapter> m_scene_render_adapter;
 	SceneController m_scene_controller{};
 	ComputeTaskRunner m_compute_task_runner{};
-	ComputeClimateTexture m_compute_climate_texture{};
 	ComputeFloatingLightPoints m_compute_floating_light_points{};
 	ComputeGrassDataTexture m_compute_grass_data_texture{};
 	ComputeMeteorographTexture m_compute_meteorograph_texture{};
 	ComputeNoiseTexture m_compute_noise_texture{};
 	ComputeSharedResourceRegistry m_compute_shared_resource_registry{};
 	ComputeTerrainClassificationTexture m_compute_terrain_classification_texture{};
-	ComputeTerrainNormalTexture m_compute_terrain_normal_texture{};
 	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
 	TerrainWaterState m_terrain_water_state{};
 
@@ -79,7 +75,6 @@ private:
 	double m_exec_last_time = 0.0;
 	double m_fps_last_time = 0.0;
 	double m_fps = 0.0;
-	double m_terrain_normal_last_update_time = -1000.0;
 	double m_terrain_classification_last_update_time = -1000.0;
 	unsigned long m_frame_count = 0;
 	WaterSurfaceDesc m_active_water_surface_desc{};

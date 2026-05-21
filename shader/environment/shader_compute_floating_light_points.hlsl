@@ -46,6 +46,7 @@ float ValueNoise(float2 p)
 {
     float2 cell = floor(p);
     float2 local = frac(p);
+    
     float2 smooth = local * local * (3.0 - 2.0 * local);
 
     float v00 = Hash21(cell + float2(0.0, 0.0));

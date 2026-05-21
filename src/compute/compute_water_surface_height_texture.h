@@ -46,8 +46,8 @@ public:
 	{
 		static constexpr ComputeSharedResourceId kWriteResources[] = {
 			ComputeSharedResourceId::WaterSurfaceHeight,
+			ComputeSharedResourceId::TerrainNormal,
 			ComputeSharedResourceId::TerrainSurfaceData,
-			ComputeSharedResourceId::SurfaceWater,
 			ComputeSharedResourceId::SurfaceWaterFlow,
 			ComputeSharedResourceId::WaterVelocity,
 			ComputeSharedResourceId::WaterSediment,
@@ -81,8 +81,8 @@ public:
 		return m_has_bootstrapped_state;
 	}
 	Backend::RenderShaderResource Resource() const;
+	Backend::RenderShaderResource TerrainNormalResource() const;
 	Backend::RenderShaderResource TerrainSurfaceDataResource() const;
-	Backend::RenderShaderResource SurfaceWaterResource() const;
 	Backend::RenderShaderResource FlowResource() const;
 	Backend::RenderShaderResource VelocityResource() const;
 	Backend::RenderShaderResource SedimentResource() const;
@@ -93,8 +93,24 @@ public:
 	bool ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const;
 
 private:
+	void DispatchTerrainNormalPass(
+		ID3D11ShaderResourceView* terrain_height_srv,
+		ID3D11ShaderResourceView* water_velocity_srv,
+		float time_seconds) const;
 	void UpdateCpuReadback(float time_seconds) const;
 	void ConsumeMappedReadback(const D3D11_MAPPED_SUBRESOURCE& mapped_resource) const;
+
+	struct TerrainNormalConstants
+	{
+		float field_width = ComputeTextureDimensions::kWorldSideLength;
+		float field_depth = ComputeTextureDimensions::kWorldSideLength;
+		float time_seconds = 0.0f;
+		float wind_ripple_strength = 0.050f;
+		unsigned int width = 0;
+		unsigned int height = 0;
+		float wind_ripple_frequency = 0.028f;
+		float wind_ripple_speed = 1.20f;
+	};
 
 	struct WaterSurfaceHeightConstants
 	{
@@ -139,9 +155,13 @@ private:
 	ID3D11Device* m_device = nullptr;
 	ID3D11DeviceContext* m_context = nullptr;
 	ID3D11ComputeShader* m_compute_shader = nullptr;
+	ID3D11ComputeShader* m_terrain_normal_compute_shader = nullptr;
 	ID3D11Texture2D* m_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_uavs[2] = { nullptr, nullptr };
+	ID3D11Texture2D* m_terrain_normal_texture = nullptr;
+	ID3D11ShaderResourceView* m_terrain_normal_srv = nullptr;
+	ID3D11UnorderedAccessView* m_terrain_normal_uav = nullptr;
 	ID3D11Texture2D* m_flow_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_flow_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_flow_uavs[2] = { nullptr, nullptr };
@@ -165,6 +185,7 @@ private:
 	ID3D11UnorderedAccessView* m_erosion_delta_uav = nullptr;
 	ID3D11Texture2D* m_readback_texture = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
+	ID3D11Buffer* m_terrain_normal_constant_buffer = nullptr;
 	mutable unsigned int m_current_index = 0u;
 	mutable bool m_has_bootstrapped_state = false;
 	mutable bool m_cpu_readback_pending = false;

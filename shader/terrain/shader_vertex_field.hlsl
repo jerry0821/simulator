@@ -20,7 +20,7 @@ cbuffer CB_Light : register(b3)
 
 Texture2D g_HeightMap : register(t0);
 Texture2D g_TerrainNormalMap : register(t1);
-Texture2D g_ClimateMap : register(t2);
+Texture2D<float4> g_MeteorographMap : register(t2);
 SamplerState g_Sampler : register(s0);
 
 static const float kWorldSideLength = 2048.0f;
@@ -82,7 +82,7 @@ struct VS_OUT
     float4 blend : COLOR0;
     float2 uv : TEXCOORD0;
     float4 shadowPos : TEXCOORD1;
-    float3 climateData : TEXCOORD2;
+    float4 meteorographData : TEXCOORD2;
     float2 macroData : TEXCOORD3;
 };
 
@@ -137,13 +137,14 @@ VS_OUT main(VS_IN vi)
     vo.shadowPos = mul(vo.posW, lightViewProj);
 
     float2 climateUV = WorldToFieldUv(vo.posW.xz);
-    uint climateWidth = 0;
-    uint climateHeight = 0;
-    g_ClimateMap.GetDimensions(climateWidth, climateHeight);
-    climateWidth = max(climateWidth, 1u);
-    climateHeight = max(climateHeight, 1u);
-    int2 climateCoord = int2(climateUV * float2(climateWidth - 1u, climateHeight - 1u) + 0.5f);
-    vo.climateData = g_ClimateMap.Load(int3(climateCoord, 0)).rgb;
+    uint meteorographWidth = 0;
+    uint meteorographHeight = 0;
+    g_MeteorographMap.GetDimensions(meteorographWidth, meteorographHeight);
+    meteorographWidth = max(meteorographWidth, 1u);
+    meteorographHeight = max(meteorographHeight, 1u);
+    int2 meteorographCoord = int2(
+        climateUV * float2(meteorographWidth - 1u, meteorographHeight - 1u) + 0.5f);
+    vo.meteorographData = g_MeteorographMap.Load(int3(meteorographCoord, 0));
 
     vo.macroData.x = Fbm(vo.posW.xz * 0.0038f + float2(31.0f, -17.0f));
     vo.macroData.y = Fbm(vo.posW.xz * 0.0075f + float2(-9.0f, 23.0f));

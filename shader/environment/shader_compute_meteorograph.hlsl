@@ -2,7 +2,8 @@ Texture2D<float4> g_PreviousMeteorograph : register(t0);
 Texture2D g_TerrainHeight : register(t1);
 SamplerState g_LinearSampler : register(s0);
 RWTexture2D<float4> g_Output : register(u0);
-RWTexture2D<float4> g_RainOut : register(u1);
+RWTexture2D<float> g_RainOut : register(u1);
+RWTexture2D<float4> g_PreviewOut : register(u2);
 
 cbuffer CS_METEOROGRAPH : register(b0)
 {
@@ -31,6 +32,14 @@ cbuffer CS_METEOROGRAPH : register(b0)
 static const float kWindSourceIntensity = 1.8f;
 static const float kHumidityDiffuseWeight = 0.01f;
 static const float kRainFadeoff = 0.55f;
+static const float kAbsoluteZeroTemperature = -273.15f;
+static const float kPolarTemperature = -10.0f;
+static const float kEquatorialTemperature = 30.0f;
+static const float kEnvironmentalLapseRate = -0.325f;
+static const float kEquatorialEvaporationRate = 1.2e-4f;
+static const float kBaseAirConvection = 0.2f;
+static const float kSoilEvaporationFactor = 0.2f;
+static const float kInvMaxWaterSoilDiffuseDistance = 1.0f;
 
 float2 SafeNormalize(float2 value)
 {
@@ -100,35 +109,60 @@ float FBM(float2 p)
     return value;
 }
 
-float ComputeSurfaceTemperature(float2 uv, float terrain_height, float water_depth)
+float NormalizePreviewTemperature(float temperature_celsius)
+{
+    return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
+}
+
+float ComputeSurfaceTemperature(float2 uv, float terrain_height)
 {
     const float latitude = abs(uv.y * 2.0f - 1.0f);
-    const float elevation_cooling = saturate(max(terrain_height, 0.0f) * 0.0125f);
-    const float marine_moderation = saturate(water_depth * 0.18f);
-    const float diurnal =
-        sin(g_TimeSeconds * 0.026f + uv.x * 6.2831853f + uv.y * 2.6f) * 0.035f;
-
-    return saturate(
-        0.72f -
-        latitude * 0.24f -
-        elevation_cooling * 0.18f +
-        marine_moderation * 0.05f +
-        diurnal);
+    const float sunlight_ratio = saturate(1.0f - latitude);
+    const float sea_level_temperature = lerp(kPolarTemperature, kEquatorialTemperature, sunlight_ratio);
+    return max(sea_level_temperature + terrain_height * kEnvironmentalLapseRate, kAbsoluteZeroTemperature);
 }
 
-float ComputeEvaporationSource(float2 wind_velocity, float humidity, float water_depth)
+float SoilMoisture(float delta_water_height)
 {
-    const float wind_strength = saturate(length(wind_velocity));
-    const float exposed_water = saturate(water_depth * 0.95f);
-    const float dry_air = 1.0f - saturate(humidity);
-    return dry_air * exposed_water * (0.045f + wind_strength * 0.065f) * g_RainCoupling;
+    return kSoilEvaporationFactor -
+        clamp(-delta_water_height * (kInvMaxWaterSoilDiffuseDistance * kSoilEvaporationFactor), 0.0f, kSoilEvaporationFactor);
 }
 
-float4 BuildRainState(float rain_amount, float humidity, float water_depth)
+float ComputeEvaporationSource(float2 wind_velocity, float humidity, float temperature_celsius, float soil_moisture)
 {
-    const float wet_hint =
-        saturate(rain_amount * 0.68f + humidity * 0.22f + saturate(water_depth) * 0.24f);
-    return float4(saturate(rain_amount), wet_hint, saturate(humidity), 1.0f);
+    const float wind_speed = length(wind_velocity);
+    const float clamped_temperature = clamp(temperature_celsius, 0.0f, 100.0f);
+    const float vapor_pressure =
+        610.78f * exp((17.27f * clamped_temperature) / (clamped_temperature + 237.3f));
+    const float vapor_pressure_deficit = max(vapor_pressure - humidity * vapor_pressure, 0.0f);
+    return
+        kEquatorialEvaporationRate *
+        max(wind_speed, kBaseAirConvection) *
+        vapor_pressure_deficit *
+        soil_moisture *
+        g_RainCoupling;
+}
+
+float4 BuildAtmospherePreview(float rain_amount, float humidity, float temperature_celsius)
+{
+    const float temperature_preview = NormalizePreviewTemperature(temperature_celsius);
+    const float humidity_preview = saturate(humidity);
+    const float rainfall_preview = saturate(rain_amount * 28.0f);
+
+    float3 preview_color = lerp(
+        float3(0.28f, 0.20f, 0.10f),
+        float3(0.94f, 0.36f, 0.10f),
+        temperature_preview);
+    preview_color = lerp(
+        preview_color,
+        float3(0.76f, 0.96f, 0.26f),
+        sqrt(humidity_preview) * 0.42f);
+    preview_color = lerp(
+        preview_color,
+        1.0f.xxx,
+        rainfall_preview);
+
+    return float4(preview_color, saturate(rain_amount));
 }
 
 [numthreads(8, 8, 1)]
@@ -149,7 +183,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float terrain_height = terrain_state.x;
     const float water_surface = max(terrain_state.y, terrain_height);
     const float water_depth = max(water_surface - terrain_height, 0.0f);
-    const float target_temperature = ComputeSurfaceTemperature(uv, terrain_height, water_depth);
+    const float target_temperature = ComputeSurfaceTemperature(uv, terrain_height);
 
     const float2 domain = uv * max(g_NoiseScale, 1.0f);
     const float2 drift =
@@ -159,9 +193,9 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         FBM(domain * 0.55f + drift * 3.1f + float2(7.1f, -4.2f)) - 0.5f,
         FBM(domain * 0.55f + drift.yx * float2(-2.3f, 2.0f) + float2(-5.4f, 9.7f)) - 0.5f));
     const float2 source_dir = SafeNormalize(
-        lerp(prevailing_wind, random_wind_source, 0.10f + g_WindCrossInfluence * 0.12f));
+        lerp(prevailing_wind, random_wind_source, 0.03f + g_WindCrossInfluence * 0.04f));
     const float source_strength =
-        max(g_WindStrength, 1.0e-4f) * (0.95f + water_depth * 0.05f);
+        max(g_WindStrength, 1.0e-4f) * (0.98f + water_depth * 0.02f);
 
     if (g_InitializeState != 0u)
     {
@@ -170,7 +204,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             FBM(domain * 0.40f + float2(13.7f, -8.1f)) * 0.26f +
             water_depth * 0.18f);
         g_Output[coord] = float4(source_dir * source_strength, humidity_seed, target_temperature);
-        g_RainOut[coord] = BuildRainState(0.0f, humidity_seed, water_depth);
+        g_RainOut[coord] = 0.0f;
+        g_PreviewOut[coord] = BuildAtmospherePreview(0.0f, humidity_seed, target_temperature);
         return;
     }
 
@@ -203,13 +238,18 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         wind_velocity *= max_strength / wind_length;
     }
 
+    const float divergence =
+        ((previous_right.x - previous_left.x) + (previous_up.y - previous_down.y)) * 0.5f;
+    const float convergence =
+        saturate(-divergence * (2.0f + g_PropagationScale * 2.0f));
+
     const float2 humiture_flow_t = -previous_up.y * previous_up.zw;
     const float2 humiture_flow_b = previous_down.y * previous_down.zw;
     const float2 humiture_flow_r = -previous_right.x * previous_right.zw;
     const float2 humiture_flow_l = previous_left.x * previous_left.zw;
     float2 humiture = max(
         previous_center.zw + (humiture_flow_t + humiture_flow_b + humiture_flow_r + humiture_flow_l) * dt,
-        float2(0.0f, 0.0f));
+        float2(0.0f, kAbsoluteZeroTemperature));
 
     const float diffuse_weight = min(max(g_HumidityAdvection, kHumidityDiffuseWeight) * dt, 0.24f);
     const float concentrated_weight = max(1.0f - diffuse_weight * 4.0f, 0.0f);
@@ -218,12 +258,11 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         (previous_up.zw + previous_down.zw + previous_right.zw + previous_left.zw) * diffuse_weight;
 
     float humidity = max(humiture.x, 0.0f);
-    humidity += ComputeEvaporationSource(wind_velocity, humidity, water_depth) * dt;
+    const float soil_moisture = SoilMoisture(water_depth);
+    humidity += ComputeEvaporationSource(wind_velocity, humidity, humiture.y, soil_moisture) * dt;
+    humidity += convergence * (0.06f + humidity * 0.18f) * dt;
 
     float rain_amount = max(humidity - g_HumidityCapacity, 0.0f) * kRainFadeoff * dt;
-    rain_amount *= max(g_RainMultiplier, 0.0f);
-    rain_amount = max(rain_amount, saturate(g_ForceRain * humidity) * 0.12f);
-    rain_amount = saturate(rain_amount);
     humidity = saturate(humidity - rain_amount);
 
     float temperature = lerp(humiture.y, target_temperature, saturate(dt * g_TemperatureRelax));
@@ -231,8 +270,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         temperature,
         (previous_up.w + previous_down.w + previous_right.w + previous_left.w) * 0.25f,
         saturate(dt * 0.05f));
-    temperature = saturate(temperature);
+    temperature -= convergence * 0.8f * dt;
+    temperature = max(temperature, kAbsoluteZeroTemperature);
 
     g_Output[coord] = float4(wind_velocity, humidity, temperature);
-    g_RainOut[coord] = BuildRainState(rain_amount, humidity, water_depth);
+    g_RainOut[coord] = saturate(rain_amount);
+    g_PreviewOut[coord] = BuildAtmospherePreview(rain_amount, humidity, temperature);
 }

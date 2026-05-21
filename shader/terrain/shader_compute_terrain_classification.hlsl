@@ -30,9 +30,12 @@ Texture2D g_TerrainHeight : register(t0);
 Texture2D g_TerrainNormal : register(t1);
 Texture2D g_WaterInteractionData : register(t2);
 Texture2D g_ErosionDelta : register(t3);
-Texture2D g_ClimateField : register(t4);
+Texture2D<float4> g_Meteorograph : register(t4);
 SamplerState g_ClassificationSampler : register(s0);
 RWTexture2D<float> g_TerrainVegetationSuitability : register(u0);
+
+static const float kPolarTemperature = -10.0f;
+static const float kEquatorialTemperature = 30.0f;
 
 float Hash21(float2 p)
 {
@@ -102,9 +105,14 @@ float4 SampleErosionDelta(float2 world_xz)
     return g_ErosionDelta.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
 }
 
-float3 SampleClimate(float2 world_xz)
+float4 SampleMeteorograph(float2 world_xz)
 {
-    return g_ClimateField.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).rgb;
+    return g_Meteorograph.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
+}
+
+float NormalizeClimateTemperature(float temperature_celsius)
+{
+    return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
 }
 
 float SampleNormalY(float2 world_xz)
@@ -129,7 +137,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float terrain_height = SampleTerrainHeight(world_xz);
     float4 water_interaction = SampleWaterInteraction(world_xz);
     float4 erosion_delta = SampleErosionDelta(world_xz);
-    float3 climate = SampleClimate(world_xz);
+    float4 meteorograph = SampleMeteorograph(world_xz);
     float normal_y = SampleNormalY(world_xz);
     float surface_wetness = water_interaction.r;
     float shoreline_wetness = water_interaction.g;
@@ -154,7 +162,13 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     float erosion_mask = saturate(erosion_delta.r * 1.85f + max(-erosion_delta.b, 0.0f) * 0.65f);
     float vegetation_noise = smoothstep(0.22f, 0.70f, macro_noise * 0.65f + patch_noise * 0.35f);
-    float moisture_support = lerp(0.92f, 1.0f, saturate(retained_moisture * 0.82f + climate.g * 0.18f));
+    float climate_humidity = saturate(meteorograph.z);
+    float climate_temperature = NormalizeClimateTemperature(meteorograph.w);
+    float climate_mildness = saturate(1.0f - abs(climate_temperature - 0.52f) * 1.35f);
+    float moisture_support = lerp(
+        0.92f,
+        1.0f,
+        saturate(retained_moisture * 0.82f + climate_humidity * 0.18f));
     float vegetation_suitability =
         grass_flatness *
         above_water *
@@ -163,6 +177,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         lerp(0.68f, 1.0f, vegetation_noise) *
         moisture_support *
         lerp(1.0f, 0.82f, max(surface_wetness, pooled_wetness * 0.92f)) *
+        lerp(1.0f, 0.82f, 1.0f - climate_mildness) *
         lerp(1.0f, 0.96f, erosion_mask);
     vegetation_suitability = saturate(vegetation_suitability);
     g_TerrainVegetationSuitability[dispatch_thread_id.xy] = vegetation_suitability;

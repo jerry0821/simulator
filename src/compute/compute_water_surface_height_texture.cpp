@@ -8,13 +8,19 @@
 
 #include "debug_menu.h"
 #include "debug_ostream.h"
-#include "meshfield.h"
 #include "sampler.h"
+#include "terrain_height_field.h"
 #include "terrain_surface_settings.h"
 
 namespace
 {
 constexpr float kCpuReadbackIntervalSeconds = 0.5f;
+constexpr bool kEnableCpuReadback =
+	ComputeTextureDimensions::kHydrologyResolution <= 1024u;
+constexpr DXGI_FORMAT kHeightfieldTextureFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+constexpr DXGI_FORMAT kTerrainNormalTextureFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+constexpr DXGI_FORMAT kFlowTextureFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+constexpr DXGI_FORMAT kAuxiliaryTextureFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
 template <typename T>
 void SafeRelease(T*& resource)
@@ -33,6 +39,7 @@ bool CreateFloat4Texture(
 	ID3D11Texture2D** texture,
 	ID3D11ShaderResourceView** srv,
 	ID3D11UnorderedAccessView** uav,
+	DXGI_FORMAT format,
 	const D3D11_SUBRESOURCE_DATA* init_data = nullptr)
 {
 	if (device == nullptr || texture == nullptr || srv == nullptr || uav == nullptr)
@@ -45,7 +52,7 @@ bool CreateFloat4Texture(
 	texture_desc.Height = height;
 	texture_desc.MipLevels = 1;
 	texture_desc.ArraySize = 1;
-	texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	texture_desc.Format = format;
 	texture_desc.SampleDesc.Count = 1;
 	texture_desc.Usage = D3D11_USAGE_DEFAULT;
 	texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -55,13 +62,20 @@ bool CreateFloat4Texture(
 		return false;
 	}
 
-	if (FAILED(device->CreateShaderResourceView(*texture, nullptr, srv)))
+	D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+	srv_desc.Format = format;
+	srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srv_desc.Texture2D.MipLevels = 1;
+	if (FAILED(device->CreateShaderResourceView(*texture, &srv_desc, srv)))
 	{
 		SafeRelease(*texture);
 		return false;
 	}
 
-	if (FAILED(device->CreateUnorderedAccessView(*texture, nullptr, uav)))
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+	uav_desc.Format = format;
+	uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+	if (FAILED(device->CreateUnorderedAccessView(*texture, &uav_desc, uav)))
 	{
 		SafeRelease(*srv);
 		SafeRelease(*texture);
@@ -104,6 +118,34 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 		return false;
 	}
 
+	std::ifstream terrain_normal_shader_stream("resource/shader/shader_compute_terrain_normal.cso", std::ios::binary);
+	if (!terrain_normal_shader_stream)
+	{
+		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): failed to open shader_compute_terrain_normal.cso" << std::endl;
+		Finalize();
+		return false;
+	}
+
+	const std::vector<char> terrain_normal_shader_bytes(
+		(std::istreambuf_iterator<char>(terrain_normal_shader_stream)),
+		std::istreambuf_iterator<char>());
+	if (terrain_normal_shader_bytes.empty())
+	{
+		Finalize();
+		return false;
+	}
+
+	if (FAILED(m_device->CreateComputeShader(
+			terrain_normal_shader_bytes.data(),
+			terrain_normal_shader_bytes.size(),
+			nullptr,
+			&m_terrain_normal_compute_shader)))
+	{
+		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): CreateComputeShader(terrain normal) failed" << std::endl;
+		Finalize();
+		return false;
+	}
+
 	for (unsigned int index = 0; index < 2; ++index)
 	{
 		if (!CreateFloat4Texture(
@@ -112,17 +154,14 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				kTextureHeight,
 				&m_textures[index],
 				&m_srvs[index],
-				&m_uavs[index]))
+				&m_uavs[index],
+				kHeightfieldTextureFormat))
 		{
 			Finalize();
 			return false;
 		}
 	}
 
-	std::vector<float> zero_flow_pixels(kTextureWidth * kTextureHeight * 4u, 0.0f);
-	D3D11_SUBRESOURCE_DATA flow_init_data{};
-	flow_init_data.pSysMem = zero_flow_pixels.data();
-	flow_init_data.SysMemPitch = sizeof(float) * 4u * kTextureWidth;
 	for (unsigned int index = 0; index < 2; ++index)
 	{
 		if (!CreateFloat4Texture(
@@ -132,7 +171,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_flow_textures[index],
 				&m_flow_srvs[index],
 				&m_flow_uavs[index],
-				&flow_init_data) ||
+				kFlowTextureFormat) ||
 			!CreateFloat4Texture(
 				m_device,
 				kTextureWidth,
@@ -140,7 +179,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_surface_textures[index],
 				&m_surface_srvs[index],
 				&m_surface_uavs[index],
-				&flow_init_data) ||
+				kAuxiliaryTextureFormat) ||
 			!CreateFloat4Texture(
 				m_device,
 				kTextureWidth,
@@ -148,7 +187,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_water_interaction_textures[index],
 				&m_water_interaction_srvs[index],
 				&m_water_interaction_uavs[index],
-				&flow_init_data) ||
+				kAuxiliaryTextureFormat) ||
 			!CreateFloat4Texture(
 				m_device,
 				kTextureWidth,
@@ -156,7 +195,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_soil_moisture_textures[index],
 				&m_soil_moisture_srvs[index],
 				&m_soil_moisture_uavs[index],
-				&flow_init_data) ||
+				kAuxiliaryTextureFormat) ||
 			!CreateFloat4Texture(
 				m_device,
 				kTextureWidth,
@@ -164,7 +203,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_velocity_textures[index],
 				&m_velocity_srvs[index],
 				&m_velocity_uavs[index],
-				&flow_init_data) ||
+				kAuxiliaryTextureFormat) ||
 			!CreateFloat4Texture(
 				m_device,
 				kTextureWidth,
@@ -172,7 +211,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				&m_sediment_textures[index],
 				&m_sediment_srvs[index],
 				&m_sediment_uavs[index],
-				&flow_init_data))
+				kAuxiliaryTextureFormat))
 		{
 			Finalize();
 			return false;
@@ -183,30 +222,46 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 			m_device,
 			kTextureWidth,
 			kTextureHeight,
-			&m_erosion_delta_texture,
-			&m_erosion_delta_srv,
-			&m_erosion_delta_uav,
-			&flow_init_data))
+			&m_terrain_normal_texture,
+			&m_terrain_normal_srv,
+			&m_terrain_normal_uav,
+			kTerrainNormalTextureFormat))
 	{
 		Finalize();
 		return false;
 	}
 
-	D3D11_TEXTURE2D_DESC readback_desc{};
-	readback_desc.Width = kTextureWidth;
-	readback_desc.Height = kTextureHeight;
-	readback_desc.MipLevels = 1;
-	readback_desc.ArraySize = 1;
-	readback_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	readback_desc.SampleDesc.Count = 1;
-	readback_desc.Usage = D3D11_USAGE_STAGING;
-	readback_desc.BindFlags = 0;
-	readback_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-	readback_desc.MiscFlags = 0;
-	if (FAILED(m_device->CreateTexture2D(&readback_desc, nullptr, &m_readback_texture)))
+	if (!CreateFloat4Texture(
+			m_device,
+			kTextureWidth,
+			kTextureHeight,
+			&m_erosion_delta_texture,
+			&m_erosion_delta_srv,
+			&m_erosion_delta_uav,
+			kAuxiliaryTextureFormat))
 	{
 		Finalize();
 		return false;
+	}
+
+	if (kEnableCpuReadback)
+	{
+		D3D11_TEXTURE2D_DESC readback_desc{};
+		readback_desc.Width = kTextureWidth;
+		readback_desc.Height = kTextureHeight;
+		readback_desc.MipLevels = 1;
+		readback_desc.ArraySize = 1;
+		readback_desc.Format = kHeightfieldTextureFormat;
+		readback_desc.SampleDesc.Count = 1;
+		readback_desc.Usage = D3D11_USAGE_STAGING;
+		readback_desc.BindFlags = 0;
+		readback_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		readback_desc.MiscFlags = 0;
+		if (FAILED(m_device->CreateTexture2D(&readback_desc, nullptr, &m_readback_texture)))
+		{
+			Finalize();
+			return false;
+		}
 	}
 
 	D3D11_BUFFER_DESC buffer_desc{};
@@ -220,10 +275,24 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 		return false;
 	}
 
+	D3D11_BUFFER_DESC terrain_normal_buffer_desc{};
+	terrain_normal_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+	terrain_normal_buffer_desc.ByteWidth = sizeof(TerrainNormalConstants);
+	terrain_normal_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	if (FAILED(m_device->CreateBuffer(
+			&terrain_normal_buffer_desc,
+			nullptr,
+			&m_terrain_normal_constant_buffer)))
+	{
+		Finalize();
+		return false;
+	}
+
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
 	m_cpu_readback_pending = false;
 	m_last_cpu_readback_request_time = -1000.0f;
+	ResetState();
 
 	return true;
 }
@@ -233,8 +302,12 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 	m_cpu_height_data_ready = false;
 	m_terrain_height_samples.clear();
 	m_water_height_samples.clear();
+	SafeRelease(m_terrain_normal_constant_buffer);
 	SafeRelease(m_constant_buffer);
 	SafeRelease(m_readback_texture);
+	SafeRelease(m_terrain_normal_uav);
+	SafeRelease(m_terrain_normal_srv);
+	SafeRelease(m_terrain_normal_texture);
 	for (unsigned int index = 0; index < 2; ++index)
 	{
 		SafeRelease(m_water_interaction_uavs[index]);
@@ -265,6 +338,7 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 		SafeRelease(m_srvs[index]);
 		SafeRelease(m_textures[index]);
 	}
+	SafeRelease(m_terrain_normal_compute_shader);
 	SafeRelease(m_compute_shader);
 	m_device = nullptr;
 	m_context = nullptr;
@@ -293,6 +367,7 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 		m_context->ClearUnorderedAccessViewFloat(m_sediment_uavs[index], clear_values);
 	}
 	m_context->ClearUnorderedAccessViewFloat(m_erosion_delta_uav, clear_values);
+	m_context->ClearUnorderedAccessViewFloat(m_terrain_normal_uav, clear_values);
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
 	m_cpu_readback_pending = false;
@@ -323,8 +398,8 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 		settings.accumulation_rate,
 		settings.seepage_rate,
 		settings.basin_fade,
-		MeshFieldRenderer::FieldWidth(),
-		MeshFieldRenderer::FieldDepth(),
+		TerrainHeightField::FieldWidth(),
+		TerrainHeightField::FieldDepth(),
 		settings.debug_injection_x,
 		settings.debug_injection_z,
 		settings.debug_injection_radius,
@@ -400,6 +475,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	// CPU readback is only for debug/range inspection and must not gate render usage.
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
+	DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], 0.0f);
 	UpdateCpuReadback(0.0f);
 }
 
@@ -428,8 +504,8 @@ void ComputeWaterSurfaceHeightTexture::Update(
 		settings.accumulation_rate,
 		settings.seepage_rate,
 		settings.basin_fade,
-		MeshFieldRenderer::FieldWidth(),
-		MeshFieldRenderer::FieldDepth(),
+		TerrainHeightField::FieldWidth(),
+		TerrainHeightField::FieldDepth(),
 		settings.debug_injection_x,
 		settings.debug_injection_z,
 		settings.debug_injection_radius,
@@ -503,7 +579,61 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
+	DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], time_seconds);
 	UpdateCpuReadback(time_seconds);
+}
+
+void ComputeWaterSurfaceHeightTexture::DispatchTerrainNormalPass(
+	ID3D11ShaderResourceView* terrain_height_srv,
+	ID3D11ShaderResourceView* water_velocity_srv,
+	float time_seconds) const
+{
+	if (m_context == nullptr ||
+		m_terrain_normal_compute_shader == nullptr ||
+		m_terrain_normal_uav == nullptr ||
+		m_terrain_normal_constant_buffer == nullptr ||
+		terrain_height_srv == nullptr ||
+		water_velocity_srv == nullptr)
+	{
+		return;
+	}
+
+	const TerrainNormalConstants constants = {
+		TerrainHeightField::FieldWidth(),
+		TerrainHeightField::FieldDepth(),
+		time_seconds,
+		0.050f,
+		kTextureWidth,
+		kTextureHeight,
+		0.028f,
+		1.20f
+	};
+	m_context->UpdateSubresource(m_terrain_normal_constant_buffer, 0, nullptr, &constants, 0, 0);
+
+	ID3D11ShaderResourceView* srvs[] = { terrain_height_srv, water_velocity_srv };
+	ID3D11UnorderedAccessView* uavs[] = { m_terrain_normal_uav };
+	ID3D11Buffer* constant_buffers[] = { m_terrain_normal_constant_buffer };
+	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
+
+	m_context->CSSetShader(m_terrain_normal_compute_shader, nullptr, 0);
+	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
+	m_context->CSSetShaderResources(0, 2, srvs);
+	m_context->CSSetSamplers(0, 1, samplers);
+	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+	m_context->Dispatch(
+		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
+		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
+		1);
+
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uav = nullptr;
+	ID3D11Buffer* null_cb = nullptr;
+	ID3D11SamplerState* null_sampler = nullptr;
+	m_context->CSSetShaderResources(0, 2, null_srvs);
+	m_context->CSSetSamplers(0, 1, &null_sampler);
+	m_context->CSSetUnorderedAccessViews(0, 1, &null_uav, nullptr);
+	m_context->CSSetConstantBuffers(0, 1, &null_cb);
+	m_context->CSSetShader(nullptr, nullptr, 0);
 }
 
 void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) const
@@ -558,6 +688,11 @@ void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) con
 void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
 	const D3D11_MAPPED_SUBRESOURCE& mapped_resource) const
 {
+	if (!kEnableCpuReadback)
+	{
+		return;
+	}
+
 	const size_t sample_count = static_cast<size_t>(kTextureWidth) * static_cast<size_t>(kTextureHeight);
 	m_terrain_height_samples.resize(sample_count);
 	m_water_height_samples.resize(sample_count);
@@ -577,12 +712,16 @@ void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
 bool ComputeWaterSurfaceHeightTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
+		   m_terrain_normal_compute_shader != nullptr &&
 		   m_textures[0] != nullptr &&
 		   m_textures[1] != nullptr &&
 		   m_srvs[0] != nullptr &&
 		   m_srvs[1] != nullptr &&
 		   m_uavs[0] != nullptr &&
 		   m_uavs[1] != nullptr &&
+		   m_terrain_normal_texture != nullptr &&
+		   m_terrain_normal_srv != nullptr &&
+		   m_terrain_normal_uav != nullptr &&
 		   m_flow_textures[0] != nullptr &&
 		   m_flow_textures[1] != nullptr &&
 		   m_flow_srvs[0] != nullptr &&
@@ -622,7 +761,8 @@ bool ComputeWaterSurfaceHeightTexture::IsValid() const
 		   m_erosion_delta_texture != nullptr &&
 		   m_erosion_delta_srv != nullptr &&
 		   m_erosion_delta_uav != nullptr &&
-		   m_constant_buffer != nullptr;
+		   m_constant_buffer != nullptr &&
+		   m_terrain_normal_constant_buffer != nullptr;
 }
 
 Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::Resource() const
@@ -630,14 +770,14 @@ Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::Resource() const
 	return Backend::RenderShaderResource(m_srvs[m_current_index]);
 }
 
+Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::TerrainNormalResource() const
+{
+	return Backend::RenderShaderResource(m_terrain_normal_srv);
+}
+
 Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::TerrainSurfaceDataResource() const
 {
 	return Backend::RenderShaderResource(m_surface_srvs[m_current_index]);
-}
-
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::SurfaceWaterResource() const
-{
-	return Backend::RenderShaderResource(m_srvs[m_current_index]);
 }
 
 Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::FlowResource() const

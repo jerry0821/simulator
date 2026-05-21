@@ -159,14 +159,13 @@
     <ClCompile Include="src\scene\camera.cpp" />
     <ClCompile Include="src\geometry\collision.cpp" />
     <ClCompile Include="src\debug\collision_debug.cpp" />
-    <ClCompile Include="src\compute\compute_climate_texture.cpp" />
     <ClCompile Include="src\compute\compute_floating_light_points.cpp" />
     <ClCompile Include="src\compute\compute_grass_data_texture.cpp" />
     <ClCompile Include="src\compute\compute_grass_instances.cpp" />
     <ClCompile Include="src\compute\compute_meteorograph_texture.cpp" />
     <ClCompile Include="src\compute\compute_noise_texture.cpp" />
     <ClCompile Include="src\compute\compute_terrain_classification_texture.cpp" />
-    <ClCompile Include="src\compute\compute_terrain_normal_texture.cpp" />
+    <ClCompile Include="src\compute\terrain_height_field.cpp" />
     <ClCompile Include="src\compute\compute_water_surface_height_texture.cpp" />
     <ClCompile Include="src\compute\compute_task_runner.cpp" />
     <ClCompile Include="src\geometry\cube.cpp" />
@@ -258,14 +257,13 @@
     <ClInclude Include="src\scene\camera.h" />
     <ClInclude Include="src\geometry\collision.h" />
     <ClInclude Include="src\geometry\collision_internal.h" />
-    <ClInclude Include="src\compute\compute_climate_texture.h" />
     <ClInclude Include="src\compute\compute_floating_light_points.h" />
     <ClInclude Include="src\compute\compute_grass_data_texture.h" />
     <ClInclude Include="src\compute\compute_grass_instances.h" />
     <ClInclude Include="src\compute\compute_meteorograph_texture.h" />
     <ClInclude Include="src\compute\compute_noise_texture.h" />
     <ClInclude Include="src\compute\compute_terrain_classification_texture.h" />
-    <ClInclude Include="src\compute\compute_terrain_normal_texture.h" />
+    <ClInclude Include="src\compute\terrain_height_field.h" />
     <ClInclude Include="src\compute\compute_water_surface_height_texture.h" />
     <ClInclude Include="src\compute\compute_task.h" />
     <ClInclude Include="src\compute\compute_task_runner.h" />
@@ -466,12 +464,6 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="shader\environment\shader_compute_noise.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="shader\environment\shader_compute_climate_field.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>

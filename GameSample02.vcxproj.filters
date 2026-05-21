@@ -215,9 +215,6 @@
     <ClCompile Include="src\compute\compute_task_runner.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\compute\compute_climate_texture.cpp">
-      <Filter>Source Files\Renderer\Resources</Filter>
-    </ClCompile>
     <ClCompile Include="src\compute\compute_final_terrain_height_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
@@ -237,6 +234,9 @@
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_meteorograph_texture.cpp">
+      <Filter>Source Files\Renderer\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="src\compute\terrain_height_field.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\debug\debug_menu.cpp">
@@ -520,9 +520,6 @@
     <ClInclude Include="src\compute\compute_noise_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\compute\compute_climate_texture.h">
-      <Filter>Header Files\Renderer\Resources</Filter>
-    </ClInclude>
     <ClInclude Include="src\compute\compute_final_terrain_height_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
@@ -542,6 +539,9 @@
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_meteorograph_texture.h">
+      <Filter>Header Files\Renderer\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="src\compute\terrain_height_field.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_task.h">
@@ -736,9 +736,6 @@
       <Filter>Shader Files\Core</Filter>
     </FxCompile>
     <FxCompile Include="shader\environment\shader_compute_noise.hlsl">
-      <Filter>Shader Files\Environment</Filter>
-    </FxCompile>
-    <FxCompile Include="shader\environment\shader_compute_climate_field.hlsl">
       <Filter>Shader Files\Environment</Filter>
     </FxCompile>
     <FxCompile Include="shader\environment\shader_compute_rain_map.hlsl">

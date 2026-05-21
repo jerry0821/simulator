@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "debug_ostream.h"
-#include "meshfield.h"
 #include "sampler.h"
+#include "terrain_height_field.h"
 
 namespace
 {
@@ -120,7 +120,7 @@ void ComputeTerrainClassificationTexture::Update(
 	ID3D11ShaderResourceView* terrain_normal_srv,
 	ID3D11ShaderResourceView* water_interaction_srv,
 	ID3D11ShaderResourceView* erosion_delta_srv,
-	ID3D11ShaderResourceView* climate_srv,
+	ID3D11ShaderResourceView* meteorograph_srv,
 	const TerrainMaterialSettings& material_settings)
 {
 	if (!IsValid() ||
@@ -128,7 +128,7 @@ void ComputeTerrainClassificationTexture::Update(
 		terrain_normal_srv == nullptr ||
 		water_interaction_srv == nullptr ||
 		erosion_delta_srv == nullptr ||
-		climate_srv == nullptr)
+		meteorograph_srv == nullptr)
 	{
 		return;
 	}
@@ -150,8 +150,8 @@ void ComputeTerrainClassificationTexture::Update(
 		material_settings.lowland_height_end,
 		material_settings.grass_coverage_min,
 		material_settings.water_height,
-		MeshFieldRenderer::FieldWidth(),
-		MeshFieldRenderer::FieldDepth(),
+		TerrainHeightField::FieldWidth(),
+		TerrainHeightField::FieldDepth(),
 		2.2f,
 		1.0f,
 		kTextureWidth,
@@ -167,7 +167,7 @@ void ComputeTerrainClassificationTexture::Update(
 		terrain_normal_srv,
 		water_interaction_srv,
 		erosion_delta_srv,
-		climate_srv
+		meteorograph_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_vegetation_uav };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };

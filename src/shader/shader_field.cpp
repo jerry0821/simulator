@@ -269,7 +269,7 @@ void ShaderField_SetShadowMap(const Backend::RenderShadowMapResource& shadow_map
 	g_pContext->PSSetShaderResources(2, 1, &pSRV);
 }
 
-void ShaderField_SetClimateMap(ID3D11ShaderResourceView* pSRV)
+void ShaderField_SetMeteorographMap(ID3D11ShaderResourceView* pSRV)
 {
 	if (!g_pContext)
 	{
@@ -277,7 +277,6 @@ void ShaderField_SetClimateMap(ID3D11ShaderResourceView* pSRV)
 	}
 
 	g_pContext->VSSetShaderResources(2, 1, &pSRV);
-	g_pContext->PSSetShaderResources(4, 1, &pSRV);
 }
 
 void ShaderField_SetTerrainMaterialSettings(const TerrainMaterialSettings& settings)

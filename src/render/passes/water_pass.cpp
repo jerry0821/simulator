@@ -13,11 +13,11 @@
 #include "render_resource_usage.h"
 #include "render_water_surface.h"
 #include "debug_menu.h"
-#include "meshfield.h"
 #include "shader_water.h"
 #include "shader3d.h"
 #include "shader3d_unlit.h"
 #include "sprite3d.h"
+#include "terrain_height_field.h"
 
 
 using namespace DirectX;
@@ -145,8 +145,8 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
-	const float world_width = MeshFieldRenderer::FieldWidth();
-	const float world_depth = MeshFieldRenderer::FieldDepth();
+	const float world_width = TerrainHeightField::FieldWidth();
+	const float world_depth = TerrainHeightField::FieldDepth();
 	const float patch_width = world_width * kWaterPatchCoverage;
 	const float patch_depth = world_depth * kWaterPatchCoverage;
 	const float patch_cell_width = patch_width / 256.0f;

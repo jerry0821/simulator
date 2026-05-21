@@ -42,7 +42,7 @@ struct RenderFrameResources
 	Backend::RenderShaderResource terrain_vegetation_suitability{};
 	Backend::RenderShaderResource grass_data{};
 	Backend::RenderShaderResource rain_map{};
-	Backend::RenderShaderResource surface_water{};
+	Backend::RenderShaderResource atmosphere_preview{};
 	Backend::RenderShaderResource water_surface_height{};
 	float terrain_heightfield_min_height = 0.0f;
 	float terrain_heightfield_max_height = 0.0f;
@@ -59,7 +59,6 @@ struct RenderFrameResources
 	Backend::RenderShaderResource soil_moisture{};
 	Backend::RenderShaderResource erosion_delta{};
 	Backend::RenderShaderResource compute_noise{};
-	Backend::RenderShaderResource climate_field{};
 	Backend::RenderShaderResource meteorograph_field{};
 	ID3D11Buffer* floating_light_instance_buffer = nullptr;
 	unsigned int floating_light_instance_count = 0;
