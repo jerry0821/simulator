@@ -115,15 +115,13 @@ void ComputeGrassDataTexture::Finalize()
 
 void ComputeGrassDataTexture::Update(
 	ID3D11ShaderResourceView* terrain_normal_srv,
-	ID3D11ShaderResourceView* terrain_vegetation_suitability_srv,
-	ID3D11ShaderResourceView* terrain_surface_data_srv,
-	ID3D11ShaderResourceView* meteorograph_srv)
+	ID3D11ShaderResourceView* water_surface_height_srv,
+	ID3D11ShaderResourceView* terrain_vegetation_suitability_srv)
 {
 	if (!IsValid() ||
 		terrain_normal_srv == nullptr ||
-		terrain_vegetation_suitability_srv == nullptr ||
-		terrain_surface_data_srv == nullptr ||
-		meteorograph_srv == nullptr)
+		water_surface_height_srv == nullptr ||
+		terrain_vegetation_suitability_srv == nullptr)
 	{
 		return;
 	}
@@ -137,9 +135,8 @@ void ComputeGrassDataTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_normal_srv,
-		terrain_vegetation_suitability_srv,
-		terrain_surface_data_srv,
-		meteorograph_srv
+		water_surface_height_srv,
+		terrain_vegetation_suitability_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uav };
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
@@ -147,7 +144,7 @@ void ComputeGrassDataTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 4, srvs);
+	m_context->CSSetShaderResources(0, 3, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -155,11 +152,11 @@ void ComputeGrassDataTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uavs[] = { nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 4, null_srvs);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

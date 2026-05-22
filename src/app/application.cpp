@@ -418,9 +418,8 @@ bool Application::InitializeEngineSystems()
 	{
 		m_compute_grass_data_texture.Update(
 			ActiveTerrainNormalResource().shaderResourceView(),
-			m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
-			m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView(),
-			m_compute_meteorograph_texture.Resource().shaderResourceView());
+			m_compute_water_surface_height_texture.Resource().shaderResourceView(),
+			m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView());
 	}
 	MeshFieldRenderer::SetRenderHeightSRV(
 		ActiveTerrainHeightResource().shaderResourceView());
@@ -577,9 +576,8 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 			{
 				m_compute_grass_data_texture.Update(
 					ActiveTerrainNormalResource().shaderResourceView(),
-					m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView(),
-					m_compute_water_surface_height_texture.TerrainSurfaceDataResource().shaderResourceView(),
-					m_compute_meteorograph_texture.Resource().shaderResourceView());
+					m_compute_water_surface_height_texture.Resource().shaderResourceView(),
+					m_compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView());
 			}
 			m_terrain_classification_last_update_time = current_time;
 			m_last_terrain_material_settings = terrain_material_settings;

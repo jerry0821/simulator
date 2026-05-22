@@ -119,8 +119,9 @@ VS_OUT main(VS_IN vi, uint instance_id : SV_InstanceID)
     float sampled_strength = saturate(length(sampled_dir));
     sampled_dir = normalize(sampled_dir + 1.0e-6f.xx);
 
-    float2 wind_dir = normalize(lerp(global_wind_dir, sampled_dir, 0.18f) + 1.0e-6f.xx);
-    float local_strength = saturate(lerp(wind_strength, sampled_strength, 0.18f));
+    float2 wind_dir = normalize(lerp(global_wind_dir, sampled_dir, 0.10f) + 1.0e-6f.xx);
+    float local_strength = saturate(lerp(wind_strength, sampled_strength, 0.10f));
+    float shaped_strength = local_strength * local_strength;
 
     float2 gust_uv =
         world_origin.xz * 0.028f +
@@ -135,15 +136,15 @@ VS_OUT main(VS_IN vi, uint instance_id : SV_InstanceID)
 
     float sweep_wave = sin(sweep_phase);
     float cross_wave = sin(cross_phase);
-    float static_bend = (0.016f + local_strength * 0.055f) * blade_factor;
-    float gust_bend = (0.034f + local_strength * 4.50f) * gust_shape * blade_factor;
+    float static_bend = (0.010f + shaped_strength * 0.040f) * blade_factor;
+    float gust_bend = (0.012f + shaped_strength * 0.055f) * gust_shape * blade_factor;
     float bend_amount = static_bend + gust_bend;
 
     float4 posW = MulPointByInstance(float4(vi.posL.xyz, 1.0f), instance_data);
     posW.x += wind_dir.x * sweep_wave * bend_amount;
     posW.z += wind_dir.y * sweep_wave * bend_amount;
-    posW.x += (-wind_dir.y) * cross_wave * gust_bend * 0.06f;
-    posW.z += ( wind_dir.x) * cross_wave * gust_bend * 0.06f;
+    posW.x += (-wind_dir.y) * cross_wave * gust_bend * 0.035f;
+    posW.z += ( wind_dir.x) * cross_wave * gust_bend * 0.035f;
 
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);

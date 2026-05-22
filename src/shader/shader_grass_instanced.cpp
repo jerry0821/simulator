@@ -6,6 +6,7 @@
 
 #include "debug_ostream.h"
 #include "direct3d.h"
+#include "sampler.h"
 
 namespace
 {
@@ -180,11 +181,15 @@ void ShaderGrassInstanced_Begin()
 	context->VSSetConstantBuffers(0, 3, vs_buffers);
 	context->PSSetConstantBuffers(0, 1, &g_ps_constant_buffer0);
 	context->VSSetShaderResources(0, 1, &g_wind_field_srv);
+	ID3D11SamplerState* sampler = Backend::DX11::Sampler::GetState();
+	context->VSSetSamplers(0, 1, &sampler);
 }
 
 void ShaderGrassInstanced_Clear()
 {
 	ID3D11ShaderResourceView* null_srv = nullptr;
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, &null_srv);
+	ID3D11SamplerState* null_sampler = nullptr;
+	Direct3D_GetContext()->VSSetSamplers(0, 1, &null_sampler);
 	g_wind_field_srv = nullptr;
 }

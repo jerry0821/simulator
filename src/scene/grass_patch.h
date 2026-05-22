@@ -19,6 +19,17 @@ void GrassPatch_DrawInstanced(int tex_id,
                               float bend_scale,
                               RenderState render_state);
 
+void GrassPatch_DrawInstancedIndirect(int tex_id,
+                                      ID3D11Buffer* instance_buffer,
+                                      unsigned int instance_stride,
+                                      ID3D11Buffer* args_buffer,
+                                      const DirectX::XMFLOAT4& material_color,
+                                      ID3D11ShaderResourceView* wind_field_srv,
+                                      float time_seconds,
+                                      float field_uv_scale,
+                                      float bend_scale,
+                                      RenderState render_state);
+
 void GrassPatch_DrawShadow(const DirectX::XMMATRIX& world_matrix);
 
 #endif // GRASS_PATCH_H

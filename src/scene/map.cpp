@@ -95,6 +95,7 @@ constexpr float kTerrainWorldHalfDepth = ComputeTextureDimensions::kWorldHalfExt
 constexpr int kFloatingDustParticleCount = 96;
 constexpr bool kDrawMeteorographPanelDebug = false;
 constexpr bool kDrawGrass = true;
+constexpr bool kDrawGrassPassTestPatch = true;
 constexpr bool kDrawTerrainGrassCompute = true;
 constexpr bool kDrawTerrainGrassComputeShadow = false;
 constexpr bool kDrawFloatingDustParticles = false;
@@ -1187,6 +1188,10 @@ void MapController::Draw(const RenderFrameContext& frame_context)
   ShaderField_SetShadowMap(frame_context.resources.shadow_map);
   ShaderField_SetMeteorographMap(frame_context.resources.meteorograph_field.shaderResourceView());
   ShaderField_SetTerrainSurfacePresentationEnabled(DebugMenu_IsTerrainSurfacePresentationEnabled());
+  ShaderField_SetTerrainVegetationSuitabilityMap(
+      frame_context.resources.terrain_vegetation_suitability.isValid()
+          ? frame_context.resources.terrain_vegetation_suitability.shaderResourceView()
+          : nullptr);
   ShaderField_SetTerrainSurfaceDataMap(
       terrain_water.terrain_surface_data.isValid()
           ? terrain_water.terrain_surface_data.shaderResourceView()
@@ -1208,6 +1213,9 @@ void MapController::Draw(const RenderFrameContext& frame_context)
     const auto& noise_settings = DebugMenu_GetComputeNoiseSettings();
     const float wrapped_time_seconds =
         std::fmod(static_cast<float>(frame_context.globals.time_seconds), 1024.0f);
+    const float grass_field_uv_scale =
+        1.0f / std::max(ComputeTextureDimensions::kWorldSideLength, 1.0f);
+    const float grass_bend_scale = 1.0f;
     ShaderSprite3D_Cutout_SetWindSettings(
         wrapped_time_seconds,
         {noise_settings.wind_direction_x, noise_settings.wind_direction_y},
@@ -1226,6 +1234,11 @@ void MapController::Draw(const RenderFrameContext& frame_context)
         kClimateWorldMinZ,
         kClimateWorldMaxZ);
     ShaderSprite3D_CutoutInstanced_SetWindField(frame_context.resources.meteorograph_field.shaderResourceView());
+    ShaderGrassInstanced_SetWindField(frame_context.resources.meteorograph_field.shaderResourceView());
+    ShaderGrassInstanced_SetWindSettings(
+        wrapped_time_seconds,
+        grass_field_uv_scale,
+        grass_bend_scale);
   }
   BillBoard_SetViewMatrix(frame_context.globals.view_matrix);
 
@@ -1368,17 +1381,40 @@ void MapController::Draw(const RenderFrameContext& frame_context)
                        RenderState{DepthMode::ReadWrite, BlendMode::Opaque, CullMode::Back});
   }
 
+  if (kDrawGrassPassTestPatch && DebugMenu_IsGrassGpuEnabled())
+  {
+    const XMFLOAT3 camera_pos = frame_context.globals.camera_position;
+    const XMFLOAT2 offsets[] = {
+        { 0.0f, 4.0f },
+        { 3.5f, 0.0f },
+        { -3.5f, 0.0f },
+        { 0.0f, -4.0f }
+    };
+    for (const XMFLOAT2 offset : offsets)
+    {
+      const float test_x = camera_pos.x + offset.x;
+      const float test_z = camera_pos.z + offset.y;
+      const float test_ground_y = SampleTerrainHeightWorld(test_x, test_z);
+      XMFLOAT4X4 test_world{};
+      XMStoreFloat4x4(
+          &test_world,
+          XMMatrixScaling(6.0f, 10.0f, 6.0f) *
+              XMMatrixTranslation(test_x, test_ground_y + 0.05f, test_z));
+      grass_patch_batch.push_back(test_world);
+    }
+  }
+
   if (kDrawGrass && DebugMenu_IsGrassGpuEnabled() && !grass_patch_batch.empty())
   {
     InstancingDebug_AddBatch(static_cast<int>(grass_patch_batch.size()));
     GrassPatch_DrawInstanced(
         m_cube_grass_tex_id,
         grass_patch_batch,
-        {1.0f, 1.0f, 1.0f, 1.0f},
-        nullptr,
-        0.0f,
-        0.0f,
-        0.0f,
+        kDrawGrassPassTestPatch ? XMFLOAT4{1.0f, 0.25f, 0.95f, 1.0f} : XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f},
+        frame_context.resources.meteorograph_field.shaderResourceView(),
+        std::fmod(static_cast<float>(frame_context.globals.time_seconds), 1024.0f),
+        1.0f / std::max(ComputeTextureDimensions::kWorldSideLength, 1.0f),
+        1.0f,
         RenderState{DepthMode::ReadWrite, BlendMode::Opaque, CullMode::None});
   }
 
@@ -1476,6 +1512,10 @@ void MapController::Draw(const RenderFrameContext& frame_context)
         grass_compute_stats.gpu_path_used = drew_compute_patch;
         grass_compute_stats.visible_instance_count = m_terrain_grass_instances.LastVisibleInstanceCount();
         grass_compute_stats.fallback_used = false;
+        if (grass_compute_stats.gpu_path_used && grass_compute_stats.visible_instance_count > 0)
+        {
+          InstancingDebug_AddBatch(static_cast<int>(grass_compute_stats.visible_instance_count));
+        }
       }
     }
 

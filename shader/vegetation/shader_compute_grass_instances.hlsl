@@ -107,9 +107,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float sy = quad_scale_y * scale_jitter * lod_scale * scale_hint;
 
     const float tx = world_xz.x;
-    // Temporary grounding override for tuning: push the whole grass clump downward.
-    const float visual_root_pivot = 0.42f;
-    const float ty = ground_y + sy * visual_root_pivot - 0.5f;
+    const float root_embed = min(sy * 0.08f, 0.14f);
+    const float ty = ground_y + sy * 0.5f - root_embed;
     const float tz = world_xz.y;
 
     const uint quad_count = use_billboard_lod ? 1u : max(quads_per_seed, 1u);

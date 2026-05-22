@@ -87,7 +87,7 @@ private:
 		unsigned int padding0 = 0;
 	};
 
-	static constexpr unsigned int kQuadsPerSeed = 2;
+	static constexpr unsigned int kQuadsPerSeed = 3;
 	static constexpr unsigned int kThreadGroupSize = 64;
 
 	ID3D11Device* m_device = nullptr;

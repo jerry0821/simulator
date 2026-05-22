@@ -195,6 +195,7 @@ void MeshFieldRenderer::Draw()
 	g_context->DrawIndexed(static_cast<UINT>(g_mesh_indices.size()), 0, 0);
 	ShaderField_SetHeightMap(nullptr);
 	ShaderField_SetTerrainNormalMap(nullptr);
+	ShaderField_SetTerrainVegetationSuitabilityMap(nullptr);
 	ShaderField_SetTerrainSurfaceDataMap(nullptr);
 }
 

@@ -238,6 +238,14 @@ void ShaderField_SetTerrainNormalMap(ID3D11ShaderResourceView* pSRV)
 	}
 }
 
+void ShaderField_SetTerrainVegetationSuitabilityMap(ID3D11ShaderResourceView* pSRV)
+{
+	if (g_pContext)
+	{
+		g_pContext->PSSetShaderResources(4, 1, &pSRV);
+	}
+}
+
 void ShaderField_SetTerrainSurfaceDataMap(ID3D11ShaderResourceView* pSRV)
 {
 	if (g_pContext)

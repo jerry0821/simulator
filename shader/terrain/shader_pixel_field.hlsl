@@ -63,6 +63,7 @@ Texture2D texRock : register(t0);
 Texture2D texStone : register(t1);
 Texture2D g_ShadowMap : register(t2);
 Texture2D texGrass : register(t3);
+Texture2D g_TerrainVegetationSuitability : register(t4);
 Texture2D g_TerrainSurfaceData : register(t5);
 
 SamplerState samp : register(s0);
@@ -79,6 +80,16 @@ float4 SampleTerrainSurfaceData(float2 world_xz)
         saturate((world_xz.x + field_width * 0.5f) / field_width),
         saturate((world_xz.y + field_depth * 0.5f) / field_depth));
     return g_TerrainSurfaceData.SampleLevel(samp, uv, 0.0f);
+}
+
+float SampleVegetationSuitability(float2 world_xz)
+{
+    const float field_width = 2048.0f;
+    const float field_depth = 2048.0f;
+    float2 uv = float2(
+        saturate((world_xz.x + field_width * 0.5f) / field_width),
+        saturate((world_xz.y + field_depth * 0.5f) / field_depth));
+    return g_TerrainVegetationSuitability.SampleLevel(samp, uv, 0.0f).r;
 }
 
 float NormalizeClimateTemperature(float temperature_celsius)
@@ -105,6 +116,7 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
 {
     float3 N = normalize(ps_in.normalW.xyz);
     float4 surface_data = SampleTerrainSurfaceData(ps_in.posW.xz);
+    float vegetationSuitability = saturate(SampleVegetationSuitability(ps_in.posW.xz));
     float slopeMask = saturate(surface_data.r);
     float beachMask = saturate(surface_data.g);
     float humidity = saturate(surface_data.b);
@@ -136,6 +148,9 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     float3 material_color = grassColor;
     material_color = lerp(material_color, beachColor, beachBlend);
     material_color = lerp(material_color, slopeColor, slopeBlend);
+    const float grassPresence =
+        saturate(vegetationSuitability * (1.0f - beachBlend) * (1.0f - slopeBlend * 0.78f));
+    material_color = lerp(material_color, grassColor * 1.08f, grassPresence * 0.82f);
     material_color *= diffuse_color.rgb;
 
     float shadowFactor = 1.0f;

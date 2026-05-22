@@ -28,6 +28,7 @@ void ShaderField_Begin();
 
 void ShaderField_SetHeightMap(ID3D11ShaderResourceView* pSRV);
 void ShaderField_SetTerrainNormalMap(ID3D11ShaderResourceView* pSRV);
+void ShaderField_SetTerrainVegetationSuitabilityMap(ID3D11ShaderResourceView* pSRV);
 void ShaderField_SetTerrainSurfaceDataMap(ID3D11ShaderResourceView* pSRV);
 
 void ShaderField_SetLightViewProj(const DirectX::XMMATRIX& matrix); // 太陽の行列用

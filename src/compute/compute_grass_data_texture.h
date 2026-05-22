@@ -19,9 +19,8 @@ public:
 	void Finalize();
 	void Update(
 		ID3D11ShaderResourceView* terrain_normal_srv,
-		ID3D11ShaderResourceView* terrain_vegetation_suitability_srv,
-		ID3D11ShaderResourceView* terrain_surface_data_srv,
-		ID3D11ShaderResourceView* meteorograph_srv);
+		ID3D11ShaderResourceView* water_surface_height_srv,
+		ID3D11ShaderResourceView* terrain_vegetation_suitability_srv);
 	bool IsValid() const;
 	Backend::RenderShaderResource Resource() const;
 

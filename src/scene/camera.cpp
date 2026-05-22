@@ -89,6 +89,7 @@ void Camera_Update(double elapsed_time)
 	XMVECTOR up = XMLoadFloat3(&g_CameraVector_Up);
 	XMVECTOR right = XMLoadFloat3(&g_CameraVector_Right);
 	XMVECTOR position = XMLoadFloat3(&g_CameraPos);
+	const float dt = static_cast<float>(elapsed_time);
 
 	// Mouse input
 	Mouse_State ms{};
@@ -130,25 +131,71 @@ void Camera_Update(double elapsed_time)
 		position += front * (float)scrollDelta * zoomSpeed;
 	}
 
+	// WASD = move camera on the horizontal plane using the current facing direction.
+	{
+		XMVECTOR moveFront = XMVectorSet(XMVectorGetX(front), 0.0f, XMVectorGetZ(front), 0.0f);
+		if (XMVectorGetX(XMVector3LengthSq(moveFront)) > 1.0e-6f)
+		{
+			moveFront = XMVector3Normalize(moveFront);
+		}
+		else
+		{
+			moveFront = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+		}
+
+		XMVECTOR moveRight = XMVectorSet(XMVectorGetX(right), 0.0f, XMVectorGetZ(right), 0.0f);
+		if (XMVectorGetX(XMVector3LengthSq(moveRight)) > 1.0e-6f)
+		{
+			moveRight = XMVector3Normalize(moveRight);
+		}
+		else
+		{
+			moveRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+		}
+
+		float moveScale = g_CameraMoveSpeed * dt;
+		if (KeyLogger_IsPressed(KK_LEFTSHIFT) || KeyLogger_IsPressed(KK_RIGHTSHIFT))
+		{
+			moveScale *= 2.0f;
+		}
+
+		if (KeyLogger_IsPressed(KK_W))
+		{
+			position += moveFront * moveScale;
+		}
+		if (KeyLogger_IsPressed(KK_S))
+		{
+			position -= moveFront * moveScale;
+		}
+		if (KeyLogger_IsPressed(KK_D))
+		{
+			position += moveRight * moveScale;
+		}
+		if (KeyLogger_IsPressed(KK_A))
+		{
+			position -= moveRight * moveScale;
+		}
+	}
+
 	// --- Keyboard fallback controls (kept for convenience) ---
 	if (KeyLogger_IsPressed(KK_DOWN)) {
-		XMMATRIX rotation = XMMatrixRotationAxis(right, g_CameraRotateSpeed * (float)elapsed_time);
+		XMMATRIX rotation = XMMatrixRotationAxis(right, g_CameraRotateSpeed * dt);
 		front = XMVector3Normalize(XMVector3TransformNormal(front, rotation));
 		up = XMVector3Normalize(XMVector3Cross(front, right));
 	}
 	if (KeyLogger_IsPressed(KK_UP)) {
-		XMMATRIX rotation = XMMatrixRotationAxis(right, -g_CameraRotateSpeed * (float)elapsed_time);
+		XMMATRIX rotation = XMMatrixRotationAxis(right, -g_CameraRotateSpeed * dt);
 		front = XMVector3Normalize(XMVector3TransformNormal(front, rotation));
 		up = XMVector3Normalize(XMVector3Cross(front, right));
 	}
 	if (KeyLogger_IsPressed(KK_RIGHT)) {
-		XMMATRIX rotation = XMMatrixRotationY((float)(g_CameraRotateSpeed * elapsed_time));
+		XMMATRIX rotation = XMMatrixRotationY(g_CameraRotateSpeed * dt);
 		up = XMVector3Normalize(XMVector3TransformNormal(up, rotation));
 		right = XMVector3Normalize(XMVector3TransformNormal(right, rotation));
 		front = XMVector3Normalize(XMVector3Cross(right, up));
 	}
 	if (KeyLogger_IsPressed(KK_LEFT)) {
-		XMMATRIX rotation = XMMatrixRotationY((float)(-g_CameraRotateSpeed * elapsed_time));
+		XMMATRIX rotation = XMMatrixRotationY(-g_CameraRotateSpeed * dt);
 		up = XMVector3Normalize(XMVector3TransformNormal(up, rotation));
 		right = XMVector3Normalize(XMVector3TransformNormal(right, rotation));
 		front = XMVector3Normalize(XMVector3Cross(right, up));

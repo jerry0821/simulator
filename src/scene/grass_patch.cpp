@@ -168,11 +168,6 @@ void GrassPatch_DrawInstanced(int tex_id,
 							  float bend_scale,
 							  RenderState render_state)
 {
-	(void)wind_field_srv;
-	(void)time_seconds;
-	(void)field_uv_scale;
-	(void)bend_scale;
-
 	if (world_matrices.empty() || g_device == nullptr || g_context == nullptr)
 	{
 		return;
@@ -193,8 +188,8 @@ void GrassPatch_DrawInstanced(int tex_id,
 	Backend::DX11::Sampler::SetLinearFilter();
 	ShaderGrassInstanced_Begin();
 	ShaderGrassInstanced_SetMaterialColor(material_color);
-	ShaderGrassInstanced_SetWindField(nullptr);
-	ShaderGrassInstanced_SetWindSettings(0.0f, 0.0f, 0.0f);
+	ShaderGrassInstanced_SetWindField(wind_field_srv);
+	ShaderGrassInstanced_SetWindSettings(time_seconds, field_uv_scale, bend_scale);
 	Texture_SetTexture(tex_id);
 
 	UINT strides[2] = { sizeof(Vertex3D), sizeof(InstanceData) };
@@ -204,6 +199,48 @@ void GrassPatch_DrawInstanced(int tex_id,
 	g_context->IASetIndexBuffer(g_index_buffer, DXGI_FORMAT_R16_UINT, 0);
 	g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	g_context->DrawIndexedInstanced(6, static_cast<UINT>(world_matrices.size()), 0, 0, 0);
+
+	ShaderGrassInstanced_Clear();
+	RestoreRenderState();
+}
+
+void GrassPatch_DrawInstancedIndirect(int tex_id,
+									  ID3D11Buffer* instance_buffer,
+									  unsigned int instance_stride,
+									  ID3D11Buffer* args_buffer,
+									  const DirectX::XMFLOAT4& material_color,
+									  ID3D11ShaderResourceView* wind_field_srv,
+									  float time_seconds,
+									  float field_uv_scale,
+									  float bend_scale,
+									  RenderState render_state)
+{
+	if (tex_id < 0 || g_device == nullptr || g_context == nullptr || instance_buffer == nullptr || args_buffer == nullptr)
+	{
+		return;
+	}
+
+	EnsureGeometry();
+	if (g_vertex_buffer == nullptr || g_index_buffer == nullptr)
+	{
+		return;
+	}
+
+	ApplyRenderState(render_state);
+	Backend::DX11::Sampler::SetLinearFilter();
+	ShaderGrassInstanced_Begin();
+	ShaderGrassInstanced_SetMaterialColor(material_color);
+	ShaderGrassInstanced_SetWindField(wind_field_srv);
+	ShaderGrassInstanced_SetWindSettings(time_seconds, field_uv_scale, bend_scale);
+	Texture_SetTexture(tex_id);
+
+	UINT strides[2] = { sizeof(Vertex3D), instance_stride };
+	UINT offsets[2] = { 0, 0 };
+	ID3D11Buffer* buffers[2] = { g_vertex_buffer, instance_buffer };
+	g_context->IASetVertexBuffers(0, 2, buffers, strides, offsets);
+	g_context->IASetIndexBuffer(g_index_buffer, DXGI_FORMAT_R16_UINT, 0);
+	g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	g_context->DrawIndexedInstancedIndirect(args_buffer, 0);
 
 	ShaderGrassInstanced_Clear();
 	RestoreRenderState();

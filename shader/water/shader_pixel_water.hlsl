@@ -18,6 +18,7 @@ struct PS_INPUT
     float4 posH : SV_POSITION;
     float3 posW : TEXCOORD0;
     float2 uv : TEXCOORD1;
+    bool isFrontFace : SV_IsFrontFace;
 };
 
 Texture2D<float4> water_surface_height_tex : register(t0);
@@ -65,69 +66,78 @@ float3 DecodeUpNormal(float2 encoded)
     return float3(xz.x, y, xz.y);
 }
 
+float2 Hash22(float2 p)
+{
+    const float2 h = float2(
+        dot(p, float2(127.1f, 311.7f)),
+        dot(p, float2(269.5f, 183.3f)));
+    return frac(sin(h) * 43758.5453f);
+}
+
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
     float2 worldUV = WorldToFieldUv(ps_in.posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
-    const float depth_visibility = smoothstep(0.003f, 0.014f, water_depth);
+    const float water_visibility = smoothstep(0.006f, 0.030f, water_depth);
 
     const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
     const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
-    const float4 packed_normal_sample = terrain_normal_tex.SampleLevel(samp, sample_uv, 0.0f);
-    const float3 terrain_normal = DecodeUpNormal(packed_normal_sample.xy);
-    const float3 water_normal = DecodeUpNormal(packed_normal_sample.zw);
 
     const float2 flow_velocity = velocity_sample.xy;
-    const float water_speed = saturate(velocity_sample.z);
-    const float transport_energy = saturate(velocity_sample.w);
+    const float water_speed_factor = saturate(length(flow_velocity) * 8.0f + velocity_sample.z * 0.65f);
     const float suspended_sediment = saturate(sediment_sample.x);
-    const float deposition = saturate(sediment_sample.y);
-    const float erosion = saturate(sediment_sample.z);
-    const float sediment_capacity = saturate(sediment_sample.w);
 
-    float3 surface_normal = water_normal;
-    surface_normal.xz += flow_velocity * 0.0008f;
-    surface_normal = normalize(surface_normal);
-    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.55f - water_depth * 5.0f)));
+    const float2 coord_offset =
+        (Hash22(ceil((ps_in.posH.xy + ps_in.posW.xz) * 128.0f) * 0.001f) * 2.0f - 1.0f) * 0.35f;
+    const float2 normal_uv = ComputeWaterSampleUv(WorldToFieldUv(ps_in.posW.xz + coord_offset));
+    const float4 packed_normal_sample = terrain_normal_tex.SampleLevel(samp, normal_uv, 0.0f);
+    float3 terrain_normal = DecodeUpNormal(packed_normal_sample.xy);
+    float3 surface_normal = DecodeUpNormal(packed_normal_sample.zw);
+    surface_normal = lerp(surface_normal, normalize(float3(surface_normal.xy * 2.0f, surface_normal.z)), water_speed_factor);
+    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.50f - water_depth * 4.5f)));
 
-    const float3 view_dir = normalize(camera_position - ps_in.posW);
     const float3 light_dir = normalize(float3(-0.34f, 0.88f, 0.24f));
+    const float3 view_dir = normalize(camera_position - ps_in.posW);
+    const float3 half_dir = normalize(light_dir + view_dir);
     const float fresnel = pow(1.0f - saturate(dot(surface_normal, view_dir)), fresnel_power);
     const float ndotl = saturate(dot(surface_normal, light_dir));
-    const float specular = pow(saturate(dot(reflect(-light_dir, surface_normal), view_dir)), 28.0f) *
-        (0.12f + highlight_strength * 0.56f);
+    const float ndoth = saturate(dot(surface_normal, half_dir));
 
-    const float depth_factor = smoothstep(0.008f, 0.22f, water_depth);
+    float4 base_color = lerp(
+        float4(0.25f, 0.40f, 0.45f, 1.0f),
+        float4(0.40f, 0.30f, 0.20f, 1.0f),
+        saturate(suspended_sediment * 5.0f));
+    base_color = lerp(base_color, float4(0.60f, 0.60f, 0.65f, 1.0f), water_speed_factor);
+    base_color.rgb *= diffuse_color.rgb;
+
+    const float specular_strength = lerp(0.50f, 0.10f, water_speed_factor) * (0.55f + highlight_strength * 0.45f);
+    const float roughness = lerp(0.15f, 0.30f, water_speed_factor);
+    const float specular = pow(ndoth, lerp(56.0f, 18.0f, roughness)) * specular_strength;
+    const float3 ambient = base_color.rgb * float3(0.18f, 0.20f, 0.22f);
+    const float3 diffuse = base_color.rgb * (0.18f + ndotl * 0.82f);
+    const float3 reflection_tint = float3(0.58f, 0.72f, 0.90f) * (0.16f + water_speed_factor * 0.10f);
+    float3 water_color = ambient + diffuse + specular.xxx;
+    water_color += reflection_tint * fresnel;
+    water_color = lerp(water_color, float3(0.92f, 0.94f, 0.98f), water_speed_factor * 0.08f);
+
+    const int2 pixel = int2(ps_in.posH.xy);
+    const float scene_depth = scene_depth_tex.Load(int3(pixel, 0)).r;
+    const float pixel_depth = ps_in.posH.z;
+    const float depth_fade = max(scene_depth - pixel_depth, 0.0f);
+    const float depth_factor = smoothstep(0.012f, 0.22f, water_depth);
     const float deep_factor = smoothstep(0.04f, 0.34f, water_depth);
-    const float shallow_factor = 1.0f - deep_factor;
-    const float muddiness = saturate(suspended_sediment * 0.70f + deposition * 0.22f);
-    const float foam_hint =
-        smoothstep(0.12f, 0.42f, water_speed + erosion * 0.20f) *
-        smoothstep(0.004f, 0.05f, water_depth) *
-        (0.22f);
-
-    float3 shallow_color = diffuse_color.rgb * float3(0.84f, 1.02f, 1.10f);
-    float3 deep_color = diffuse_color.rgb * float3(0.42f, 0.70f, 1.16f);
-    float3 sediment_color = float3(0.41f, 0.33f, 0.24f);
-    float3 sky_reflection = float3(0.58f, 0.72f, 0.90f);
-
-    float3 water_color = lerp(shallow_color, deep_color, deep_factor);
-    water_color = lerp(water_color, sediment_color, muddiness * shallow_factor * 0.58f);
-    water_color += sky_reflection * fresnel * (0.22f + ndotl * 0.18f);
-    water_color += float3(1.0f, 1.0f, 1.0f) * specular;
-    water_color += float3(0.14f, 0.18f, 0.22f) * water_speed * depth_factor;
-    water_color = lerp(water_color, float3(0.92f, 0.97f, 1.00f), foam_hint * 0.25f);
-
-    float alpha =
-        diffuse_color.a * 0.82f +
-        depth_factor * 0.22f +
-        fresnel * 0.18f +
-        water_speed * 0.06f +
-        sediment_capacity * 0.04f;
-    alpha = saturate(alpha * depth_visibility);
-    clip(alpha - 0.002f);
+    const float scene_edge_alpha = pow(saturate(depth_fade * 24.0f), 0.28f);
+    const float base_alpha =
+        diffuse_color.a * water_visibility * (0.24f + depth_factor * 0.42f + deep_factor * 0.16f) +
+        fresnel * water_visibility * 0.12f +
+        water_speed_factor * water_visibility * 0.05f;
+    float alpha = max(base_alpha, scene_edge_alpha * diffuse_color.a * water_visibility);
+    alpha = lerp(alpha, alpha * 0.92f + deep_factor * 0.04f, ps_in.isFrontFace ? 1.0f : 0.0f);
+    alpha *= saturate(0.72f + log(length(ps_in.posW - camera_position) + 1.0f) * 0.16f);
+    alpha = saturate(alpha);
+    clip(alpha - 0.010f);
 
     return float4(saturate(water_color), alpha);
 }

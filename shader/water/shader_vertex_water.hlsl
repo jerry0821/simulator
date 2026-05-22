@@ -59,11 +59,13 @@ VS_OUT main(VS_IN vi)
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
+    const float water_visibility = smoothstep(0.006f, 0.020f, water_depth);
+    const float visible_water_height = lerp(terrain_water_height.x, terrain_water_height.y, water_visibility);
     const float surface_lift =
-        water_depth > 0.0f
-            ? (0.008f + min(water_depth * 0.030f, 0.014f))
+        water_visibility > 0.0f
+            ? water_visibility * (0.006f + min(water_depth * 0.020f, 0.010f))
             : 0.0f;
-    posW.y = terrain_water_height.y + surface_lift;
+    posW.y = visible_water_height + surface_lift;
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

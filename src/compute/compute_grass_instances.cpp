@@ -261,7 +261,7 @@ bool ComputeGrassInstances::ConfigureCoverage(
 	D3D11_BUFFER_DESC instance_desc{};
 	instance_desc.Usage = D3D11_USAGE_DEFAULT;
 	instance_desc.ByteWidth = static_cast<UINT>(sizeof(InstanceData) * m_instance_count);
-	instance_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	instance_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_VERTEX_BUFFER;
 	instance_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	instance_desc.StructureByteStride = sizeof(InstanceData);
 
