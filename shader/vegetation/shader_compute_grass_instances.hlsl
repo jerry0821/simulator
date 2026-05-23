@@ -78,19 +78,18 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const uint col = seed_index % max(grid_cols, 1u);
     const uint row = seed_index / max(grid_cols, 1u);
     const float2 grid_pos = float2((float)col, (float)row);
+    const float lod1_t =
+        saturate((distance_to_camera - lod_full_distance) /
+                 max(lod_max_distance - lod_full_distance, 1.0f));
+    const float distance_fade =
+        saturate((lod_max_distance - distance_to_camera) / max(lod_max_distance, 1.0f));
+    const float visibility_scale = saturate(min(distance_fade * 2.0f, 1.0f));
+    if (visibility_scale <= 0.02f)
+    {
+        return;
+    }
 
     const bool use_billboard_lod = distance_to_camera >= lod_full_distance;
-    float lod1_t = 0.0f;
-    if (use_billboard_lod)
-    {
-        lod1_t = saturate((distance_to_camera - lod_full_distance) / max(lod_max_distance - lod_full_distance, 1.0f));
-        float keep_probability = lerp(1.0f, far_keep_probability, lod1_t);
-        float lod_hash = Hash21(grid_pos + float2(53.0f, 71.0f));
-        if (lod_hash > keep_probability)
-        {
-            return;
-        }
-    }
 
     const float angle_offsets[3] = {
         0.0f,
@@ -100,18 +99,22 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     const float scale_noise = Hash21(world_xz * 0.18f + float2(41.0f, -17.0f));
     const float scale_jitter = 0.78f + scale_noise * 0.52f;
-    const float lod_scale = use_billboard_lod ? lerp(0.92f, 0.52f, lod1_t) : 1.0f;
+    const float lod_scale = lerp(1.0f, 0.72f, lod1_t) * visibility_scale;
     const float yaw_offset = Hash21(grid_pos + float2(29.0f, 31.0f)) * 3.14159265f;
 
     const float sx = quad_scale_x * scale_jitter * lod_scale * scale_hint;
     const float sy = quad_scale_y * scale_jitter * lod_scale * scale_hint;
 
     const float tx = world_xz.x;
-    const float root_embed = min(sy * 0.08f, 0.14f);
+    const float root_embed = min(sy * 0.015f, 0.025f);
     const float ty = ground_y + sy * 0.5f - root_embed;
     const float tz = world_xz.y;
 
-    const uint quad_count = use_billboard_lod ? 1u : max(quads_per_seed, 1u);
+    uint quad_count = max(quads_per_seed, 1u);
+    if (use_billboard_lod)
+    {
+        quad_count = (lod1_t < 0.35f) ? min(2u, quad_count) : 1u;
+    }
     const float billboard_angle = atan2(camera_xz.x - tx, camera_xz.y - tz);
 
     [unroll]

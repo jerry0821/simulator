@@ -140,7 +140,7 @@ void MeshFieldRenderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
 	BuildProceduralTerrain();
 	RebuildGpuBuffers();
 
-	g_field_texture_id0 = TextureManager::Load(L"resource/texture/rock.png");
+	g_field_texture_id0 = TextureManager::Load(L"resource/texture/stone_floor.png");
 	g_field_texture_id1 = TextureManager::Load(L"resource/texture/stone_floor.png");
 	g_field_texture_id2 = TextureManager::Load(L"resource/texture/grass.png");
 	ShaderField_Initialize(g_device, g_context);

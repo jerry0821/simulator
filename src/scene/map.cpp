@@ -82,26 +82,27 @@ constexpr float kClimateWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr float kDebugQuadScaleX = 2.2f;
 constexpr float kDebugQuadScaleY = 3.4f;
 constexpr float kTerrainGrassMargin = 14.0f;
-constexpr float kTerrainGrassSpacing = 3.8f;
-constexpr float kTerrainGrassLodFullDistance = 46.0f;
-constexpr float kTerrainGrassLodMaxDistance = 104.0f;
+constexpr float kTerrainGrassSpacing = 2.35f;
+constexpr float kTerrainGrassLodFullDistance = 52.0f;
+constexpr float kTerrainGrassLodMaxDistance = 128.0f;
 constexpr float kTerrainGrassAreaCenterX = 0.0f;
 constexpr float kTerrainGrassAreaCenterZ = 0.0f;
-constexpr float kTerrainGrassAreaHalfExtentX = 132.0f;
-constexpr float kTerrainGrassAreaHalfExtentZ = 132.0f;
+constexpr float kTerrainGrassAreaHalfExtentX =
+    ComputeTextureDimensions::kWorldHalfExtent - kTerrainGrassMargin;
+constexpr float kTerrainGrassAreaHalfExtentZ =
+    ComputeTextureDimensions::kWorldHalfExtent - kTerrainGrassMargin;
 constexpr float kTerrainGrassSlopeSampleOffset = 2.2f;
 constexpr float kTerrainWorldHalfWidth = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr float kTerrainWorldHalfDepth = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr int kFloatingDustParticleCount = 96;
 constexpr bool kDrawMeteorographPanelDebug = false;
 constexpr bool kDrawGrass = true;
-constexpr bool kDrawGrassPassTestPatch = true;
 constexpr bool kDrawTerrainGrassCompute = true;
 constexpr bool kDrawTerrainGrassComputeShadow = false;
 constexpr bool kDrawFloatingDustParticles = false;
-constexpr double kGrassCoverageProbeIntervalSeconds = 0.75;
-constexpr double kTerrainGrassUpdateIntervalSeconds = 1.0 / 15.0;
-constexpr float kGrassCoverageClassificationSignatureThreshold = 0.020f;
+constexpr double kGrassCoverageProbeIntervalSeconds = 3.0;
+constexpr double kTerrainGrassUpdateIntervalSeconds = 0.0;
+constexpr float kGrassCoverageClassificationSignatureThreshold = 0.080f;
 ID3D11Buffer* g_tiled_vertex_buffer = nullptr;
 
 float SampleTerrainHeightWorld(float world_x, float world_z)
@@ -1160,7 +1161,10 @@ bool MapController::ShouldRefreshTerrainGrassCoverage(const RenderFrameContext& 
       kGrassCoverageClassificationSignatureThreshold;
 
   m_terrain_grass_last_grass_data_signature = grass_data_signature;
-  return first_probe || grass_data_changed;
+  // Keep terrain grass distribution stable during normal play. The simplified
+  // grass-data path no longer needs frequent runtime refreshes, and probing
+  // tiny signature changes caused visible popping/flicker.
+  return first_probe ? false : grass_data_changed;
 }
 
 void MapController::Draw(const RenderFrameContext& frame_context)
@@ -1381,36 +1385,13 @@ void MapController::Draw(const RenderFrameContext& frame_context)
                        RenderState{DepthMode::ReadWrite, BlendMode::Opaque, CullMode::Back});
   }
 
-  if (kDrawGrassPassTestPatch && DebugMenu_IsGrassGpuEnabled())
-  {
-    const XMFLOAT3 camera_pos = frame_context.globals.camera_position;
-    const XMFLOAT2 offsets[] = {
-        { 0.0f, 4.0f },
-        { 3.5f, 0.0f },
-        { -3.5f, 0.0f },
-        { 0.0f, -4.0f }
-    };
-    for (const XMFLOAT2 offset : offsets)
-    {
-      const float test_x = camera_pos.x + offset.x;
-      const float test_z = camera_pos.z + offset.y;
-      const float test_ground_y = SampleTerrainHeightWorld(test_x, test_z);
-      XMFLOAT4X4 test_world{};
-      XMStoreFloat4x4(
-          &test_world,
-          XMMatrixScaling(6.0f, 10.0f, 6.0f) *
-              XMMatrixTranslation(test_x, test_ground_y + 0.05f, test_z));
-      grass_patch_batch.push_back(test_world);
-    }
-  }
-
   if (kDrawGrass && DebugMenu_IsGrassGpuEnabled() && !grass_patch_batch.empty())
   {
     InstancingDebug_AddBatch(static_cast<int>(grass_patch_batch.size()));
     GrassPatch_DrawInstanced(
         m_cube_grass_tex_id,
         grass_patch_batch,
-        kDrawGrassPassTestPatch ? XMFLOAT4{1.0f, 0.25f, 0.95f, 1.0f} : XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f},
+        XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f},
         frame_context.resources.meteorograph_field.shaderResourceView(),
         std::fmod(static_cast<float>(frame_context.globals.time_seconds), 1024.0f),
         1.0f / std::max(ComputeTextureDimensions::kWorldSideLength, 1.0f),
@@ -1501,6 +1482,22 @@ void MapController::Draw(const RenderFrameContext& frame_context)
                 "GrassIndirectArgs",
                 m_terrain_grass_instances.ArgsBuffer());
           }
+          const auto& terrain_grass_wind = DebugMenu_GetComputeNoiseSettings();
+          ShaderSprite3D_CutoutInstanced_SetWindSettings(
+              std::fmod(static_cast<float>(frame_context.globals.time_seconds), 1024.0f),
+              {terrain_grass_wind.wind_direction_x, terrain_grass_wind.wind_direction_y},
+              terrain_grass_wind.wind_strength * 1.20f,
+              kClimateWorldMinX,
+              kClimateWorldMaxX,
+              kClimateWorldMinZ,
+              kClimateWorldMaxZ);
+          ShaderSprite3D_CutoutInstanced_SetWindField(
+              frame_context.resources.meteorograph_field.shaderResourceView());
+          ShaderSprite3D_CutoutInstanced_SetTerrainNormalField(
+              frame_context.resources.terrain_normal.shaderResourceView());
+          // Terrain grass authority: compute-generated billboard cards rendered through
+          // Sprite3D cutout instancing, with wind sampled from Meteorograph in the
+          // cutout-instanced vertex shader.
           Sprite3D_DrawCutoutInstancedIndirectBuffer(
               m_debug_billboard_tex_id,
               m_terrain_grass_instances.InstanceSRV(),
@@ -1797,7 +1794,7 @@ void MapController::DrawShadow(const RenderFrameContext* frame_context)
     ShaderSprite3D_ShadowInstanced_SetWindSettings(
         wrapped_time_seconds,
         {noise_settings.wind_direction_x, noise_settings.wind_direction_y},
-        noise_settings.wind_strength,
+        noise_settings.wind_strength * 1.20f,
         kClimateWorldMinX,
         kClimateWorldMaxX,
         kClimateWorldMinZ,

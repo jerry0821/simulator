@@ -50,6 +50,9 @@
     <ClCompile Include="src\app\application.cpp">
       <Filter>Source Files\App</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\runtime_bootstrap.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
     <ClCompile Include="src\app\game_window.cpp">
       <Filter>Source Files\App</Filter>
     </ClCompile>
@@ -203,6 +206,33 @@
     <ClCompile Include="src\scene\camera.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\runtime_system.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\runtime_frame_loop.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\runtime_frame_debug.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\renderer_submission.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\compute_task_frame.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\compute_task_publish.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\compute_task_system.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\compute_task_resources.cpp">
+      <Filter>Source Files\App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\renderer_frame_builder.cpp">
+      <Filter>Source Files\Renderer\Core</Filter>
+    </ClCompile>
     <ClCompile Include="src\geometry\collision.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
@@ -324,6 +354,18 @@
   <ItemGroup>
     <ClInclude Include="src\app\application.h">
       <Filter>Header Files\App</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\runtime_system.h">
+      <Filter>Header Files\App</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\compute_task_publish.h">
+      <Filter>Header Files\App</Filter>
+    </ClInclude>
+    <ClInclude Include="src\app\compute_task_system_state.h">
+      <Filter>Header Files\App</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\renderer_frame_builder.h">
+      <Filter>Header Files\Renderer\Core</Filter>
     </ClInclude>
     <ClInclude Include="src\app\game_window.h">
       <Filter>Header Files\App</Filter>

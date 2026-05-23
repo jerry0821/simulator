@@ -602,11 +602,11 @@ void ComputeWaterSurfaceHeightTexture::DispatchTerrainNormalPass(
 		TerrainHeightField::FieldWidth(),
 		TerrainHeightField::FieldDepth(),
 		time_seconds,
-		0.050f,
+		0.022f,
 		kTextureWidth,
 		kTextureHeight,
-		0.028f,
-		1.20f
+		0.018f,
+		0.72f
 	};
 	m_context->UpdateSubresource(m_terrain_normal_constant_buffer, 0, nullptr, &constants, 0, 0);
 

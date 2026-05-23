@@ -288,7 +288,7 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
 
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
     const float4 previous_flow = max(g_PreviousWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
-    const float previous_flow_retention = saturate(1.0f - water_dt * 2.2f);
+    const float previous_flow_retention = 0.0f;
     const float4 retained_previous_flow = previous_flow * previous_flow_retention;
     const float available_water = SamplePreviousDepth(coord);
     if (available_water <= 1.0e-5f)
@@ -306,35 +306,6 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
 
     const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
     const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
-    const float2 wind_velocity = meteorograph_sample.xy;
-    const float wind_strength = saturate(length(wind_velocity));
-    const float2 wind_dir = SafeNormalize(wind_velocity);
-    if (wind_strength > 1.0e-4f)
-    {
-        const float2 world_pos = ComputeWorldPosition(coord);
-        const float along_wind = dot(world_pos, wind_dir);
-        const float cross_wind = dot(world_pos, float2(-wind_dir.y, wind_dir.x));
-        const float wind_phase =
-            along_wind * 0.030f -
-            time_seconds * (0.10f + wind_strength * 0.40f) +
-            cross_wind * 0.006f;
-        const float gust = 0.5f + 0.5f * sin(wind_phase * 6.2831853f);
-        const float4 neighbor_depth = float4(
-            SamplePreviousDepth(coord + int2(1, 0)),
-            SamplePreviousDepth(coord + int2(-1, 0)),
-            SamplePreviousDepth(coord + int2(0, 1)),
-            SamplePreviousDepth(coord + int2(0, -1)));
-        const float disturbance_scale =
-            wind_strength *
-            (0.0035f + gust * 0.010f) *
-            max(length(surface_delta_heights), 0.0006f);
-        const float4 wind_effect =
-            float4(wind_dir.x, -wind_dir.x, wind_dir.y, -wind_dir.y) * disturbance_scale;
-        const float4 max_disturbance =
-            max(min(neighbor_depth, available_water.xxxx) * 0.018f, 0.00008f.xxxx);
-        surface_delta_heights =
-            max(surface_delta_heights + clamp(wind_effect, -max_disturbance, max_disturbance), 0.0f.xxxx);
-    }
 
     float4 candidate = max(retained_previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
     const float total_candidate = dot(candidate, 1.0f.xxxx);
@@ -373,6 +344,7 @@ float4 ComputeSoilMoistureSample(
     float water_dt,
     float rain_amount,
     float next_depth,
+    float sheet_absorption,
     float4 water_mask)
 {
     static const float rain_absorption = 0.16f;
@@ -401,7 +373,10 @@ float4 ComputeSoilMoistureSample(
     const float standing_water = smoothstep(0.04f, 0.16f, next_depth);
 
     const float rain_gain = rain_amount * rain_absorption;
-    const float seep_gain = standing_water * (wetness_absorption * 1.10f) + next_depth * 0.28f;
+    const float seep_gain =
+        standing_water * (wetness_absorption * 1.10f) +
+        next_depth * 0.28f +
+        sheet_absorption * 0.95f;
     const float bank_gain =
         max(water_coverage * shoreline_absorption, shoreline_contact * (shoreline_absorption * 1.20f));
     const float evaporation =
@@ -513,14 +488,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float2 atmospheric_wind = meteorograph_sample.xy;
     const float atmospheric_humidity = saturate(meteorograph_sample.z);
     const float atmospheric_temperature = NormalizeClimateTemperature(meteorograph_sample.w);
-    const float wind_strength = saturate(length(atmospheric_wind));
+    const float wind_strength = saturate(length(atmospheric_wind)) * 0.35f;
     const float2 wind_dir = SafeNormalize(atmospheric_wind);
     const float wind_surface_factor =
-        smoothstep(0.01f, 0.12f, next_depth) *
+        smoothstep(0.02f, 0.14f, next_depth) *
         wind_strength *
-        (0.55f + basin_factor * 0.45f);
+        (0.70f + basin_factor * 0.45f);
     float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
-    water_velocity_xy += wind_dir * ((0.0035f + next_depth * 0.014f) * wind_surface_factor);
+    water_velocity_xy += wind_dir * ((0.0045f + next_depth * 0.0180f) * wind_surface_factor);
     float water_speed = saturate(length(water_velocity_xy) * 2.8f);
     float transport_energy =
         saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f + wind_surface_factor * 0.05f));
@@ -617,24 +592,53 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             seepage_rate * water_dt * 60.0f * (1.0f - basin_factor));
     next_depth = max(next_depth - seepage_loss, 0.0f);
 
-    const float resolved_surface_height =
-        IsEdgeCell(coord)
-            ? max(terrain_height + next_depth, kWaterBaseHeight)
-            : terrain_height + next_depth;
+    const float shallow_sheet_factor = 1.0f - smoothstep(0.018f, 0.060f, next_depth);
+    const float slope_sheet_factor = smoothstep(0.08f, 0.24f, terrain_slope);
+    const float basin_sheet_factor = 1.0f - smoothstep(0.12f, 0.52f, basin_factor);
+    const float sheet_prune_factor =
+        shallow_sheet_factor *
+        slope_sheet_factor *
+        basin_sheet_factor *
+        (1.0f - standing_water) *
+        (0.42f + runoff * 0.58f);
+    const float sheet_absorption = next_depth * saturate(sheet_prune_factor * 0.92f);
+    next_depth = max(next_depth - sheet_absorption, 0.0f);
+
+    float resolved_surface_height = terrain_height + next_depth;
+    if (!IsEdgeCell(coord))
+    {
+        const float neighbor_surface_average =
+            (SamplePreviousSurfaceHeight(coord + int2(1, 0)) +
+             SamplePreviousSurfaceHeight(coord + int2(-1, 0)) +
+             SamplePreviousSurfaceHeight(coord + int2(0, 1)) +
+             SamplePreviousSurfaceHeight(coord + int2(0, -1)) +
+             resolved_surface_height) * 0.2f;
+        const float local_surface_slope =
+            max(
+                abs(SamplePreviousSurfaceHeight(coord + int2(1, 0)) - SamplePreviousSurfaceHeight(coord + int2(-1, 0))),
+                abs(SamplePreviousSurfaceHeight(coord + int2(0, 1)) - SamplePreviousSurfaceHeight(coord + int2(0, -1))));
+        const float standing_settle =
+            standing_water *
+            (1.0f - runoff) *
+            (1.0f - saturate(local_surface_slope * 6.0f)) *
+            saturate(1.0f - terrain_slope * 1.8f) *
+            lerp(0.55f, 1.0f, basin_factor);
+        const float settled_surface_height =
+            max(terrain_height, lerp(resolved_surface_height, neighbor_surface_average, standing_settle * 0.55f));
+        resolved_surface_height = settled_surface_height;
+        next_depth = max(resolved_surface_height - terrain_height, 0.0f);
+    }
+    else
+    {
+        resolved_surface_height = max(resolved_surface_height, kWaterBaseHeight);
+        next_depth = max(resolved_surface_height - terrain_height, 0.0f);
+    }
 
     const float depth_preview = smoothstep(0.01f, 0.12f, next_depth);
-    const float2 world_pos = ComputeWorldPosition(coord);
-    const float along_wind = dot(world_pos, wind_dir);
-    const float cross_wind = dot(world_pos, float2(-wind_dir.y, wind_dir.x));
-    const float wind_phase =
-        along_wind * 0.040f -
-        time_seconds * lerp(0.14f, 0.95f, wind_strength) +
-        cross_wind * 0.010f;
-    const float ripple_a = 0.5f + 0.5f * sin(wind_phase * 6.2831853f);
-    const float ripple_b = 0.5f + 0.5f * sin(wind_phase * 12.5663706f + 0.85f);
     const float wind_glint =
-        pow(saturate(ripple_a * 0.72f + ripple_b * 0.28f), 2.2f) *
-        smoothstep(0.015f, 0.10f, max(next_depth, runoff * 0.08f));
+        pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector + wind_dir * 0.25f), wind_dir)), 2.2f) *
+        smoothstep(0.015f, 0.10f, max(next_depth, runoff * 0.08f)) *
+        wind_strength;
     const float flow_sheen =
         pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector), wind_dir)), 2.0f) *
         water_speed * 0.30f;
@@ -671,6 +675,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         water_dt,
         rain_amount,
         next_depth,
+        sheet_absorption,
         water_mask);
     const float4 water_interaction =
         ComputeWaterInteractionSample(visible_water, water_mask, soil_moisture);

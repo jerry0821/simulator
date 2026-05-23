@@ -123,9 +123,10 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     float roughness = saturate(surface_data.a);
 
     float climateHumidity = saturate(ps_in.meteorographData.z);
-    float temperature = NormalizeClimateTemperature(ps_in.meteorographData.w);
+    float temperatureCelsius = ps_in.meteorographData.w;
+    float temperature = NormalizeClimateTemperature(temperatureCelsius);
     float humidityMask = saturate(max(humidity, climateHumidity * 0.55f));
-    float slopeBlend = smoothstep(0.06f, 0.72f, slopeMask);
+    float slopeBlend = smoothstep(g_RockSlopeStart, g_RockSlopeEnd, slopeMask);
     float beachBlend = saturate(beachMask * (1.0f - slopeBlend * 0.55f));
 
     float2 terrainTexCoord = ps_in.posW.xz * 0.05f;
@@ -136,7 +137,7 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
 
     float3 grassColor = texGrass.Sample(samp, grass_uv).rgb * 1.35f;
     float3 beachColor = texStone.Sample(samp, beach_uv).rgb * 0.92f;
-    float3 slopeColor = texRock.Sample(samp, slope_uv).rgb * 0.82f;
+    float3 slopeColor = texStone.Sample(samp, slope_uv).rgb * 0.84f;
 
     grassColor = ApplySurfaceVariant(grassColor, beachBlend, humidityMask, temperature);
     beachColor = ApplySurfaceVariant(beachColor * float3(0.96f, 0.92f, 0.82f), 1.0f, humidityMask * 0.45f, temperature);
@@ -145,12 +146,26 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         slopeColor * float3(0.74f, 0.78f, 0.82f),
         saturate(humidityMask * 0.35f + roughness * 0.18f));
 
+    const float snowSlopeMask = 1.0f - smoothstep(0.68f, 0.94f, slopeMask);
+    const float snowTemperatureMask = saturate(-temperatureCelsius * 0.5f);
+    const float snowAltitudeSupport = smoothstep(g_RockHeightStart, g_RockHeightEnd, ps_in.posW.y);
+    const float snowMask =
+        saturate(max(snowTemperatureMask, snowTemperatureMask * 0.55f + snowAltitudeSupport * 0.45f) * snowSlopeMask);
+    const float3 snowColor = lerp(
+        float3(0.86f, 0.90f, 0.95f),
+        float3(0.98f, 0.99f, 1.0f),
+        saturate(roughness * 0.25f + humidityMask * 0.35f));
+
     float3 material_color = grassColor;
     material_color = lerp(material_color, beachColor, beachBlend);
     material_color = lerp(material_color, slopeColor, slopeBlend);
-    const float grassPresence =
-        saturate(vegetationSuitability * (1.0f - beachBlend) * (1.0f - slopeBlend * 0.78f));
-    material_color = lerp(material_color, grassColor * 1.08f, grassPresence * 0.82f);
+    const float vegetationFill = smoothstep(0.32f, 0.82f, vegetationSuitability);
+    const float terrainGrassMask =
+        saturate(max(
+            vegetationFill * 0.95f,
+            vegetationSuitability * (1.0f - beachBlend) * (1.0f - slopeBlend * 0.68f)));
+    material_color = lerp(material_color, grassColor * 1.10f, terrainGrassMask * 0.90f);
+    material_color = lerp(material_color, snowColor, snowMask);
     material_color *= diffuse_color.rgb;
 
     float shadowFactor = 1.0f;

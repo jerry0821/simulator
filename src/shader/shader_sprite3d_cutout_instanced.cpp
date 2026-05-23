@@ -26,6 +26,7 @@ ID3D11Buffer* g_vs_constant_buffer1 = nullptr;
 ID3D11Buffer* g_vs_constant_buffer2 = nullptr;
 ID3D11Buffer* g_ps_constant_buffer0 = nullptr;
 ID3D11ShaderResourceView* g_wind_field_srv = nullptr;
+ID3D11ShaderResourceView* g_terrain_normal_srv = nullptr;
 ID3D11ShaderResourceView* g_instance_buffer_srv = nullptr;
 
 struct Sprite3DWindConstants
@@ -131,6 +132,7 @@ bool ShaderSprite3D_CutoutInstanced_Initialize()
 void ShaderSprite3D_CutoutInstanced_Finalize()
 {
 	g_wind_field_srv = nullptr;
+	g_terrain_normal_srv = nullptr;
 	SAFE_RELEASE(g_ps_constant_buffer0);
 	SAFE_RELEASE(g_vs_constant_buffer2);
 	SAFE_RELEASE(g_vs_constant_buffer1);
@@ -162,6 +164,11 @@ void ShaderSprite3D_CutoutInstanced_SetMaterialColor(const XMFLOAT4& material_co
 void ShaderSprite3D_CutoutInstanced_SetWindField(ID3D11ShaderResourceView* wind_field_srv)
 {
 	g_wind_field_srv = wind_field_srv;
+}
+
+void ShaderSprite3D_CutoutInstanced_SetTerrainNormalField(ID3D11ShaderResourceView* terrain_normal_srv)
+{
+	g_terrain_normal_srv = terrain_normal_srv;
 }
 
 void ShaderSprite3D_CutoutInstanced_SetInstanceBuffer(ID3D11ShaderResourceView* instance_buffer_srv)
@@ -214,19 +221,21 @@ void ShaderSprite3D_CutoutInstanced_Begin()
 	};
 	context->VSSetConstantBuffers(0, 3, vs_buffers);
 	context->PSSetConstantBuffers(0, 1, &g_ps_constant_buffer0);
-	ID3D11ShaderResourceView* vs_srvs[2] = {
+	ID3D11ShaderResourceView* vs_srvs[3] = {
 		g_wind_field_srv,
+		g_terrain_normal_srv,
 		g_instance_buffer_srv
 	};
-	context->VSSetShaderResources(0, 2, vs_srvs);
+	context->VSSetShaderResources(0, 3, vs_srvs);
 
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 }
 
 void ShaderSprite3D_CutoutInstanced_Clear()
 {
-	ID3D11ShaderResourceView* null_srvs[2] = { nullptr, nullptr };
-	Direct3D_GetContext()->VSSetShaderResources(0, 2, null_srvs);
+	ID3D11ShaderResourceView* null_srvs[3] = { nullptr, nullptr, nullptr };
+	Direct3D_GetContext()->VSSetShaderResources(0, 3, null_srvs);
 	g_wind_field_srv = nullptr;
+	g_terrain_normal_srv = nullptr;
 	g_instance_buffer_srv = nullptr;
 }

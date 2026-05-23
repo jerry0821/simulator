@@ -14,8 +14,6 @@ RWTexture2D<float4> g_GrassData : register(u0);
 
 static const float kMaxGrassScaling = 1.60f;
 static const float kMinGrassScaling = 0.45f;
-static const float kMinDryDistance = 0.10f;
-static const float kMaxDryDistance = 0.90f;
 
 float Hash21(float2 p)
 {
@@ -55,20 +53,35 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float4 water_surface_height = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv, 0.0f);
     float terrain_height = water_surface_height.x;
     float water_depth = max(water_surface_height.z, 0.0f);
+    float2 texel = 1.0f / float2(width, height);
+    float terrain_height_xp = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv + float2(texel.x, 0.0f), 0.0f).x;
+    float terrain_height_xm = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv - float2(texel.x, 0.0f), 0.0f).x;
+    float terrain_height_yp = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv + float2(0.0f, texel.y), 0.0f).x;
+    float terrain_height_ym = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv - float2(0.0f, texel.y), 0.0f).x;
     float vegetation_suitability = g_TerrainVegetationSuitability.SampleLevel(g_GrassDataSampler, uv, 0.0f).r;
-    float grass_possibility = 0.0f;
-    if (water_depth < 0.05f)
-    {
-        float slope_factor = saturate(length(normal_sample.xy) * 2.0f);
-        grass_possibility = saturate(1.05f - slope_factor * 0.88f);
-    }
-    grass_possibility *= lerp(0.72f, 1.0f, vegetation_suitability);
+
+    float slope_factor = saturate(length(normal_sample.xy) * 1.85f);
+    float slope_mask = smoothstep(0.72f, 0.90f, normal_y);
+    float local_height_delta = max(
+        max(abs(terrain_height_xp - terrain_height), abs(terrain_height_xm - terrain_height)),
+        max(abs(terrain_height_yp - terrain_height), abs(terrain_height_ym - terrain_height)));
+    float cliff_mask = 1.0f - smoothstep(0.12f, 0.32f, local_height_delta);
+    float water_mask = 1.0f - smoothstep(0.015f, 0.05f, water_depth);
+
+    const float vegetation_fill = smoothstep(0.32f, 0.82f, vegetation_suitability);
+    float grass_possibility =
+        saturate(1.02f - slope_factor * 0.92f) *
+        slope_mask *
+        cliff_mask *
+        water_mask;
+    grass_possibility *= lerp(0.72f, 1.18f, vegetation_fill);
     grass_possibility = saturate(grass_possibility);
 
     float density_hash = Hash21(float2(dispatch_thread_id.xy) + float2(19.7f, 3.1f));
     const float aridity = saturate(1.0f - vegetation_suitability);
     float scaling = lerp(kMaxGrassScaling, kMinGrassScaling, aridity);
-    scaling *= lerp(0.90f, 1.05f, vegetation_suitability);
+    scaling *= lerp(0.92f, 1.10f, vegetation_fill);
+    scaling *= lerp(0.72f, 1.0f, slope_mask * cliff_mask);
 
     g_GrassData[dispatch_thread_id.xy] = float4(grass_possibility, density_hash, scaling, 0.0f);
 }

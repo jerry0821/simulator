@@ -26,6 +26,7 @@ Texture2D<float4> water_velocity_tex : register(t1);
 Texture2D<float4> water_sediment_tex : register(t2);
 Texture2D<float4> terrain_normal_tex : register(t3);
 Texture2D scene_depth_tex : register(t4);
+Texture2D<float4> flow_normal_tex : register(t5);
 SamplerState samp : register(s0);
 
 static const float kWorldSideLength = 2048.0f;
@@ -66,37 +67,60 @@ float3 DecodeUpNormal(float2 encoded)
     return float3(xz.x, y, xz.y);
 }
 
-float2 Hash22(float2 p)
-{
-    const float2 h = float2(
-        dot(p, float2(127.1f, 311.7f)),
-        dot(p, float2(269.5f, 183.3f)));
-    return frac(sin(h) * 43758.5453f);
-}
-
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
+    const float edge_u = min(ps_in.uv.x, 1.0f - ps_in.uv.x);
+    const float edge_v = min(ps_in.uv.y, 1.0f - ps_in.uv.y);
+    const float patch_edge_distance = min(edge_u, edge_v);
+    const float patch_edge_mask = smoothstep(0.035f, 0.110f, patch_edge_distance);
+
     float2 worldUV = WorldToFieldUv(ps_in.posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
     const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
-    const float water_visibility = smoothstep(0.006f, 0.030f, water_depth);
+    const float water_visibility = smoothstep(0.004f, 0.024f, water_depth);
 
     const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
     const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
 
     const float2 flow_velocity = velocity_sample.xy;
+    const float flow_speed = length(flow_velocity);
     const float water_speed_factor = saturate(length(flow_velocity) * 8.0f + velocity_sample.z * 0.65f);
     const float suspended_sediment = saturate(sediment_sample.x);
+    const float2 flow_dir = SafeNormalize2(flow_velocity + float2(0.12f, 0.05f));
 
-    const float2 coord_offset =
-        (Hash22(ceil((ps_in.posH.xy + ps_in.posW.xz) * 128.0f) * 0.001f) * 2.0f - 1.0f) * 0.35f;
-    const float2 normal_uv = ComputeWaterSampleUv(WorldToFieldUv(ps_in.posW.xz + coord_offset));
+    const float2 normal_uv = ComputeWaterSampleUv(WorldToFieldUv(ps_in.posW.xz));
     const float4 packed_normal_sample = terrain_normal_tex.SampleLevel(samp, normal_uv, 0.0f);
     float3 terrain_normal = DecodeUpNormal(packed_normal_sample.xy);
     float3 surface_normal = DecodeUpNormal(packed_normal_sample.zw);
+    const float slope_flatness = smoothstep(0.78f, 0.94f, terrain_normal.y);
+    const float standing_visibility = smoothstep(0.020f, 0.080f, water_depth);
+    const float runoff_visibility =
+        smoothstep(0.010f, 0.040f, water_depth) *
+        slope_flatness *
+        lerp(0.30f, 0.72f, water_speed_factor);
+    const float water_presence = max(standing_visibility, runoff_visibility) * patch_edge_mask;
     surface_normal = lerp(surface_normal, normalize(float3(surface_normal.xy * 2.0f, surface_normal.z)), water_speed_factor);
-    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.50f - water_depth * 4.5f)));
+
+    const float camera_distance = length(ps_in.posW - camera_position);
+    const float ripple_distance_fade = 1.0f - smoothstep(90.0f, 220.0f, camera_distance);
+    const float ripple_strength = water_presence * ripple_distance_fade * (0.22f + water_speed_factor * 0.28f);
+    const float phase = frac(time_seconds * (0.055f + flow_speed * 0.14f));
+    const float phase_a = phase;
+    const float phase_b = frac(phase + 0.5f);
+    const float flow_blend = abs(phase * 2.0f - 1.0f);
+    const float2 ripple_base_uv = ps_in.posW.xz * 0.018f;
+    const float2 ripple_scroll = flow_dir * lerp(0.080f, 0.240f, saturate(flow_speed * 2.5f));
+    const float2 ripple_uv_a = ripple_base_uv + ripple_scroll * phase_a;
+    const float2 ripple_uv_b = ripple_base_uv * 1.37f - ripple_scroll * phase_b + float2(0.31f, 0.57f);
+    const float2 flow_xy_a = flow_normal_tex.Sample(samp, ripple_uv_a).rg * 2.0f - 1.0f;
+    const float2 flow_xy_b = flow_normal_tex.Sample(samp, ripple_uv_b).rg * 2.0f - 1.0f;
+    const float2 flow_xy = lerp(flow_xy_a, flow_xy_b, flow_blend) * ripple_strength;
+    const float ripple_luma = lerp(flow_xy_a.x + flow_xy_a.y, flow_xy_b.x + flow_xy_b.y, flow_blend) * 0.5f;
+    const float3 flow_normal = DecodeUpNormal(flow_xy);
+
+    surface_normal = normalize(lerp(surface_normal, flow_normal, ripple_strength));
+    surface_normal = normalize(lerp(surface_normal, terrain_normal, saturate(0.50f - water_depth * 4.5f) + (1.0f - slope_flatness) * 0.85f));
 
     const float3 light_dir = normalize(float3(-0.34f, 0.88f, 0.24f));
     const float3 view_dir = normalize(camera_position - ps_in.posW);
@@ -106,18 +130,19 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float ndoth = saturate(dot(surface_normal, half_dir));
 
     float4 base_color = lerp(
-        float4(0.25f, 0.40f, 0.45f, 1.0f),
-        float4(0.40f, 0.30f, 0.20f, 1.0f),
+        float4(0.10f, 0.22f, 0.34f, 1.0f),
+        float4(0.26f, 0.24f, 0.18f, 1.0f),
         saturate(suspended_sediment * 5.0f));
-    base_color = lerp(base_color, float4(0.60f, 0.60f, 0.65f, 1.0f), water_speed_factor);
+    base_color = lerp(base_color, float4(0.28f, 0.36f, 0.50f, 1.0f), water_speed_factor);
+    base_color.rgb *= 1.0f + ripple_luma * ripple_strength * 0.18f;
     base_color.rgb *= diffuse_color.rgb;
 
-    const float specular_strength = lerp(0.50f, 0.10f, water_speed_factor) * (0.55f + highlight_strength * 0.45f);
-    const float roughness = lerp(0.15f, 0.30f, water_speed_factor);
-    const float specular = pow(ndoth, lerp(56.0f, 18.0f, roughness)) * specular_strength;
-    const float3 ambient = base_color.rgb * float3(0.18f, 0.20f, 0.22f);
-    const float3 diffuse = base_color.rgb * (0.18f + ndotl * 0.82f);
-    const float3 reflection_tint = float3(0.58f, 0.72f, 0.90f) * (0.16f + water_speed_factor * 0.10f);
+    const float specular = 0.0f;
+    const float deep_absorption = smoothstep(0.05f, 0.24f, water_depth);
+    const float3 absorbed_color = lerp(base_color.rgb, base_color.rgb * float3(0.72f, 0.80f, 0.88f), deep_absorption);
+    const float3 ambient = absorbed_color * float3(0.26f, 0.28f, 0.32f);
+    const float3 diffuse = absorbed_color * (0.24f + ndotl * 0.56f);
+    const float3 reflection_tint = float3(0.38f, 0.48f, 0.66f) * (0.03f + water_speed_factor * 0.02f);
     float3 water_color = ambient + diffuse + specular.xxx;
     water_color += reflection_tint * fresnel;
     water_color = lerp(water_color, float3(0.92f, 0.94f, 0.98f), water_speed_factor * 0.08f);
@@ -128,13 +153,14 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float depth_fade = max(scene_depth - pixel_depth, 0.0f);
     const float depth_factor = smoothstep(0.012f, 0.22f, water_depth);
     const float deep_factor = smoothstep(0.04f, 0.34f, water_depth);
-    const float scene_edge_alpha = pow(saturate(depth_fade * 24.0f), 0.28f);
+    const float scene_edge_alpha = pow(saturate(depth_fade * 24.0f), 0.24f);
     const float base_alpha =
-        diffuse_color.a * water_visibility * (0.24f + depth_factor * 0.42f + deep_factor * 0.16f) +
-        fresnel * water_visibility * 0.12f +
-        water_speed_factor * water_visibility * 0.05f;
-    float alpha = max(base_alpha, scene_edge_alpha * diffuse_color.a * water_visibility);
-    alpha = lerp(alpha, alpha * 0.92f + deep_factor * 0.04f, ps_in.isFrontFace ? 1.0f : 0.0f);
+        diffuse_color.a * water_presence * (0.66f + depth_factor * 0.54f + deep_factor * 0.28f) +
+        fresnel * water_presence * 0.08f +
+        water_speed_factor * water_presence * 0.06f;
+    float alpha = max(base_alpha, scene_edge_alpha * diffuse_color.a * water_presence);
+    alpha = max(alpha, water_presence * (0.40f + deep_factor * 0.18f));
+    alpha = lerp(alpha, alpha * 0.94f + deep_factor * 0.05f, ps_in.isFrontFace ? 1.0f : 0.0f);
     alpha *= saturate(0.72f + log(length(ps_in.posW - camera_position) + 1.0f) * 0.16f);
     alpha = saturate(alpha);
     clip(alpha - 0.010f);

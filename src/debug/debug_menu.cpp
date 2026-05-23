@@ -51,8 +51,36 @@ static bool g_SurfaceWaterResetRequested = false;
 static bool g_ShowComputeResourcePreviews = false;
 static bool g_EnableTerrainSurfacePresentation = true;
 static bool g_EnableGrassGpu = true;
+struct DebugWindowVisibility
+{
+    bool portfolio = true;
+    bool compute_noise = false;
+    bool wind = true;
+    bool atmosphere = true;
+    bool water = true;
+    bool post_fx = false;
+    bool terrain = true;
+    bool camera = false;
+    bool toon = false;
+    bool compute_registry = false;
+    bool instancing = true;
+    bool frustum_culling = false;
+    bool grass_compute = true;
+    bool render_flow = false;
+};
+static DebugWindowVisibility g_DebugWindows{};
 static ComputeNoiseSettings g_ComputeNoiseSettings{};
 static TerrainSettings g_TerrainSettings = MeshFieldRenderer::GetTerrainSettings();
+struct TerrainAuthoringControls
+{
+    float plains_coverage = 0.45f;
+    float peak_density = 0.45f;
+    float peak_height = 0.55f;
+    float lake_amount = 0.0f;
+    float lake_size = 0.35f;
+};
+static TerrainAuthoringControls g_TerrainAuthoringControls{};
+static bool g_TerrainAuthoringControlsInitialized = false;
 static TerrainMaterialSettings g_TerrainMaterialSettings{};
 static WaterSurfaceDesc g_WaterSurfaceSettings{};
 static SurfaceWaterSimulationSettings g_SurfaceWaterSimulationSettings{};
@@ -71,6 +99,77 @@ constexpr float kWindPreviewWorldMinZ = -ComputeTextureDimensions::kWorldHalfExt
 constexpr float kWindPreviewWorldMaxZ = ComputeTextureDimensions::kWorldHalfExtent;
 constexpr int kWindPreviewCols = 18;
 constexpr int kWindPreviewRows = 18;
+
+float Saturate(float value)
+{
+    return std::clamp(value, 0.0f, 1.0f);
+}
+
+float Lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
+float InverseLerpClamped(float a, float b, float value)
+{
+    return Saturate((value - a) / std::max(b - a, 1.0e-5f));
+}
+
+void SyncTerrainAuthoringControlsFromSettings(
+    const TerrainSettings& settings,
+    TerrainAuthoringControls& controls)
+{
+    const float peak_density = (
+        InverseLerpClamped(0.0015f, 0.0200f, settings.base_frequency) +
+        InverseLerpClamped(1.0f, 8.0f, settings.detail_frequency) +
+        InverseLerpClamped(0.5f, 4.0f, settings.ridge_frequency)) / 3.0f;
+    const float peak_height = (
+        InverseLerpClamped(4.0f, 36.0f, settings.base_height) +
+        InverseLerpClamped(0.0f, 12.0f, settings.detail_height) +
+        InverseLerpClamped(0.0f, 28.0f, settings.ridge_height) +
+        InverseLerpClamped(-2.0f, 10.0f, settings.continent_height)) / 4.0f;
+
+    controls.plains_coverage = Saturate(1.0f - (peak_density * 0.45f + peak_height * 0.55f));
+    controls.peak_density = peak_density;
+    controls.peak_height = peak_height;
+    controls.lake_amount = InverseLerpClamped(0.0f, 20.0f, settings.lake_depth);
+    controls.lake_size = (
+        InverseLerpClamped(8.0f, 80.0f, settings.lake_radius_x) +
+        InverseLerpClamped(8.0f, 80.0f, settings.lake_radius_z)) * 0.5f;
+}
+
+void ApplyTerrainAuthoringControlsToSettings(
+    const TerrainAuthoringControls& controls,
+    TerrainSettings& settings)
+{
+    const float plains = Saturate(controls.plains_coverage);
+    const float peak_density = Saturate(controls.peak_density);
+    const float peak_height = Saturate(controls.peak_height);
+    const float lake_amount = Saturate(controls.lake_amount);
+    const float lake_size = Saturate(controls.lake_size);
+
+    settings.base_frequency = Lerp(0.0021f, 0.0075f, peak_density);
+    settings.detail_frequency = Lerp(1.2f, 4.6f, peak_density);
+    settings.ridge_frequency = Lerp(0.55f, 1.85f, peak_density);
+
+    settings.base_height = Lerp(10.0f, 30.0f, peak_height);
+    settings.detail_height = Lerp(0.8f, 8.0f, peak_height);
+    settings.ridge_height = Lerp(3.0f, 24.0f, peak_height);
+    settings.continent_height = Lerp(0.0f, 8.0f, peak_height);
+
+    settings.base_frequency *= Lerp(1.0f, 0.72f, plains);
+    settings.detail_frequency *= Lerp(1.0f, 0.78f, plains);
+    settings.ridge_frequency *= Lerp(1.0f, 0.80f, plains);
+    settings.base_height = Lerp(settings.base_height, 9.0f, plains * 0.55f);
+    settings.detail_height *= Lerp(1.0f, 0.35f, plains);
+    settings.ridge_height *= Lerp(1.0f, 0.24f, plains);
+    settings.continent_height *= Lerp(1.0f, 0.55f, plains);
+
+    settings.lake_depth = Lerp(0.0f, 18.0f, lake_amount);
+    const float lake_radius = Lerp(16.0f, 72.0f, lake_size);
+    settings.lake_radius_x = lake_radius;
+    settings.lake_radius_z = lake_radius;
+}
 
 void ApplyAfterglowMeteorographPreset()
 {
@@ -707,102 +806,152 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
     ImGui::TextColored(shader_status_color, "Shader Reload: %s", g_ShaderReloadMessage.c_str());
     ImGui::TextDisabled("Map editor and object placement controls are disabled in simulator mode.");
-    ImGui::End();
-
-    ImGui::Begin("Portfolio");
-    ImGui::TextDisabled("Before / After showcase toggles");
-    ImGui::Checkbox("Terrain Surface Shading", &g_EnableTerrainSurfacePresentation);
-    ImGui::Checkbox("Grass GPU Instances", &g_EnableGrassGpu);
     ImGui::Separator();
-    ImGui::TextWrapped("Use these to record clean portfolio comparisons without changing the underlying pipeline.");
-    ImGui::End();
-
-    ImGui::Begin("Compute Noise");
-    if (ImGui::Button("Apply Afterglow Meteo Preset"))
+    if (ImGui::CollapsingHeader("Panels", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ApplyAfterglowMeteorographPreset();
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("Bias the active weather settings toward Afterglow-style broad, stable flow.");
-    ImGui::SliderFloat("Scale", &g_ComputeNoiseSettings.noise_scale, 4.0f, 96.0f);
-    ImGui::Separator();
-    ImGui::TextDisabled("Wind");
-    ImGui::SliderFloat("Wind Dir X", &g_ComputeNoiseSettings.wind_direction_x, -1.0f, 1.0f);
-    ImGui::SliderFloat("Wind Dir Y", &g_ComputeNoiseSettings.wind_direction_y, -1.0f, 1.0f);
-    ImGui::SliderFloat("Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
-    ImGui::SliderFloat("Cross Flow", &g_ComputeNoiseSettings.wind_cross_influence, 0.0f, 1.5f);
-    ImGui::Separator();
-    ImGui::TextDisabled("Detail Offsets");
-    ImGui::SliderFloat("Flow X0", &g_ComputeNoiseSettings.flow_speed_x0, -0.20f, 0.20f);
-    ImGui::SliderFloat("Flow Y0", &g_ComputeNoiseSettings.flow_speed_y0, -0.20f, 0.20f);
-    ImGui::SliderFloat("Flow X1", &g_ComputeNoiseSettings.flow_speed_x1, -0.20f, 0.20f);
-    ImGui::SliderFloat("Flow Y1", &g_ComputeNoiseSettings.flow_speed_y1, -0.20f, 0.20f);
-    ImGui::SliderFloat("Band Strength", &g_ComputeNoiseSettings.band_strength, 0.0f, 0.35f);
-    ImGui::SliderFloat("Contrast", &g_ComputeNoiseSettings.contrast, 0.35f, 2.25f);
-    ImGui::Separator();
-    ImGui::TextDisabled("Rain");
-    ImGui::TextWrapped("Rainfall now follows Afterglow-style humidity overflow inside Meteorograph. Higher local humidity and converging airflow create brighter rain zones.");
-    ImGui::End();
-
-    ImGui::Begin("Wind");
-    ImGui::TextDisabled("Global wind controls and Meteorograph preview");
-    ImGui::SliderFloat("World Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
-    ImGui::Text("Current: %.3f", g_ComputeNoiseSettings.wind_strength);
-    ImGui::Checkbox("Accurate GPU Arrows", &g_UseAccurateWindPreviewArrows);
-    ImGui::TextDisabled("Off = approximate CPU preview. On = read back the authoritative Meteorograph state at a limited rate.");
-    if (frame_context == nullptr || !frame_context->resources.meteorograph_field.isValid())
-    {
-        ImGui::TextDisabled("Meteorograph Wind Preview: Missing");
-    }
-    else
-    {
-        ImGui::Separator();
-        ImGui::TextDisabled("Meteorograph Wind Preview");
-        ImGui::TextWrapped("Background = Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Arrows = wind vectors decoded from Meteorograph.xy.");
-        const ImVec2 preview_size(224.0f, 224.0f);
-        const ImVec2 preview_top_left = ImGui::GetCursorScreenPos();
-        ImGui::Image(
-            ImTextureRef(reinterpret_cast<ImTextureID>(
-                frame_context->resources.atmosphere_preview.isValid()
-                    ? frame_context->resources.atmosphere_preview.shaderResourceView()
-                    : frame_context->resources.meteorograph_field.shaderResourceView())),
-            preview_size);
-        DrawWindFieldOverlay(
-            preview_top_left,
-            preview_size,
-            frame_context->resources.meteorograph_field.shaderResourceView(),
-            static_cast<float>(frame_context->globals.time_seconds),
-            g_ComputeNoiseSettings,
-            true);
+        ImGui::Checkbox("Portfolio", &g_DebugWindows.portfolio);
+        ImGui::Checkbox("Compute Noise", &g_DebugWindows.compute_noise);
+        ImGui::Checkbox("Wind", &g_DebugWindows.wind);
+        ImGui::Checkbox("Atmosphere", &g_DebugWindows.atmosphere);
+        ImGui::Checkbox("Water", &g_DebugWindows.water);
+        ImGui::Checkbox("Terrain", &g_DebugWindows.terrain);
+        ImGui::Checkbox("Post FX", &g_DebugWindows.post_fx);
+        ImGui::Checkbox("Camera", &g_DebugWindows.camera);
+        ImGui::Checkbox("Toon", &g_DebugWindows.toon);
+        ImGui::Checkbox("Grass Compute", &g_DebugWindows.grass_compute);
+        ImGui::Checkbox("Instancing", &g_DebugWindows.instancing);
+        ImGui::Checkbox("Frustum Culling", &g_DebugWindows.frustum_culling);
+        ImGui::Checkbox("Compute Registry", &g_DebugWindows.compute_registry);
+        ImGui::Checkbox("Render Flow", &g_DebugWindows.render_flow);
     }
     ImGui::End();
 
-    ImGui::Begin("Atmosphere");
-    if (frame_context == nullptr)
+    if (g_DebugWindows.portfolio)
     {
-        ImGui::TextDisabled("No frame context");
-    }
-    else
-    {
-        const ImVec2 preview_size(224.0f, 224.0f);
-
-        ImGui::TextDisabled("Atmosphere Preview");
-        ImGui::TextWrapped("Preview follows an Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Wind arrows are shown in the Wind panel.");
-        ImGui::TextDisabled("Afterglow-like tuning now biases toward weaker random source, wrap-around transport, humidity capacity 1.0, and slower broad weather motion.");
-        if (!frame_context->resources.atmosphere_preview.isValid())
+        const bool portfolio_open = ImGui::Begin("Portfolio", &g_DebugWindows.portfolio);
+        if (portfolio_open)
         {
-            ImGui::TextDisabled("Atmosphere Preview: Missing");
+            ImGui::TextDisabled("Before / After showcase toggles");
+            ImGui::Checkbox("Terrain Surface Shading", &g_EnableTerrainSurfacePresentation);
+            ImGui::Checkbox("Grass GPU Instances", &g_EnableGrassGpu);
+            ImGui::Separator();
+            ImGui::TextWrapped("Use these to record clean portfolio comparisons without changing the underlying pipeline.");
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.compute_noise)
+    {
+        const bool compute_noise_open = ImGui::Begin("Compute Noise", &g_DebugWindows.compute_noise);
+        if (compute_noise_open)
+        {
+            if (ImGui::Button("Apply Afterglow Meteo Preset"))
+            {
+                ApplyAfterglowMeteorographPreset();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("Bias the active weather settings toward Afterglow-style broad, stable flow.");
+            ImGui::SliderFloat("Scale", &g_ComputeNoiseSettings.noise_scale, 4.0f, 96.0f);
+            ImGui::Separator();
+            ImGui::TextDisabled("Wind");
+            ImGui::SliderFloat("Wind Dir X", &g_ComputeNoiseSettings.wind_direction_x, -1.0f, 1.0f);
+            ImGui::SliderFloat("Wind Dir Y", &g_ComputeNoiseSettings.wind_direction_y, -1.0f, 1.0f);
+            ImGui::SliderFloat("Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
+            ImGui::SliderFloat("Cross Flow", &g_ComputeNoiseSettings.wind_cross_influence, 0.0f, 1.5f);
+            ImGui::Separator();
+            ImGui::TextDisabled("Detail Offsets");
+            ImGui::SliderFloat("Flow X0", &g_ComputeNoiseSettings.flow_speed_x0, -0.20f, 0.20f);
+            ImGui::SliderFloat("Flow Y0", &g_ComputeNoiseSettings.flow_speed_y0, -0.20f, 0.20f);
+            ImGui::SliderFloat("Flow X1", &g_ComputeNoiseSettings.flow_speed_x1, -0.20f, 0.20f);
+            ImGui::SliderFloat("Flow Y1", &g_ComputeNoiseSettings.flow_speed_y1, -0.20f, 0.20f);
+            ImGui::SliderFloat("Band Strength", &g_ComputeNoiseSettings.band_strength, 0.0f, 0.35f);
+            ImGui::SliderFloat("Contrast", &g_ComputeNoiseSettings.contrast, 0.35f, 2.25f);
+            ImGui::Separator();
+            ImGui::TextDisabled("Rain");
+            ImGui::TextWrapped("Rainfall now follows Afterglow-style humidity overflow inside Meteorograph. Higher local humidity and converging airflow create brighter rain zones.");
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.wind)
+    {
+        const bool wind_open = ImGui::Begin("Wind", &g_DebugWindows.wind);
+        if (wind_open)
+        {
+            ImGui::TextDisabled("Global wind controls and Meteorograph preview");
+            ImGui::SliderFloat("World Wind Strength", &g_ComputeNoiseSettings.wind_strength, 0.0f, 0.20f);
+            ImGui::Text("Current: %.3f", g_ComputeNoiseSettings.wind_strength);
+            ImGui::Checkbox("Accurate GPU Arrows", &g_UseAccurateWindPreviewArrows);
+            ImGui::TextDisabled("Off = approximate CPU preview. On = read back the authoritative Meteorograph state at a limited rate.");
+            if (frame_context == nullptr || !frame_context->resources.meteorograph_field.isValid())
+            {
+                ImGui::TextDisabled("Meteorograph Wind Preview: Missing");
+            }
+            else
+            {
+                ImGui::Separator();
+                ImGui::TextDisabled("Meteorograph Wind Preview");
+                ImGui::TextWrapped("Background = Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Arrows = wind vectors decoded from Meteorograph.xy.");
+                const ImVec2 preview_size(224.0f, 224.0f);
+                const ImVec2 preview_top_left = ImGui::GetCursorScreenPos();
+                ImGui::Image(
+                    ImTextureRef(reinterpret_cast<ImTextureID>(
+                        frame_context->resources.atmosphere_preview.isValid()
+                            ? frame_context->resources.atmosphere_preview.shaderResourceView()
+                            : frame_context->resources.meteorograph_field.shaderResourceView())),
+                    preview_size);
+                DrawWindFieldOverlay(
+                    preview_top_left,
+                    preview_size,
+                    frame_context->resources.meteorograph_field.shaderResourceView(),
+                    static_cast<float>(frame_context->globals.time_seconds),
+                    g_ComputeNoiseSettings,
+                    true);
+            }
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.atmosphere)
+    {
+        const bool atmosphere_open = ImGui::Begin("Atmosphere", &g_DebugWindows.atmosphere);
+        if (atmosphere_open)
+        {
+            if (frame_context == nullptr)
+            {
+                ImGui::TextDisabled("No frame context");
+            }
+            else
+            {
+                const ImVec2 preview_size(224.0f, 224.0f);
+
+                ImGui::TextDisabled("Atmosphere Preview");
+                ImGui::TextWrapped("Preview follows an Afterglow-style climate composite: warm temperature base, humidity tint, and white rainfall highlights. Wind arrows are shown in the Wind panel.");
+                ImGui::TextDisabled("Afterglow-like tuning now biases toward weaker random source, wrap-around transport, humidity capacity 1.0, and slower broad weather motion.");
+                if (!frame_context->resources.atmosphere_preview.isValid())
+                {
+                    ImGui::TextDisabled("Atmosphere Preview: Missing");
+                }
+                else
+                {
+                    ImGui::Image(
+                        ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.atmosphere_preview.shaderResourceView())),
+                        preview_size);
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.water)
+    {
+        const bool water_open = ImGui::Begin("Water", &g_DebugWindows.water);
+        if (!water_open)
+        {
+            ImGui::End();
         }
         else
         {
-            ImGui::Image(
-                ImTextureRef(reinterpret_cast<ImTextureID>(frame_context->resources.atmosphere_preview.shaderResourceView())),
-                preview_size);
-        }
-    }
-    ImGui::End();
-
-    ImGui::Begin("Water");
     ImGui::SliderFloat("Water Height Override", &g_WaterSurfaceSettings.height, -1.0f, 32.0f);
     ImGui::Separator();
     ImGui::ColorEdit4("Base Color", reinterpret_cast<float*>(&g_WaterSurfaceSettings.base_color));
@@ -1015,9 +1164,15 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
                 ImVec2(192.0f, 192.0f));
         }
     }
-    ImGui::End();
+        ImGui::End();
+        }
+    }
 
-    ImGui::Begin("Post FX");
+    if (g_DebugWindows.post_fx)
+    {
+        const bool post_fx_open = ImGui::Begin("Post FX", &g_DebugWindows.post_fx);
+        if (post_fx_open)
+        {
     ImGui::TextDisabled("Current pass: Chromatic Aberration / Film Grain / Vignette / Bloom / Height Fog");
     ImGui::SliderFloat("Chromatic Aberration", &g_PostProcessSettings.chromatic_aberration, 0.0f, 0.016f);
     ImGui::SliderFloat("Film Grain", &g_PostProcessSettings.film_grain, 0.0f, 0.120f);
@@ -1043,21 +1198,58 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Fog Scatter Strength", &g_PostProcessSettings.fog_scatter_strength, 0.0f, 1.0f);
     ImGui::SliderFloat("Fog Scatter Focus", &g_PostProcessSettings.fog_scatter_focus, 0.0f, 1.0f);
     ImGui::TextDisabled("Scattering v1 uses sky tint + forward light direction to color the fog, not full volumetrics.");
-    ImGui::End();
+        }
+        ImGui::End();
+    }
 
-    ImGui::Begin("Terrain");
-    ImGui::SliderFloat("Base Frequency", &g_TerrainSettings.base_frequency, 0.0015f, 0.0200f, "%.4f");
-    ImGui::SliderFloat("Base Height", &g_TerrainSettings.base_height, 4.0f, 36.0f);
-    ImGui::SliderFloat("Detail Frequency", &g_TerrainSettings.detail_frequency, 1.0f, 8.0f);
-    ImGui::SliderFloat("Detail Height", &g_TerrainSettings.detail_height, 0.0f, 12.0f);
-    ImGui::SliderFloat("Ridge Frequency", &g_TerrainSettings.ridge_frequency, 0.5f, 4.0f);
-    ImGui::SliderFloat("Ridge Height", &g_TerrainSettings.ridge_height, 0.0f, 28.0f);
-    ImGui::SliderFloat("Continent Height", &g_TerrainSettings.continent_height, -2.0f, 10.0f);
+    if (g_DebugWindows.terrain)
+    {
+        const bool terrain_open = ImGui::Begin("Terrain", &g_DebugWindows.terrain);
+        if (terrain_open)
+        {
+    if (!g_TerrainAuthoringControlsInitialized)
+    {
+        SyncTerrainAuthoringControlsFromSettings(g_TerrainSettings, g_TerrainAuthoringControls);
+        g_TerrainAuthoringControlsInitialized = true;
+    }
+
+    ImGui::TextDisabled("Shape");
+    bool terrain_shape_changed = false;
+    terrain_shape_changed |= ImGui::SliderFloat("Plains Coverage", &g_TerrainAuthoringControls.plains_coverage, 0.0f, 1.0f);
+    terrain_shape_changed |= ImGui::SliderFloat("Peak Density", &g_TerrainAuthoringControls.peak_density, 0.0f, 1.0f);
+    terrain_shape_changed |= ImGui::SliderFloat("Peak Height", &g_TerrainAuthoringControls.peak_height, 0.0f, 1.0f);
+    terrain_shape_changed |= ImGui::SliderFloat("Lake Amount", &g_TerrainAuthoringControls.lake_amount, 0.0f, 1.0f);
+    terrain_shape_changed |= ImGui::SliderFloat("Lake Size", &g_TerrainAuthoringControls.lake_size, 0.0f, 1.0f);
+    if (terrain_shape_changed)
+    {
+        const float preserved_lake_center_z = g_TerrainSettings.lake_center_z;
+        ApplyTerrainAuthoringControlsToSettings(g_TerrainAuthoringControls, g_TerrainSettings);
+        g_TerrainSettings.lake_center_z = preserved_lake_center_z;
+    }
+
     ImGui::Separator();
-    ImGui::SliderFloat("Lake Center Z", &g_TerrainSettings.lake_center_z, -40.0f, 60.0f);
-    ImGui::SliderFloat("Lake Radius X", &g_TerrainSettings.lake_radius_x, 8.0f, 80.0f);
-    ImGui::SliderFloat("Lake Radius Z", &g_TerrainSettings.lake_radius_z, 8.0f, 80.0f);
-    ImGui::SliderFloat("Lake Depth", &g_TerrainSettings.lake_depth, 0.0f, 20.0f);
+    if (ImGui::TreeNode("Advanced Terrain Settings"))
+    {
+        bool terrain_advanced_changed = false;
+        terrain_advanced_changed |= ImGui::SliderFloat("Base Frequency", &g_TerrainSettings.base_frequency, 0.0015f, 0.0200f, "%.4f");
+        terrain_advanced_changed |= ImGui::SliderFloat("Base Height", &g_TerrainSettings.base_height, 4.0f, 36.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Detail Frequency", &g_TerrainSettings.detail_frequency, 1.0f, 8.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Detail Height", &g_TerrainSettings.detail_height, 0.0f, 12.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Ridge Frequency", &g_TerrainSettings.ridge_frequency, 0.5f, 4.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Ridge Height", &g_TerrainSettings.ridge_height, 0.0f, 28.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Continent Height", &g_TerrainSettings.continent_height, -2.0f, 10.0f);
+        ImGui::Separator();
+        terrain_advanced_changed |= ImGui::SliderFloat("Lake Center Z", &g_TerrainSettings.lake_center_z, -40.0f, 60.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Lake Radius X", &g_TerrainSettings.lake_radius_x, 8.0f, 80.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Lake Radius Z", &g_TerrainSettings.lake_radius_z, 8.0f, 80.0f);
+        terrain_advanced_changed |= ImGui::SliderFloat("Lake Depth", &g_TerrainSettings.lake_depth, 0.0f, 20.0f);
+        if (terrain_advanced_changed)
+        {
+            SyncTerrainAuthoringControlsFromSettings(g_TerrainSettings, g_TerrainAuthoringControls);
+        }
+        ImGui::TreePop();
+    }
+
     ImGui::Separator();
     ImGui::TextDisabled("Material Blend");
     ImGui::SliderFloat("Grass Slope Min", &g_TerrainMaterialSettings.grass_slope_min, 0.10f, 0.95f);
@@ -1066,27 +1258,39 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Grass Height Start", &g_TerrainMaterialSettings.grass_height_start, -4.0f, 24.0f);
     ImGui::SliderFloat("Grass Height End", &g_TerrainMaterialSettings.grass_height_end, -2.0f, 32.0f);
     ImGui::SliderFloat("Grass Coverage Min", &g_TerrainMaterialSettings.grass_coverage_min, 0.05f, 0.95f);
-    ImGui::SliderFloat("Rock Slope Start", &g_TerrainMaterialSettings.rock_slope_start, 0.0f, 1.0f);
-    ImGui::SliderFloat("Rock Slope End", &g_TerrainMaterialSettings.rock_slope_end, 0.0f, 1.0f);
-    ImGui::SliderFloat("Rock Height Start", &g_TerrainMaterialSettings.rock_height_start, -4.0f, 28.0f);
-    ImGui::SliderFloat("Rock Height End", &g_TerrainMaterialSettings.rock_height_end, -2.0f, 36.0f);
+    ImGui::SliderFloat("Stone Slope Start", &g_TerrainMaterialSettings.rock_slope_start, 0.0f, 1.0f);
+    ImGui::SliderFloat("Stone Slope End", &g_TerrainMaterialSettings.rock_slope_end, 0.0f, 1.0f);
+    ImGui::SliderFloat("Snow Height Start", &g_TerrainMaterialSettings.rock_height_start, -4.0f, 28.0f);
+    ImGui::SliderFloat("Snow Height End", &g_TerrainMaterialSettings.rock_height_end, -2.0f, 36.0f);
     ImGui::SliderFloat("Stone Noise Scale", &g_TerrainMaterialSettings.stone_noise_scale, 0.005f, 0.150f, "%.3f");
     ImGui::SliderFloat("Shore Offset Start", &g_TerrainMaterialSettings.shoreline_offset_start, 0.0f, 4.0f);
     ImGui::SliderFloat("Shore Offset End", &g_TerrainMaterialSettings.shoreline_offset_end, 1.0f, 10.0f);
     ImGui::SliderFloat("Lowland Start", &g_TerrainMaterialSettings.lowland_height_start, -8.0f, 48.0f);
     ImGui::SliderFloat("Lowland End", &g_TerrainMaterialSettings.lowland_height_end, 0.0f, 80.0f);
-    ImGui::End();
-
-    ImGui::Begin("Camera");
-    if (ImGui::CollapsingHeader("Camera"))
-    {
-        extern float g_CameraMoveSpeed;
-        ImGui::SliderFloat("Camera Speed", &g_CameraMoveSpeed, 1.0f, 20.0f);
+        }
+        ImGui::End();
     }
-    ImGui::End();
+
+    if (g_DebugWindows.camera)
+    {
+        const bool camera_open = ImGui::Begin("Camera", &g_DebugWindows.camera);
+        if (camera_open)
+        {
+            if (ImGui::CollapsingHeader("Camera"))
+            {
+                extern float g_CameraMoveSpeed;
+                ImGui::SliderFloat("Camera Speed", &g_CameraMoveSpeed, 1.0f, 20.0f);
+            }
+        }
+        ImGui::End();
+    }
 
     ImGui::SetNextWindowSizeConstraints(ImVec2(200, 300), ImVec2(500, 800));
-    ImGui::Begin("Toon");
+    if (g_DebugWindows.toon)
+    {
+        const bool toon_open = ImGui::Begin("Toon", &g_DebugWindows.toon);
+        if (toon_open)
+        {
 
     if (ImGui::CollapsingHeader("Toon Lighting Debug"))
     {
@@ -1147,109 +1351,141 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         extern int g_ToonStepCount;
         ImGui::SliderInt("Step Count", &g_ToonStepCount, 1, 30);
     }
-    ImGui::End();
-
-    ImGui::Begin("Compute Registry");
-    if (frame_context == nullptr || frame_context->resources.compute_shared_registry == nullptr)
-    {
-        ImGui::TextDisabled("No registry bound");
+        }
+        ImGui::End();
     }
-    else
-    {
-        const ComputeSharedResourceRegistry& registry = *frame_context->resources.compute_shared_registry;
-        for (unsigned int i = 0; i < static_cast<unsigned int>(ComputeSharedResourceId::Count); ++i)
-        {
-            const auto id = static_cast<ComputeSharedResourceId>(i);
-            const ComputeSharedResourceEntry& entry = registry.Get(id);
-            if (entry.kind == ComputeSharedResourceKind::None)
-            {
-                continue;
-            }
 
-            if (ImGui::TreeNode(ToString(id)))
+    if (g_DebugWindows.compute_registry)
+    {
+        const bool compute_registry_open = ImGui::Begin("Compute Registry", &g_DebugWindows.compute_registry);
+        if (compute_registry_open)
+        {
+            if (frame_context == nullptr || frame_context->resources.compute_shared_registry == nullptr)
             {
-                ImGui::Text("Debug Name: %s", entry.debug_name != nullptr ? entry.debug_name : "");
-                ImGui::Text("Kind: %s", ToString(entry.kind));
-                ImGui::Text("SRV: %s", entry.srv != nullptr ? "Yes" : "No");
-                ImGui::Text("UAV: %s", entry.uav != nullptr ? "Yes" : "No");
-                ImGui::Text("Buffer: %s", entry.buffer != nullptr ? "Yes" : "No");
-                if (entry.element_count > 0)
+                ImGui::TextDisabled("No registry bound");
+            }
+            else
+            {
+                const ComputeSharedResourceRegistry& registry = *frame_context->resources.compute_shared_registry;
+                for (unsigned int i = 0; i < static_cast<unsigned int>(ComputeSharedResourceId::Count); ++i)
                 {
-                    ImGui::Text("Elements: %u", entry.element_count);
+                    const auto id = static_cast<ComputeSharedResourceId>(i);
+                    const ComputeSharedResourceEntry& entry = registry.Get(id);
+                    if (entry.kind == ComputeSharedResourceKind::None)
+                    {
+                        continue;
+                    }
+
+                    if (ImGui::TreeNode(ToString(id)))
+                    {
+                        ImGui::Text("Debug Name: %s", entry.debug_name != nullptr ? entry.debug_name : "");
+                        ImGui::Text("Kind: %s", ToString(entry.kind));
+                        ImGui::Text("SRV: %s", entry.srv != nullptr ? "Yes" : "No");
+                        ImGui::Text("UAV: %s", entry.uav != nullptr ? "Yes" : "No");
+                        ImGui::Text("Buffer: %s", entry.buffer != nullptr ? "Yes" : "No");
+                        if (entry.element_count > 0)
+                        {
+                            ImGui::Text("Elements: %u", entry.element_count);
+                        }
+                        if (entry.stride > 0)
+                        {
+                            ImGui::Text("Stride: %u", entry.stride);
+                        }
+                        ImGui::TreePop();
+                    }
                 }
-                if (entry.stride > 0)
+            }
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.instancing)
+    {
+        const bool instancing_open = ImGui::Begin("Instancing", &g_DebugWindows.instancing);
+        if (instancing_open)
+        {
+            ImGui::Text("Enabled: %s", InstancingDebug_IsEnabled() ? "Yes" : "No");
+            ImGui::Text("Batches: %d", g_InstancingStats.instanced_batch_count);
+            ImGui::Text("Instances: %d", g_InstancingStats.instanced_instance_count);
+            ImGui::Text("Saved Draws: %d", g_InstancingStats.estimated_draw_calls_saved);
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.frustum_culling)
+    {
+        const bool frustum_culling_open = ImGui::Begin("Frustum Culling", &g_DebugWindows.frustum_culling);
+        if (frustum_culling_open)
+        {
+            ImGui::Text("Enabled: %s", FrustumCullingDebug_IsEnabled() ? "Yes" : "No");
+            ImGui::Text("Tested: %d", g_FrustumCullingStats.tested_objects);
+            ImGui::Text("Visible: %d", g_FrustumCullingStats.visible_objects);
+            ImGui::Text("Culled: %d", g_FrustumCullingStats.culled_objects);
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.grass_compute)
+    {
+        const bool grass_compute_open = ImGui::Begin("Grass Compute", &g_DebugWindows.grass_compute);
+        if (grass_compute_open)
+        {
+            ImGui::Text("GPU Ready: %s", g_GrassComputeStats.gpu_ready ? "Yes" : "No");
+            ImGui::Text("GPU Path Used: %s", g_GrassComputeStats.gpu_path_used ? "Yes" : "No");
+            ImGui::Text("Fallback Used: %s", g_GrassComputeStats.fallback_used ? "Yes" : "No");
+            ImGui::Text("Coverage Dirty: %s", g_GrassComputeStats.coverage_dirty ? "Yes" : "No");
+            ImGui::Separator();
+            ImGui::Text("Coverage Grid: %u x %u", g_GrassComputeStats.grid_cols, g_GrassComputeStats.grid_rows);
+            ImGui::Text("Candidate Seeds: %u", g_GrassComputeStats.seed_count);
+            ImGui::Text("Max Quads: %u", g_GrassComputeStats.max_instance_capacity);
+            ImGui::Text("Visible Quads: %u", g_GrassComputeStats.visible_instance_count);
+            if (!g_GrassComputeStats.last_error.empty())
+            {
+                ImGui::Separator();
+                ImGui::TextWrapped("Status: %s", g_GrassComputeStats.last_error.c_str());
+            }
+        }
+        ImGui::End();
+    }
+
+    if (g_DebugWindows.render_flow)
+    {
+        const bool render_flow_open = ImGui::Begin("Render Flow", &g_DebugWindows.render_flow);
+        if (render_flow_open)
+        {
+            ImGui::TextDisabled("Pass order and resource flow");
+            ImGui::Separator();
+
+            for (size_t pass_index = 0; pass_index < g_FramePlan.passes.size(); ++pass_index)
+            {
+                const auto& pass_plan = g_FramePlan.passes[pass_index];
+                if (ImGui::TreeNode(pass_plan.pass_name.data(), "%zu. %s", pass_index + 1, pass_plan.pass_name.data()))
                 {
-                    ImGui::Text("Stride: %u", entry.stride);
+                    if (pass_plan.resources.empty())
+                    {
+                        ImGui::TextDisabled("No explicit resources");
+                    }
+
+                    for (const auto& usage : pass_plan.resources)
+                    {
+                        ImGui::Bullet();
+                        ImGui::SameLine();
+                        DrawResourceUsageChip(usage);
+                    }
+                    ImGui::TreePop();
                 }
-                ImGui::TreePop();
+
+                if (pass_index + 1 < g_FramePlan.passes.size())
+                {
+                    ImGui::Indent(12.0f);
+                    ImGui::TextDisabled("|");
+                    ImGui::TextDisabled("v");
+                    ImGui::Unindent(12.0f);
+                }
             }
         }
+        ImGui::End();
     }
-    ImGui::End();
-
-    ImGui::Begin("Instancing");
-    ImGui::Text("Enabled: %s", InstancingDebug_IsEnabled() ? "Yes" : "No");
-    ImGui::Text("Batches: %d", g_InstancingStats.instanced_batch_count);
-    ImGui::Text("Instances: %d", g_InstancingStats.instanced_instance_count);
-    ImGui::Text("Saved Draws: %d", g_InstancingStats.estimated_draw_calls_saved);
-    ImGui::End();
-
-    ImGui::Begin("Frustum Culling");
-    ImGui::Text("Enabled: %s", FrustumCullingDebug_IsEnabled() ? "Yes" : "No");
-    ImGui::Text("Tested: %d", g_FrustumCullingStats.tested_objects);
-    ImGui::Text("Visible: %d", g_FrustumCullingStats.visible_objects);
-    ImGui::Text("Culled: %d", g_FrustumCullingStats.culled_objects);
-    ImGui::End();
-
-    ImGui::Begin("Grass Compute");
-    ImGui::Text("GPU Ready: %s", g_GrassComputeStats.gpu_ready ? "Yes" : "No");
-    ImGui::Text("GPU Path Used: %s", g_GrassComputeStats.gpu_path_used ? "Yes" : "No");
-    ImGui::Text("Fallback Used: %s", g_GrassComputeStats.fallback_used ? "Yes" : "No");
-    ImGui::Text("Coverage Dirty: %s", g_GrassComputeStats.coverage_dirty ? "Yes" : "No");
-    ImGui::Separator();
-    ImGui::Text("Coverage Grid: %u x %u", g_GrassComputeStats.grid_cols, g_GrassComputeStats.grid_rows);
-    ImGui::Text("Candidate Seeds: %u", g_GrassComputeStats.seed_count);
-    ImGui::Text("Max Quads: %u", g_GrassComputeStats.max_instance_capacity);
-    ImGui::Text("Visible Quads: %u", g_GrassComputeStats.visible_instance_count);
-    if (!g_GrassComputeStats.last_error.empty())
-    {
-        ImGui::Separator();
-        ImGui::TextWrapped("Status: %s", g_GrassComputeStats.last_error.c_str());
-    }
-    ImGui::End();
-
-    ImGui::Begin("Render Flow");
-    ImGui::TextDisabled("Pass order and resource flow");
-    ImGui::Separator();
-
-    for (size_t pass_index = 0; pass_index < g_FramePlan.passes.size(); ++pass_index)
-    {
-        const auto& pass_plan = g_FramePlan.passes[pass_index];
-        if (ImGui::TreeNode(pass_plan.pass_name.data(), "%zu. %s", pass_index + 1, pass_plan.pass_name.data()))
-        {
-            if (pass_plan.resources.empty())
-            {
-                ImGui::TextDisabled("No explicit resources");
-            }
-
-            for (const auto& usage : pass_plan.resources)
-            {
-                ImGui::Bullet();
-                ImGui::SameLine();
-                DrawResourceUsageChip(usage);
-            }
-            ImGui::TreePop();
-        }
-
-        if (pass_index + 1 < g_FramePlan.passes.size())
-        {
-            ImGui::Indent(12.0f);
-            ImGui::TextDisabled("|");
-            ImGui::TextDisabled("v");
-            ImGui::Unindent(12.0f);
-        }
-    }
-    ImGui::End();
 }
 
 void DebugMenu_End()

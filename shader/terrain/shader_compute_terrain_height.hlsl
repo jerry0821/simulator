@@ -141,44 +141,45 @@ float GenerateTerrainHeight(float2 worldXZ)
     const float ridgeHeightScale = max(g_RidgeHeight / 26.0f, 0.1f);
     const float continentHeightScale = max(g_ContinentHeight / 6.5f, 0.1f);
 
-    const float flattness = 0.25f;
+    const float flattness = 0.30f;
     const float steepMaskScaling = 20.0f * baseScale;
     const float regularity = 0.4f;
     const float disturbanceIntensityScaling = 10.0f * baseScale;
-    const float disturbanceFactor = 0.025f;
+    const float disturbanceFactor = 0.018f;
     const float disturbanceIntensityMin = 0.2f;
     const float disturbanceScaling = 200.0f * baseScale;
 
     const float baseTerrainScaling = 50.0f * baseScale;
-    const float baseTerrainHeightFactor = 80.0f * baseHeightScale;
+    const float baseTerrainHeightFactor = 72.0f * baseHeightScale;
     const float baseTerrainBias = 4.0f;
 
     const uint fractalCount = 8u;
     const float minFractalHeightWeight = 0.1f;
-    const float fractalHeightWeightIntensity = 4.0f * detailHeightScale;
+    const float fractalHeightWeightIntensity = 2.8f * detailHeightScale;
 
     const float riftLimit = 0.4f;
     const float riftMaskScaling = 40.0f * baseScale;
     const float riftScaling = 80.0f * baseScale;
     const float riftDisturbanceIntensity = 2.0f;
-    const float riftDepth = 10.0f * detailHeightScale;
-    const float riftSoftness = 0.2f;
-    const float riftWidth = 0.1f;
+    const float riftDepth = 6.5f * detailHeightScale;
+    const float riftSoftness = 0.32f;
+    const float riftWidth = 0.13f;
 
     const float ridgeScaling = 30.0f * ridgeScale;
     const float ridgeMaskScaling = 10.0f * ridgeScale;
-    const float ridgeSoftness = 0.15f;
-    const float ridgeTransparency = 0.2f;
+    const float ridgeSoftness = 0.26f;
+    const float ridgeTransparency = 0.28f;
     const float ridgeLimit = 0.25f;
-    const float ridgeAmplitude = 60.0f * ridgeHeightScale;
+    const float ridgeAmplitude = 42.0f * ridgeHeightScale;
 
     const float trendScaling = 2.0f * baseScale;
-    const float trendAmplitude = 80.0f * continentHeightScale;
+    const float trendAmplitude = 68.0f * continentHeightScale;
 
     float steep = smoothstep(
         0.0f,
         1.0f - flattness,
         ValueNoise(uv * steepMaskScaling + float2(3.1f, -7.4f)) - flattness);
+    steep = lerp(0.72f, 1.0f, steep);
 
     float disturbanceIntensity = max(
         ValueNoise(uv * disturbanceIntensityScaling + float2(-11.0f, 19.0f)) - regularity,
@@ -229,7 +230,7 @@ float GenerateTerrainHeight(float2 worldXZ)
             (ValueNoise(uv * ridgeMaskScaling + float2(-41.0f, 29.0f)) - ridgeLimit) * steep) -
             ridgeTransparency,
         0.0f);
-    terrainHeight = lerp(terrainHeight, ridge, ridgeMask);
+    terrainHeight = lerp(terrainHeight, ridge, ridgeMask * 0.82f);
 
     terrainHeight += SignedValueNoise(uv * trendScaling + float2(5.0f, -11.0f)) * trendAmplitude;
 

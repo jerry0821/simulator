@@ -140,9 +140,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float possibility = saturate(grass_data.r);
     float density_hash = grass_data.g;
     float scale_hint = max(grass_data.b, 0.0f);
+    const float coverage_probability = saturate(possibility * 1.22f);
     bool valid =
-        (possibility > 0.006f) &&
-        (density_hash <= possibility);
+        (possibility > 0.08f) &&
+        (density_hash <= coverage_probability);
 
     GrassSeed seed;
     seed.data = valid ? float4(world_xz.x, ground_y, world_xz.y, scale_hint) : float4(0.0f, 0.0f, 0.0f, 0.0f);

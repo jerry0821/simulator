@@ -23,6 +23,7 @@ ID3D11ShaderResourceView* g_pWaterVelocitySRV = nullptr;
 ID3D11ShaderResourceView* g_pWaterSedimentSRV = nullptr;
 ID3D11ShaderResourceView* g_pTerrainNormalSRV = nullptr;
 ID3D11ShaderResourceView* g_pSceneDepthSRV = nullptr;
+ID3D11ShaderResourceView* g_pFlowNormalSRV = nullptr;
 
 struct WaterSurfaceSettings
 {
@@ -140,6 +141,7 @@ void ShaderWater_Finalize()
 	g_pWaterSedimentSRV = nullptr;
 	g_pTerrainNormalSRV = nullptr;
 	g_pSceneDepthSRV = nullptr;
+	g_pFlowNormalSRV = nullptr;
 }
 
 void ShaderWater_SetWorldMatrix(const XMMATRIX& matrix)
@@ -209,6 +211,11 @@ void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv)
 	g_pSceneDepthSRV = scene_depth_srv;
 }
 
+void ShaderWater_SetFlowNormal(ID3D11ShaderResourceView* flow_normal_srv)
+{
+	g_pFlowNormalSRV = flow_normal_srv;
+}
+
 void ShaderWater_Begin()
 {
 	Direct3D_GetContext()->VSSetShader(g_pVertexShader, nullptr, 0);
@@ -228,15 +235,23 @@ void ShaderWater_Begin()
 		g_pTerrainNormalSRV,
 		g_pSceneDepthSRV
 	};
-	Direct3D_GetContext()->PSSetShaderResources(0, 5, ps_srvs);
+	ID3D11ShaderResourceView* ps_srvs_ext[6] = {
+		ps_srvs[0],
+		ps_srvs[1],
+		ps_srvs[2],
+		ps_srvs[3],
+		ps_srvs[4],
+		g_pFlowNormalSRV
+	};
+	Direct3D_GetContext()->PSSetShaderResources(0, 6, ps_srvs_ext);
 	Backend::DX11::Sampler::SetAnisotropicFilter();
 }
 
 void ShaderWater_End()
 {
-	ID3D11ShaderResourceView* null_srvs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_ps_buffer = nullptr;
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, null_srvs);
-	Direct3D_GetContext()->PSSetShaderResources(0, 5, null_srvs);
+	Direct3D_GetContext()->PSSetShaderResources(0, 6, null_srvs);
 	Direct3D_GetContext()->PSSetConstantBuffers(1, 1, &null_ps_buffer);
 }

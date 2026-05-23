@@ -14,6 +14,7 @@ void ShaderSprite3D_CutoutInstanced_SetViewMatrix(const DirectX::XMMATRIX& matri
 void ShaderSprite3D_CutoutInstanced_SetProjMatrix(const DirectX::XMMATRIX& matrix);
 void ShaderSprite3D_CutoutInstanced_SetMaterialColor(const DirectX::XMFLOAT4& material_color);
 void ShaderSprite3D_CutoutInstanced_SetWindField(ID3D11ShaderResourceView* wind_field_srv);
+void ShaderSprite3D_CutoutInstanced_SetTerrainNormalField(ID3D11ShaderResourceView* terrain_normal_srv);
 void ShaderSprite3D_CutoutInstanced_SetInstanceBuffer(ID3D11ShaderResourceView* instance_buffer_srv);
 void ShaderSprite3D_CutoutInstanced_SetWindSettings(float time_seconds,
 													const DirectX::XMFLOAT2& wind_direction,

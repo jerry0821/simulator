@@ -155,6 +155,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\app\application.cpp" />
+    <ClCompile Include="src\app\runtime_bootstrap.cpp" />
+    <ClCompile Include="src\app\compute_task_publish.cpp" />
+    <ClCompile Include="src\app\runtime_system.cpp" />
+    <ClCompile Include="src\app\runtime_frame_loop.cpp" />
+    <ClCompile Include="src\app\runtime_frame_debug.cpp" />
+    <ClCompile Include="src\app\renderer_submission.cpp" />
+    <ClCompile Include="src\app\compute_task_frame.cpp" />
+    <ClCompile Include="src\app\compute_task_system.cpp" />
+    <ClCompile Include="src\app\compute_task_resources.cpp" />
     <ClCompile Include="src\gfx\billboard.cpp" />
     <ClCompile Include="src\scene\camera.cpp" />
     <ClCompile Include="src\geometry\collision.cpp" />
@@ -183,6 +192,7 @@
     <ClCompile Include="src\debug\frustum_culling_debug.cpp" />
     <ClCompile Include="src\app\game.cpp" />
     <ClCompile Include="src\app\game_window.cpp" />
+    <ClCompile Include="src\render\renderer_frame_builder.cpp" />
     <ClCompile Include="src\scene\grass_patch.cpp" />
     <ClCompile Include="src\geometry\grid.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -253,6 +263,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\app\application.h" />
+    <ClInclude Include="src\app\compute_task_publish.h" />
+    <ClInclude Include="src\app\runtime_system.h" />
+    <ClInclude Include="src\app\compute_task_system_state.h" />
     <ClInclude Include="src\gfx\billboard.h" />
     <ClInclude Include="src\scene\camera.h" />
     <ClInclude Include="src\geometry\collision.h" />
@@ -284,6 +297,7 @@
     <ClInclude Include="src\debug\frustum_culling_debug.h" />
     <ClInclude Include="src\app\game.h" />
     <ClInclude Include="src\app\game_window.h" />
+    <ClInclude Include="src\render\renderer_frame_builder.h" />
     <ClInclude Include="src\scene\grass_patch.h" />
     <ClInclude Include="src\geometry\grid.h" />
     <ClInclude Include="imgui\imconfig.h" />

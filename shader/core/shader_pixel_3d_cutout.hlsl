@@ -22,8 +22,12 @@ SamplerState samp;
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
     float4 color = tex.Sample(samp, ps_in.uv) * diffuse_color * ps_in.color;
-    clip(color.a - 0.04f);
-    color.rgb *= saturate((color.a - 0.04f) * 1.5f + 0.85f);
+    const float alpha_cutoff = 0.20f;
+    const float alpha_width = max(fwidth(color.a) * 1.6f, 1.0e-3f);
+    const float coverage =
+        smoothstep(alpha_cutoff - alpha_width, alpha_cutoff + alpha_width, color.a);
+    clip(coverage - 0.02f);
+    color.rgb *= coverage;
     color.a = 1.0f;
     return color;
 }

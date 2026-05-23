@@ -5,21 +5,15 @@
 
 #include <Windows.h>
 
+#include "compute_task_publish.h"
+#include "compute_task_system_state.h"
+#include "renderer_frame_builder.h"
+#include "runtime_system.h"
 #include "debug_text.h"
-#include "compute_floating_light_points.h"
-#include "compute_grass_data_texture.h"
-#include "compute_meteorograph_texture.h"
-#include "compute_noise_texture.h"
-#include "compute_shared_resource_registry.h"
-#include "compute_task_runner.h"
-#include "compute_terrain_classification_texture.h"
-#include "compute_water_surface_height_texture.h"
 #include "render_backend_dx11.h"
-#include "render_water_surface.h"
 #include "renderer.h"
 #include "scene.h"
 #include "scene_render_adapter.h"
-#include "terrain_water_state.h"
 
 class Application
 {
@@ -34,10 +28,15 @@ public:
 private:
 	bool InitializePlatform(HINSTANCE instance_handle, int show_command);
 	bool InitializeEngineSystems();
+	bool InitializeComputeResources();
+	void ConfigureComputeTasks();
 	void InitializeRuntimeObjects();
 	void InitializeDebugTools();
 	void ResetFrameState();
 	void BeginFrame(double current_time, double elapsed_time);
+	void ReloadComputeResources();
+	void DispatchComputeFrame(double current_time, double elapsed_time);
+	void RefreshDerivedComputeResources(double current_time);
 	Backend::RenderShaderResource BaseTerrainHeightResource() const;
 	Backend::RenderShaderResource SimulationTerrainHeightResource() const;
 	Backend::RenderShaderResource ActiveTerrainHeightResource() const;
@@ -47,7 +46,7 @@ private:
 	float ResolveActiveWaterSurfaceHeight() const;
 	void PublishSharedComputeResources();
 	void RenderDebugText();
-	RenderFrameContext BuildFrameContext(double current_time, double elapsed_time) const;
+	void RenderCurrentFrame(double current_time, double elapsed_time);
 	void FinalizeEngineSystems();
 
 	void UpdateFps(double current_time);
@@ -58,15 +57,7 @@ private:
 	std::unique_ptr<Renderer> m_renderer;
 	std::unique_ptr<SceneRenderAdapter> m_scene_render_adapter;
 	SceneController m_scene_controller{};
-	ComputeTaskRunner m_compute_task_runner{};
-	ComputeFloatingLightPoints m_compute_floating_light_points{};
-	ComputeGrassDataTexture m_compute_grass_data_texture{};
-	ComputeMeteorographTexture m_compute_meteorograph_texture{};
-	ComputeNoiseTexture m_compute_noise_texture{};
-	ComputeSharedResourceRegistry m_compute_shared_resource_registry{};
-	ComputeTerrainClassificationTexture m_compute_terrain_classification_texture{};
-	ComputeWaterSurfaceHeightTexture m_compute_water_surface_height_texture{};
-	TerrainWaterState m_terrain_water_state{};
+	ComputeTaskSystemState m_simulation{};
 
 #if defined(DEBUG) || defined(_DEBUG)
 	std::unique_ptr<hal::DebugText> m_debug_text;
@@ -75,15 +66,8 @@ private:
 	double m_exec_last_time = 0.0;
 	double m_fps_last_time = 0.0;
 	double m_fps = 0.0;
-	double m_terrain_classification_last_update_time = -1000.0;
 	unsigned long m_frame_count = 0;
-	WaterSurfaceDesc m_active_water_surface_desc{};
-	float m_active_water_surface_height = 0.0f;
 	float m_glitch_amount = 0.0f;
-	TerrainMaterialSettings m_last_terrain_material_settings{};
-	bool m_has_last_terrain_material_settings = false;
-	bool m_use_shared_terrain_water_heightfield = true;
-	bool m_pending_surface_water_reset = false;
 };
 
 #endif // APPLICATION_H
