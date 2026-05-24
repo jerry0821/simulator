@@ -55,6 +55,7 @@ static const float kWaterDeltaTime = 1.0f / 60.0f;
 static const float kWaterFlowDamping = 0.020f;
 static const float kHydrologicalCycleRate = 0.5f;
 static const float kWaterBaseHeight = 0.0f;
+static const float kDryDepthEpsilon = 0.008f;
 static const float kHydraulicErosionRate = 0.020f;
 static const float kHydraulicDepositionRate = 0.016f;
 static const float kThermalErosionRate = 0.030f;
@@ -634,10 +635,30 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         next_depth = max(resolved_surface_height - terrain_height, 0.0f);
     }
 
+    float4 resolved_outflow = outflow;
+    float resolved_runoff = runoff;
+    float resolved_sediment_capacity = sediment_capacity;
+    float resolved_deposition_tendency = deposition_tendency;
+    float resolved_erosion_tendency = erosion_tendency;
+    if (next_depth < kDryDepthEpsilon)
+    {
+        next_depth = 0.0f;
+        resolved_surface_height = terrain_height;
+        water_velocity_xy = 0.0f.xx;
+        water_speed = 0.0f;
+        transport_energy = 0.0f;
+        suspended_sediment = 0.0f;
+        resolved_outflow = 0.0f.xxxx;
+        resolved_runoff = 0.0f;
+        resolved_sediment_capacity = 0.0f;
+        resolved_deposition_tendency = 0.0f;
+        resolved_erosion_tendency = 0.0f;
+    }
+
     const float depth_preview = smoothstep(0.01f, 0.12f, next_depth);
     const float wind_glint =
         pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector + wind_dir * 0.25f), wind_dir)), 2.2f) *
-        smoothstep(0.015f, 0.10f, max(next_depth, runoff * 0.08f)) *
+        smoothstep(0.015f, 0.10f, max(next_depth, resolved_runoff * 0.08f)) *
         wind_strength;
     const float flow_sheen =
         pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector), wind_dir)), 2.0f) *
@@ -651,7 +672,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     preview_color += float3(0.16f, 0.20f, 0.24f) * flow_sheen;
 
     const float preview_alpha =
-        saturate(max(standing_water * 0.24f, runoff * 0.30f) + wind_glint * 0.18f);
+        saturate(max(standing_water * 0.24f, resolved_runoff * 0.30f) + wind_glint * 0.18f);
     const float4 visible_water = ComputeVisibleWaterSample(
         terrain_height,
         west_terrain,
@@ -659,7 +680,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         south_terrain,
         north_terrain,
         next_depth,
-        outflow);
+        resolved_outflow);
     const float4 visible_left = ComputeApproxVisibleWaterAtCoord(coord + int2(-1, 0));
     const float4 visible_right = ComputeApproxVisibleWaterAtCoord(coord + int2(1, 0));
     const float4 visible_up = ComputeApproxVisibleWaterAtCoord(coord + int2(0, -1));
@@ -706,7 +727,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float roughness =
         saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
 
-    g_WaterFlowOut[dispatch_thread_id.xy] = outflow;
+    g_WaterFlowOut[dispatch_thread_id.xy] = resolved_outflow;
     g_SoilMoistureOut[dispatch_thread_id.xy] = soil_moisture;
     g_WaterInteractionOut[dispatch_thread_id.xy] = water_interaction;
     g_TerrainSurfaceDataOut[dispatch_thread_id.xy] =
@@ -714,7 +735,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     g_WaterVelocityOut[dispatch_thread_id.xy] =
         float4(water_velocity_xy, water_speed, transport_energy);
     g_WaterSedimentOut[dispatch_thread_id.xy] =
-        float4(suspended_sediment, deposition_tendency, erosion_tendency, sediment_capacity);
+        float4(suspended_sediment, resolved_deposition_tendency, resolved_erosion_tendency, resolved_sediment_capacity);
     g_ErosionDeltaOut[dispatch_thread_id.xy] =
         float4(erosion_amount, deposition_amount, deposition_amount - erosion_amount, saturate(max(transport_energy, water_speed)));
     g_WaterSurfaceHeight[dispatch_thread_id.xy] =

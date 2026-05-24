@@ -1186,6 +1186,7 @@ void MapController::Draw(const RenderFrameContext& frame_context)
   view_frustum.build(view_matrix, projection_matrix);
   const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
 
+  Light_SetCameraPosition(frame_context.globals.camera_position);
   ShaderField_SetLightViewProj(Light_GetLightViewProjectionMatrix());
   ShaderField_SetViewMatrix(view);
   ShaderField_SetProjectionMatrix(proj);

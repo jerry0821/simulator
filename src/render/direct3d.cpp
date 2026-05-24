@@ -108,6 +108,15 @@ static bool MakeRenderTarget(int w, int h,
 	ID3D11ShaderResourceView** ppSRV,
 	ID3D11Texture2D** ppDepthTex,
 	ID3D11DepthStencilView** ppDSV,
+	DXGI_FORMAT colorFormat,
+	ID3D11ShaderResourceView** ppDepthSRV,
+	D3D11_VIEWPORT* pViewport);
+static bool MakeRenderTarget(int w, int h,
+	ID3D11Texture2D** ppTex,
+	ID3D11RenderTargetView** ppRTV,
+	ID3D11ShaderResourceView** ppSRV,
+	ID3D11Texture2D** ppDepthTex,
+	ID3D11DepthStencilView** ppDSV,
 	D3D11_VIEWPORT* pViewport)
 {
 	return MakeRenderTarget(w, h, ppTex, ppRTV, ppSRV, ppDepthTex, ppDSV, nullptr, pViewport);
@@ -121,6 +130,28 @@ static bool MakeRenderTarget(int w, int h,
 	ID3D11ShaderResourceView** ppDepthSRV,
 	D3D11_VIEWPORT* pViewport)
 {
+	return MakeRenderTarget(
+		w,
+		h,
+		ppTex,
+		ppRTV,
+		ppSRV,
+		ppDepthTex,
+		ppDSV,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		ppDepthSRV,
+		pViewport);
+}
+static bool MakeRenderTarget(int w, int h,
+	ID3D11Texture2D** ppTex,
+	ID3D11RenderTargetView** ppRTV,
+	ID3D11ShaderResourceView** ppSRV,
+	ID3D11Texture2D** ppDepthTex,
+	ID3D11DepthStencilView** ppDSV,
+	DXGI_FORMAT colorFormat,
+	ID3D11ShaderResourceView** ppDepthSRV,
+	D3D11_VIEWPORT* pViewport)
+{
 	HRESULT hr;
 
 	D3D11_TEXTURE2D_DESC texDesc = {};
@@ -128,7 +159,7 @@ static bool MakeRenderTarget(int w, int h,
 	texDesc.Height = h;
 	texDesc.MipLevels = 1;
 	texDesc.ArraySize = 1;
-	texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texDesc.Format = colorFormat;
 	texDesc.SampleDesc.Count = 1;
 	texDesc.SampleDesc.Quality = 0;
 	texDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -270,7 +301,8 @@ bool Direct3D_Initialize(HWND hWnd)
 	int screenW = Direct3D_GetBackBufferWidth();
 	int screenH = Direct3D_GetBackBufferHeight();
 	if (!MakeRenderTarget(screenW, screenH,
-		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV, &g_pSceneDepthSRV, &g_SceneViewport))
+		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV,
+		DXGI_FORMAT_R16G16B16A16_FLOAT, &g_pSceneDepthSRV, &g_SceneViewport))
 		return false;
 
 	// ミニマップ用のオフスクリーンバッファ
@@ -428,7 +460,8 @@ void Direct3D_Resize(int width, int height) {
 	configureBackBuffer();
 
 	MakeRenderTarget(width, height,
-		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV, &g_pSceneDepthSRV, &g_SceneViewport);
+		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV,
+		DXGI_FORMAT_R16G16B16A16_FLOAT, &g_pSceneDepthSRV, &g_SceneViewport);
 }
 
 

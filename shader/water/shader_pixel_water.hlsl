@@ -94,9 +94,9 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
 {
     float2 worldUV = WorldToFieldUv(ps_in.posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
-    const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
-    const float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
-    const float water_visibility = smoothstep(0.004f, 0.024f, water_depth);
+    const float4 terrain_water_sample = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f);
+    const float water_depth =
+        max(max(terrain_water_sample.z, terrain_water_sample.y - terrain_water_sample.x), 0.0f);
 
     const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
     const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
@@ -174,19 +174,12 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         scene_sample_valid > 0.5f
             ? length(scene_world_pos - ps_in.posW)
             : 0.0f;
-    const float depth_factor = smoothstep(0.012f, 0.22f, water_depth);
-    const float deep_factor = smoothstep(0.04f, 0.34f, water_depth);
-    const float standing_alpha = smoothstep(0.012f, 0.090f, water_depth);
-    const float runoff_alpha =
-        smoothstep(0.006f, 0.038f, water_depth) *
-        slope_flatness *
-        lerp(0.26f, 0.65f, water_speed_factor);
-    const float depth_edge = smoothstep(0.03f, 0.45f, true_depth_fade);
-    float alpha = max(standing_alpha, runoff_alpha);
-    alpha = lerp(alpha, 1.0f, depth_edge * (0.18f + depth_factor * 0.32f));
-    alpha *= water_presence;
-    alpha *= saturate(0.72f + log(length(ps_in.posW - camera_position) + 1.0f) * 0.16f);
-    alpha *= lerp(0.82f, 1.0f, saturate(depth_factor * 0.65f + deep_factor * 0.35f));
+    const float edge_fade_distance = 0.42f;
+    const float depth_alpha = pow(saturate(true_depth_fade * 0.10f), 0.25f);
+    const float edge_cut = 1.0f - saturate(true_depth_fade / edge_fade_distance);
+    const float water_depth_presence = smoothstep(0.004f, 0.020f, water_depth);
+    float alpha = max(depth_alpha - edge_cut, 0.0f);
+    alpha *= water_depth_presence * scene_sample_valid;
     alpha = saturate(alpha);
     clip(alpha - 0.003f);
 

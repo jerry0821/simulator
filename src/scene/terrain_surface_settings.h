@@ -19,6 +19,14 @@ struct TerrainMaterialSettings
 	float lowland_height_end = 58.0f;
 	float grass_coverage_min = 0.28f;
 	float water_height = 0.0f;
+	float pbr_roughness_bias = -0.08f;
+	float pbr_specular_scale = 1.65f;
+	float pbr_detail_normal_strength = 0.38f;
+	float pbr_light_intensity = 1.18f;
+	float pbr_metallic = 0.0f;
+	float pbr_ao_strength = 1.0f;
+	float pbr_debug_mode = 0.0f;
+	float pbr_padding0 = 0.0f;
 
 	bool operator==(const TerrainMaterialSettings& other) const
 	{

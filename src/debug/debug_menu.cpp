@@ -1188,6 +1188,23 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Bloom Soft Knee", &g_PostProcessSettings.bloom_soft_knee, 0.02f, 0.45f);
     ImGui::SliderFloat("Bloom Blur Scale", &g_PostProcessSettings.bloom_blur_scale, 0.50f, 3.50f);
     ImGui::Separator();
+    ImGui::TextDisabled("Tone Mapping");
+    ImGui::SliderFloat("Exposure EV", &g_PostProcessSettings.exposure_ev, -4.0f, 4.0f);
+    static const char* toneMapModes[] = {
+        "Off",
+        "Reinhard",
+        "ACES",
+        "Filmic"
+    };
+    int tone_map_mode = static_cast<int>(g_PostProcessSettings.tone_map_mode + 0.5f);
+    tone_map_mode = std::clamp(tone_map_mode, 0, static_cast<int>(std::size(toneMapModes)) - 1);
+    if (ImGui::Combo("Tone Map", &tone_map_mode, toneMapModes, static_cast<int>(std::size(toneMapModes))))
+    {
+        g_PostProcessSettings.tone_map_mode = static_cast<float>(tone_map_mode);
+    }
+    ImGui::SliderFloat("Output Gamma", &g_PostProcessSettings.output_gamma, 1.0f, 2.6f);
+    ImGui::SliderFloat("Output Gain", &g_PostProcessSettings.output_gain, 0.25f, 2.0f);
+    ImGui::Separator();
     ImGui::TextDisabled("Height Fog");
     ImGui::SliderFloat("Fog Intensity", &g_PostProcessSettings.fog_intensity, 0.0f, 0.90f);
     ImGui::SliderFloat("Fog Distance Fade", &g_PostProcessSettings.fog_distance_fade, 0.0f, 0.80f);
@@ -1267,6 +1284,29 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Shore Offset End", &g_TerrainMaterialSettings.shoreline_offset_end, 1.0f, 10.0f);
     ImGui::SliderFloat("Lowland Start", &g_TerrainMaterialSettings.lowland_height_start, -8.0f, 48.0f);
     ImGui::SliderFloat("Lowland End", &g_TerrainMaterialSettings.lowland_height_end, 0.0f, 80.0f);
+    ImGui::Separator();
+    ImGui::TextDisabled("PBR Preview");
+    ImGui::SliderFloat("PBR Roughness Bias", &g_TerrainMaterialSettings.pbr_roughness_bias, -0.45f, 0.45f);
+    ImGui::SliderFloat("PBR Specular Scale", &g_TerrainMaterialSettings.pbr_specular_scale, 0.0f, 4.0f);
+    ImGui::SliderFloat("PBR Detail Normal", &g_TerrainMaterialSettings.pbr_detail_normal_strength, 0.0f, 1.5f);
+    ImGui::SliderFloat("PBR Light Intensity", &g_TerrainMaterialSettings.pbr_light_intensity, 0.25f, 3.0f);
+    ImGui::SliderFloat("PBR Metallic", &g_TerrainMaterialSettings.pbr_metallic, 0.0f, 1.0f);
+    ImGui::SliderFloat("PBR AO Strength", &g_TerrainMaterialSettings.pbr_ao_strength, 0.0f, 1.0f);
+    static const char* pbrDebugModes[] = {
+        "Shaded",
+        "Albedo",
+        "Metallic",
+        "Roughness",
+        "Normal",
+        "AO",
+        "Fresnel"
+    };
+    int pbr_debug_mode = static_cast<int>(g_TerrainMaterialSettings.pbr_debug_mode + 0.5f);
+    pbr_debug_mode = std::clamp(pbr_debug_mode, 0, static_cast<int>(std::size(pbrDebugModes)) - 1);
+    if (ImGui::Combo("PBR Debug View", &pbr_debug_mode, pbrDebugModes, static_cast<int>(std::size(pbrDebugModes))))
+    {
+        g_TerrainMaterialSettings.pbr_debug_mode = static_cast<float>(pbr_debug_mode);
+    }
         }
         ImGui::End();
     }

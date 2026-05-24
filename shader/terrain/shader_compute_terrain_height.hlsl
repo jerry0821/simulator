@@ -61,6 +61,72 @@ float SignedValueNoise(float2 p)
     return ValueNoise(p) * 2.0f - 1.0f;
 }
 
+float2 Hash22(float2 p)
+{
+    float2 value = float2(
+        dot(p, float2(127.1f, 311.7f)),
+        dot(p, float2(269.5f, 183.3f)));
+    return frac(sin(value) * 43758.5453f);
+}
+
+float2 Gradient2(float2 cell)
+{
+    float2 gradient = Hash22(cell) * 2.0f - 1.0f;
+    const float lenSq = max(dot(gradient, gradient), 1.0e-5f);
+    return gradient * rsqrt(lenSq);
+}
+
+float PerlinNoise(float2 p)
+{
+    float2 cell = floor(p);
+    float2 local = frac(p);
+    float2 smooth = local * local * local * (local * (local * 6.0f - 15.0f) + 10.0f);
+
+    float n00 = dot(Gradient2(cell + float2(0.0f, 0.0f)), local - float2(0.0f, 0.0f));
+    float n10 = dot(Gradient2(cell + float2(1.0f, 0.0f)), local - float2(1.0f, 0.0f));
+    float n01 = dot(Gradient2(cell + float2(0.0f, 1.0f)), local - float2(0.0f, 1.0f));
+    float n11 = dot(Gradient2(cell + float2(1.0f, 1.0f)), local - float2(1.0f, 1.0f));
+
+    float nx0 = lerp(n00, n10, smooth.x);
+    float nx1 = lerp(n01, n11, smooth.x);
+    return saturate(0.5f + lerp(nx0, nx1, smooth.y) * 0.7071f);
+}
+
+float SignedPerlinNoise(float2 p)
+{
+    return PerlinNoise(p) * 2.0f - 1.0f;
+}
+
+float SimplexNoise(float2 p)
+{
+    const float F = 0.366025404f;
+    const float G = 0.211324865f;
+
+    float2 skewedCell = floor(p + (p.x + p.y) * F);
+    float2 x0 = p - (skewedCell - (skewedCell.x + skewedCell.y) * G);
+    float2 i1 = x0.x > x0.y ? float2(1.0f, 0.0f) : float2(0.0f, 1.0f);
+    float2 x1 = x0 - i1 + G;
+    float2 x2 = x0 - 1.0f + 2.0f * G;
+
+    float3 weight = max(
+        0.5f - float3(dot(x0, x0), dot(x1, x1), dot(x2, x2)),
+        0.0f.xxx);
+    weight *= weight;
+    weight *= weight;
+
+    float3 gradientDot = float3(
+        dot(Gradient2(skewedCell), x0),
+        dot(Gradient2(skewedCell + i1), x1),
+        dot(Gradient2(skewedCell + 1.0f.xx), x2));
+
+    return saturate(0.5f + 35.0f * dot(weight, gradientDot));
+}
+
+float SignedSimplexNoise(float2 p)
+{
+    return SimplexNoise(p) * 2.0f - 1.0f;
+}
+
 float WorleyNoise(float2 p)
 {
     float2 cell = floor(p);
@@ -141,36 +207,36 @@ float GenerateTerrainHeight(float2 worldXZ)
     const float ridgeHeightScale = max(g_RidgeHeight / 26.0f, 0.1f);
     const float continentHeightScale = max(g_ContinentHeight / 6.5f, 0.1f);
 
-    const float flattness = 0.30f;
+    const float flattness = 0.28f;
     const float steepMaskScaling = 20.0f * baseScale;
     const float regularity = 0.4f;
     const float disturbanceIntensityScaling = 10.0f * baseScale;
-    const float disturbanceFactor = 0.018f;
+    const float disturbanceFactor = 0.023f;
     const float disturbanceIntensityMin = 0.2f;
     const float disturbanceScaling = 200.0f * baseScale;
 
     const float baseTerrainScaling = 50.0f * baseScale;
-    const float baseTerrainHeightFactor = 72.0f * baseHeightScale;
+    const float baseTerrainHeightFactor = 76.0f * baseHeightScale;
     const float baseTerrainBias = 4.0f;
 
     const uint fractalCount = 8u;
     const float minFractalHeightWeight = 0.1f;
-    const float fractalHeightWeightIntensity = 2.8f * detailHeightScale;
+    const float fractalHeightWeightIntensity = 2.75f * detailHeightScale;
 
     const float riftLimit = 0.4f;
     const float riftMaskScaling = 40.0f * baseScale;
     const float riftScaling = 80.0f * baseScale;
     const float riftDisturbanceIntensity = 2.0f;
-    const float riftDepth = 6.5f * detailHeightScale;
-    const float riftSoftness = 0.32f;
-    const float riftWidth = 0.13f;
+    const float riftDepth = 7.0f * detailHeightScale;
+    const float riftSoftness = 0.28f;
+    const float riftWidth = 0.11f;
 
     const float ridgeScaling = 30.0f * ridgeScale;
     const float ridgeMaskScaling = 10.0f * ridgeScale;
     const float ridgeSoftness = 0.26f;
-    const float ridgeTransparency = 0.28f;
+    const float ridgeTransparency = 0.27f;
     const float ridgeLimit = 0.25f;
-    const float ridgeAmplitude = 42.0f * ridgeHeightScale;
+    const float ridgeAmplitude = 50.0f * ridgeHeightScale;
 
     const float trendScaling = 2.0f * baseScale;
     const float trendAmplitude = 68.0f * continentHeightScale;
@@ -178,18 +244,18 @@ float GenerateTerrainHeight(float2 worldXZ)
     float steep = smoothstep(
         0.0f,
         1.0f - flattness,
-        ValueNoise(uv * steepMaskScaling + float2(3.1f, -7.4f)) - flattness);
-    steep = lerp(0.72f, 1.0f, steep);
+        PerlinNoise(uv * steepMaskScaling + float2(3.1f, -7.4f)) - flattness);
+    steep = lerp(0.64f, 1.0f, steep);
 
     float disturbanceIntensity = max(
-        ValueNoise(uv * disturbanceIntensityScaling + float2(-11.0f, 19.0f)) - regularity,
+        PerlinNoise(uv * disturbanceIntensityScaling + float2(-11.0f, 19.0f)) - regularity,
         disturbanceIntensityMin) * disturbanceFactor;
     float2 disturbance = float2(
-        SignedValueNoise(uv * disturbanceScaling + float2(17.0f, -31.0f)),
-        SignedValueNoise(uv * disturbanceScaling + float2(-29.0f, 41.0f))) * disturbanceIntensity;
+        SignedPerlinNoise(uv * disturbanceScaling + float2(17.0f, -31.0f)),
+        SignedPerlinNoise(uv * disturbanceScaling + float2(-29.0f, 41.0f))) * disturbanceIntensity;
 
     float terrainHeight =
-        (1.0f - saturate(WorleyNoise((uv + disturbance) * baseTerrainScaling))) *
+        saturate(WorleyNoise((uv + disturbance) * baseTerrainScaling)) *
         baseTerrainHeightFactor * steep +
         baseTerrainBias;
 
@@ -202,7 +268,7 @@ float GenerateTerrainHeight(float2 worldXZ)
         fractalWeight *= 0.5f;
         fractalScaling *= 2.0f;
         terrainHeight +=
-            SignedValueNoise(uv * fractalScaling + float2(13.0f + index * 7.0f, -17.0f - index * 5.0f)) *
+            SignedSimplexNoise(uv * fractalScaling + float2(13.0f + index * 7.0f, -17.0f - index * 5.0f)) *
             fractalWeight *
             baseTerrainScaling *
             fractalHeightWeight;
@@ -212,27 +278,28 @@ float GenerateTerrainHeight(float2 worldXZ)
     float riftMask = smoothstep(
         0.0f,
         riftSoftness,
-        ValueNoise(riftDomain * riftMaskScaling + float2(23.0f, -5.0f)) - riftLimit);
+        PerlinNoise(riftDomain * riftMaskScaling + float2(23.0f, -5.0f)) - riftLimit);
     float riftHeight = -smoothstep(
         0.0f,
         riftSoftness,
-        riftWidth - abs(SignedValueNoise(riftDomain * riftScaling + float2(-19.0f, 37.0f)))) * riftDepth;
+        riftWidth - abs(SignedPerlinNoise(riftDomain * riftScaling + float2(-19.0f, 37.0f)))) * riftDepth;
     riftHeight *= max(0.4f - steep, 0.0f) * riftMask;
     terrainHeight += riftHeight;
 
-    float ridge =
-        (0.5f - abs(SignedValueNoise((uv + disturbance * 0.5f) * ridgeScaling + float2(7.0f, -13.0f)))) *
-        ridgeAmplitude;
+    float ridgeSignal =
+        1.0f - abs(SignedPerlinNoise((uv + disturbance * 0.5f) * ridgeScaling + float2(7.0f, -13.0f)));
+    ridgeSignal = pow(saturate(ridgeSignal), 1.55f);
+    float ridge = terrainHeight + ridgeSignal * ridgeAmplitude;
     float ridgeMask = max(
         smoothstep(
             0.0f,
             ridgeSoftness,
-            (ValueNoise(uv * ridgeMaskScaling + float2(-41.0f, 29.0f)) - ridgeLimit) * steep) -
+            (PerlinNoise(uv * ridgeMaskScaling + float2(-41.0f, 29.0f)) - ridgeLimit) * steep) -
             ridgeTransparency,
         0.0f);
     terrainHeight = lerp(terrainHeight, ridge, ridgeMask * 0.82f);
 
-    terrainHeight += SignedValueNoise(uv * trendScaling + float2(5.0f, -11.0f)) * trendAmplitude;
+    terrainHeight += SignedPerlinNoise(uv * trendScaling + float2(5.0f, -11.0f)) * trendAmplitude;
 
     float centerPlatform = saturate(length(worldXZ) * 0.01f);
     terrainHeight = lerp(0.0f, terrainHeight, centerPlatform);

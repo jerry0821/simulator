@@ -729,6 +729,9 @@
     <FxCompile Include="shader\vegetation\shader_vertex_grass_instanced.hlsl">
       <Filter>Shader Files\Vegetation</Filter>
     </FxCompile>
+    <FxCompile Include="shader\vegetation\shader_pixel_grass_instanced.hlsl">
+      <Filter>Shader Files\Vegetation</Filter>
+    </FxCompile>
     <FxCompile Include="shader\core\shader_vertex_3d_unlit.hlsl">
       <Filter>Shader Files\Core</Filter>
     </FxCompile>

@@ -28,6 +28,7 @@ struct GlitchConstantBuffer
 	DirectX::XMFLOAT4 post_fx_secondary{ 0.0025f, 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT4 post_fx_fog{ 0.20f, 0.24f, 0.0f, 0.82f };
 	DirectX::XMFLOAT4 post_fx_scatter{ 0.28f, 0.38f, 0.0f, 0.0f };
+	DirectX::XMFLOAT4 post_fx_tone{ 0.0f, 2.0f, 2.2f, 1.0f };
 	DirectX::XMFLOAT4X4 inverse_view_projection{};
 };
 
@@ -119,6 +120,11 @@ void ShaderGlitch_Draw(ID3D11ShaderResourceView* scene_srv,
 		post_process_settings.fog_scatter_focus,
 		0.0f,
 		0.0f);
+	constants.post_fx_tone = DirectX::XMFLOAT4(
+		post_process_settings.exposure_ev,
+		post_process_settings.tone_map_mode,
+		post_process_settings.output_gamma,
+		post_process_settings.output_gain);
 
 	if (water_surface_desc != nullptr && water_surface_desc->enabled)
 	{

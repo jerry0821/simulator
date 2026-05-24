@@ -55,6 +55,11 @@ struct PointLightList
 };
 
 static PointLightList g_PointLights{};
+static SpecularLight g_CurrentSpecularLight{
+	XMFLOAT3(0.0f, 0.0f, 0.0f),
+	20.0f,
+	XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f)
+};
 
 void Light_Initialize(ID3D11Device* pDevice, ID3D11DeviceContext* pContext)
 {
@@ -90,8 +95,9 @@ void Light_Finalize()
 
 void Light_SetAmbient(const DirectX::XMFLOAT3& color)
 {
+	const XMFLOAT4 padded_color(color.x, color.y, color.z, 1.0f);
 	// 定数バッファアンビエントをセット
-	g_pContext->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &color, 0, 0);
+	g_pContext->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &padded_color, 0, 0);
 	g_pContext->PSSetConstantBuffers(1, 1, &g_pPSConstantBuffer1);
 }
 
@@ -107,8 +113,15 @@ void Light_SetDirectionalWorld(const DirectX::XMFLOAT4& world_directional, const
 
 void Light_SetSpecularWorld(const DirectX::XMFLOAT3& camera_position, float power, const DirectX::XMFLOAT4& color)
 {
-	SpecularLight s_light{ camera_position,power,color };
-	g_pContext->UpdateSubresource(g_pPSConstantBuffer3, 0, nullptr, &s_light, 0, 0);
+	g_CurrentSpecularLight = SpecularLight{ camera_position,power,color };
+	g_pContext->UpdateSubresource(g_pPSConstantBuffer3, 0, nullptr, &g_CurrentSpecularLight, 0, 0);
+	g_pContext->PSSetConstantBuffers(3, 1, &g_pPSConstantBuffer3);
+}
+
+void Light_SetCameraPosition(const DirectX::XMFLOAT3& camera_position)
+{
+	g_CurrentSpecularLight.CameraPosition = camera_position;
+	g_pContext->UpdateSubresource(g_pPSConstantBuffer3, 0, nullptr, &g_CurrentSpecularLight, 0, 0);
 	g_pContext->PSSetConstantBuffers(3, 1, &g_pPSConstantBuffer3);
 }
 

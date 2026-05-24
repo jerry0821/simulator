@@ -1,3 +1,5 @@
+#include "../common/shader_common_pbr.hlsli"
+
 cbuffer PS_CONSTANT_BUFFER0 : register(b0)
 {
     float4 diffuse_color;
@@ -39,6 +41,14 @@ cbuffer PS_TERRAIN_MATERIAL : register(b4)
     float g_LowlandHeightEnd;
     float g_GrassCoverageMin;
     float g_WaterHeight;
+    float g_PbrRoughnessBias;
+    float g_PbrSpecularScale;
+    float g_PbrDetailNormalStrength;
+    float g_PbrLightIntensity;
+    float g_PbrMetallic;
+    float g_PbrAoStrength;
+    float g_PbrDebugMode;
+    float g_PbrPadding0;
 };
 
 cbuffer PS_PRESENTATION_SETTINGS : register(b5)
@@ -65,36 +75,128 @@ Texture2D g_ShadowMap : register(t2);
 Texture2D texGrass : register(t3);
 Texture2D g_TerrainVegetationSuitability : register(t4);
 Texture2D g_TerrainSurfaceData : register(t5);
+Texture2D g_TerrainNormalMap : register(t6);
 
 SamplerState samp : register(s0);
 SamplerState shadowSamp : register(s1);
 
 static const float kPolarTemperature = -10.0f;
 static const float kEquatorialTemperature = 30.0f;
+static const float kWorldSideLength = 2048.0f;
+static const float kWorldHalfExtent = kWorldSideLength * 0.5f;
+
+float2 WorldToFieldUv(float2 world_xz)
+{
+    return float2(
+        saturate((world_xz.x + kWorldHalfExtent) / kWorldSideLength),
+        saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
+}
+
+float3 DecodeUpNormal(float2 encoded)
+{
+    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
+    const float y = sqrt(saturate(1.0f - dot(xz, xz)));
+    const float3 normal = float3(xz.x, y, xz.y);
+    return dot(normal, normal) > 1.0e-4f ? normalize(normal) : float3(0.0f, 1.0f, 0.0f);
+}
+
+float3 SampleTerrainNormal(float2 world_xz)
+{
+    const float2 uv = WorldToFieldUv(world_xz);
+    const float2 encodedNormal = g_TerrainNormalMap.SampleLevel(samp, uv, 0.0f).xy;
+    return DecodeUpNormal(encodedNormal);
+}
 
 float4 SampleTerrainSurfaceData(float2 world_xz)
 {
-    const float field_width = 2048.0f;
-    const float field_depth = 2048.0f;
-    float2 uv = float2(
-        saturate((world_xz.x + field_width * 0.5f) / field_width),
-        saturate((world_xz.y + field_depth * 0.5f) / field_depth));
+    float2 uv = WorldToFieldUv(world_xz);
     return g_TerrainSurfaceData.SampleLevel(samp, uv, 0.0f);
 }
 
 float SampleVegetationSuitability(float2 world_xz)
 {
-    const float field_width = 2048.0f;
-    const float field_depth = 2048.0f;
-    float2 uv = float2(
-        saturate((world_xz.x + field_width * 0.5f) / field_width),
-        saturate((world_xz.y + field_depth * 0.5f) / field_depth));
+    float2 uv = WorldToFieldUv(world_xz);
     return g_TerrainVegetationSuitability.SampleLevel(samp, uv, 0.0f).r;
 }
 
 float NormalizeClimateTemperature(float temperature_celsius)
 {
     return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
+}
+
+float Hash21(float2 p)
+{
+    p = frac(p * float2(123.34f, 345.45f));
+    p += dot(p, p + 34.345f);
+    return frac(p.x * p.y);
+}
+
+float ValueNoise(float2 p)
+{
+    float2 cell = floor(p);
+    float2 local = frac(p);
+    float2 smooth = local * local * (3.0f - 2.0f * local);
+
+    float v00 = Hash21(cell);
+    float v10 = Hash21(cell + float2(1.0f, 0.0f));
+    float v01 = Hash21(cell + float2(0.0f, 1.0f));
+    float v11 = Hash21(cell + float2(1.0f, 1.0f));
+
+    float vx0 = lerp(v00, v10, smooth.x);
+    float vx1 = lerp(v01, v11, smooth.x);
+    return lerp(vx0, vx1, smooth.y);
+}
+
+float Fbm3(float2 p)
+{
+    float value = 0.0f;
+    float amplitude = 0.5f;
+    float2 domain = p;
+
+    [unroll]
+    for (int octave = 0; octave < 3; ++octave)
+    {
+        value += ValueNoise(domain) * amplitude;
+        domain = domain * 2.07f + float2(19.1f, 7.7f);
+        amplitude *= 0.5f;
+    }
+
+    return value;
+}
+
+float TerrainDetailHeight(float2 world_xz, float slopeBlend, float beachBlend, float snowMask)
+{
+    float stoneScale = max(g_StoneNoiseScale * 18.0f, 0.04f);
+    float stoneDetail = Fbm3(world_xz * stoneScale);
+    float grassDetail = Fbm3(world_xz * 0.42f + float2(11.0f, 3.0f));
+    float snowDetail = Fbm3(world_xz * 0.11f + float2(5.0f, 17.0f));
+
+    float detail = lerp(grassDetail * 0.42f, stoneDetail * 1.25f, slopeBlend);
+    detail = lerp(detail, stoneDetail * 0.72f, beachBlend);
+    detail = lerp(detail, snowDetail * 0.22f, snowMask);
+    return detail;
+}
+
+float3 ApplyTerrainDetailNormal(float3 normalW, float2 world_xz, float slopeBlend, float beachBlend, float snowMask)
+{
+    normalW = normalize(normalW);
+    float strength = saturate(g_PbrDetailNormalStrength);
+
+    const float sampleStep = 1.35f;
+    float heightX =
+        TerrainDetailHeight(world_xz + float2(sampleStep, 0.0f), slopeBlend, beachBlend, snowMask) -
+        TerrainDetailHeight(world_xz - float2(sampleStep, 0.0f), slopeBlend, beachBlend, snowMask);
+    float heightZ =
+        TerrainDetailHeight(world_xz + float2(0.0f, sampleStep), slopeBlend, beachBlend, snowMask) -
+        TerrainDetailHeight(world_xz - float2(0.0f, sampleStep), slopeBlend, beachBlend, snowMask);
+
+    float3 tangentX = float3(1.0f, 0.0f, 0.0f) - normalW * dot(normalW, float3(1.0f, 0.0f, 0.0f));
+    tangentX = dot(tangentX, tangentX) > 1.0e-4f ? normalize(tangentX) : float3(0.0f, 0.0f, 1.0f);
+    float3 tangentZ = normalize(cross(normalW, tangentX));
+    float materialStrength = lerp(0.65f, 1.25f, slopeBlend);
+    materialStrength = lerp(materialStrength, 0.72f, beachBlend);
+    materialStrength = lerp(materialStrength, 0.36f, snowMask);
+    return normalize(normalW - (tangentX * heightX + tangentZ * heightZ) * strength * materialStrength);
 }
 
 float3 ApplySurfaceVariant(float3 srcColor, float beachMask, float humidity, float temperature)
@@ -114,7 +216,7 @@ float3 ApplySurfaceVariant(float3 srcColor, float beachMask, float humidity, flo
 
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
-    float3 N = normalize(ps_in.normalW.xyz);
+    float3 N = SampleTerrainNormal(ps_in.posW.xz);
     float4 surface_data = SampleTerrainSurfaceData(ps_in.posW.xz);
     float vegetationSuitability = saturate(SampleVegetationSuitability(ps_in.posW.xz));
     float slopeMask = saturate(surface_data.r);
@@ -182,21 +284,66 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         shadowFactor = (sPos.z - bias) > shadowDepth ? 0.55f : 1.0f;
     }
 
-    float3 lightVec = normalize(-directional_world_vector.xyz);
-    float3 viewVec = normalize(eye_posW - ps_in.posW.xyz);
-    float3 halfVec = normalize(lightVec + viewVec);
-    float NdotL = saturate(dot(lightVec, N));
-    float NdotH = saturate(dot(N, halfVec));
-    float diffuseWrap = saturate(NdotL * 0.82f + 0.18f);
-    float specularExponent = lerp(30.0f, 8.0f, roughness);
-    float specularStrength = lerp(0.12f, 0.03f, roughness);
-    float shorelineSheen = beachBlend * (0.04f + humidityMask * 0.08f);
-    float specularTerm = pow(NdotH, specularExponent) * (specularStrength + shorelineSheen);
+    N = ApplyTerrainDetailNormal(N, ps_in.posW.xz, slopeBlend, beachBlend, snowMask);
 
-    float3 diffuse = material_color * directional_color.rgb * diffuseWrap * shadowFactor;
-    float3 ambient = ambient_color.rgb * material_color;
-    float3 specular = directional_color.rgb * specular_color.rgb * specularTerm * shadowFactor;
-    float3 shaded_color = ambient + diffuse + specular;
+    float terrainRoughness = saturate(lerp(0.56f, 0.94f, roughness) + g_PbrRoughnessBias);
+    terrainRoughness = lerp(terrainRoughness, 0.72f, beachBlend);
+    terrainRoughness = lerp(terrainRoughness, 0.82f, slopeBlend);
+    terrainRoughness = lerp(terrainRoughness, saturate(0.46f + g_PbrRoughnessBias), snowMask);
+
+    float terrainSpecular = lerp(0.42f, 0.22f, slopeBlend);
+    terrainSpecular = lerp(terrainSpecular, 0.50f, beachBlend * saturate(humidityMask + 0.25f));
+    terrainSpecular = lerp(terrainSpecular, 0.30f, snowMask);
+    terrainSpecular *= max(g_PbrSpecularScale, 0.0f);
+
+    float3 terrainViewDir = normalize(eye_posW - ps_in.posW.xyz);
+    float terrainMetallic = saturate(g_PbrMetallic);
+    float terrainAO = lerp(
+        1.0f,
+        lerp(1.0f, 0.84f, saturate(slopeMask * roughness)),
+        saturate(g_PbrAoStrength));
+
+    PbrSurface terrainSurface;
+    terrainSurface.baseColor = material_color;
+    terrainSurface.normal = N;
+    terrainSurface.viewDir = terrainViewDir;
+    terrainSurface.lightDir = normalize(-directional_world_vector.xyz);
+    terrainSurface.lightColor = directional_color.rgb * max(g_PbrLightIntensity, 0.0f);
+    terrainSurface.ambientColor = ambient_color.rgb;
+    terrainSurface.roughness = terrainRoughness;
+    terrainSurface.metallic = terrainMetallic;
+    terrainSurface.specular = terrainSpecular;
+    terrainSurface.ambientOcclusion = terrainAO;
+    terrainSurface.shadow = shadowFactor;
+    float3 shaded_color = DefaultPbrShading(terrainSurface);
+
+    int pbrDebugMode = (int)(g_PbrDebugMode + 0.5f);
+    if (pbrDebugMode == 1)
+    {
+        shaded_color = material_color;
+    }
+    else if (pbrDebugMode == 2)
+    {
+        shaded_color = terrainMetallic.xxx;
+    }
+    else if (pbrDebugMode == 3)
+    {
+        shaded_color = terrainRoughness.xxx;
+    }
+    else if (pbrDebugMode == 4)
+    {
+        shaded_color = N * 0.5f + 0.5f;
+    }
+    else if (pbrDebugMode == 5)
+    {
+        shaded_color = terrainAO.xxx;
+    }
+    else if (pbrDebugMode == 6)
+    {
+        float3 dielectricF0 = lerp(0.02f.xxx, 0.08f.xxx, saturate(terrainSpecular));
+        float3 f0 = lerp(dielectricF0, material_color, terrainMetallic);
+        shaded_color = saturate(FresnelSchlick(saturate(dot(N, terrainViewDir)), f0) * 8.0f);
+    }
 
     float3 surface_preview =
         float3(

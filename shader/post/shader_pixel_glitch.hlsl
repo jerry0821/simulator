@@ -21,6 +21,7 @@ cbuffer CB_PostProcess : register(b0)
     float4 g_PostFxSecondary;
     float4 g_PostFxFog;
     float4 g_PostFxScatter;
+    float4 g_PostFxTone;
     float4x4 g_InverseViewProjection;
 };
 
@@ -330,10 +331,51 @@ float3 ApplyBloom(float3 color, float2 uv)
     if (bloom_intensity > 0.0f)
     {
         float3 bloom = BloomTex.Sample(Sampler, saturate(uv)).rgb;
-        result = saturate(color + bloom * bloom_intensity);
+        result = color + bloom * bloom_intensity;
     }
 
     return result;
+}
+
+float3 ToneMapReinhard(float3 color)
+{
+    return color / (1.0f + color);
+}
+
+float3 ToneMapACES(float3 color)
+{
+    return saturate((color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f));
+}
+
+float3 ToneMapFilmic(float3 color)
+{
+    color = max(0.0f.xxx, color - 0.004f);
+    return (color * (6.2f * color + 0.5f)) / (color * (6.2f * color + 1.7f) + 0.06f);
+}
+
+float3 ApplyToneMapping(float3 color)
+{
+    color = max(color, 0.0f.xxx);
+    color *= exp2(g_PostFxTone.x);
+
+    int tone_mode = (int)(g_PostFxTone.y + 0.5f);
+    if (tone_mode == 1)
+    {
+        color = ToneMapReinhard(color);
+    }
+    else if (tone_mode == 2)
+    {
+        color = ToneMapACES(color);
+    }
+    else if (tone_mode == 3)
+    {
+        color = ToneMapFilmic(color);
+    }
+
+    color *= max(g_PostFxTone.w, 0.0f);
+    float gamma_value = max(g_PostFxTone.z, 0.10f);
+    color = pow(saturate(color), 1.0f / gamma_value);
+    return saturate(color);
 }
 
 float4 main(PS_INPUT input_pixel) : SV_TARGET
@@ -354,5 +396,6 @@ float4 main(PS_INPUT input_pixel) : SV_TARGET
     color = ApplyFilmGrain(color, uv, input_pixel.posH.xy, raw_scene_depth);
     color = ApplyAtmosphericDust(color, uv, scene_distance, raw_scene_depth);
     color = ApplyVignette(color, uv);
+    color = ApplyToneMapping(color);
     return float4(color, 1.0f);
 }

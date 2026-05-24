@@ -234,7 +234,7 @@ void ShaderField_SetTerrainNormalMap(ID3D11ShaderResourceView* pSRV)
 {
 	if (g_pContext)
 	{
-		g_pContext->VSSetShaderResources(1, 1, &pSRV);
+		g_pContext->PSSetShaderResources(6, 1, &pSRV);
 	}
 }
 

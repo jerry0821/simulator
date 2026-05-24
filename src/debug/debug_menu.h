@@ -45,6 +45,10 @@ struct PostProcessSettings
 	float bloom_threshold = 0.74f;
 	float bloom_soft_knee = 0.16f;
 	float bloom_blur_scale = 1.65f;
+	float exposure_ev = 0.0f;
+	float tone_map_mode = 2.0f;
+	float output_gamma = 2.2f;
+	float output_gain = 1.0f;
 	float fog_intensity = 0.20f;
 	float fog_distance_fade = 0.24f;
 	float fog_height_bias = 0.0f;

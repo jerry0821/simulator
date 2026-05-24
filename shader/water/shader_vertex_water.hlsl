@@ -14,7 +14,6 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
 };
 
 Texture2D<float4> water_surface_height_tex : register(t0);
-SamplerState samp : register(s0);
 
 static const float kWorldSideLength = 2048.0f;
 static const float kWorldHalfExtent = kWorldSideLength * 0.5f;
@@ -34,31 +33,35 @@ struct VS_OUT
     float2 uv : TEXCOORD1;
 };
 
-float2 ComputeWaterSampleUv(float2 uv)
+int2 WorldToHeightCoord(float2 world_xz)
 {
     uint tex_width = 0;
     uint tex_height = 0;
     water_surface_height_tex.GetDimensions(tex_width, tex_height);
-    const float2 texel_size = 1.0f / max(float2(tex_width, tex_height), 1.0f.xx);
-    const float2 half_texel = texel_size * 0.5f;
-    return clamp(uv, half_texel, 1.0f.xx - half_texel);
-}
+    tex_width = max(tex_width, 1u);
+    tex_height = max(tex_height, 1u);
 
-float2 WorldToFieldUv(float2 world_xz)
-{
-    return float2(
-        saturate((world_xz.x + kWorldHalfExtent) / kWorldSideLength),
-        saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
+    const float2 tex_size = float2(tex_width, tex_height);
+    const float2 data_coord = floor(
+        (world_xz + float2(kWorldHalfExtent, kWorldHalfExtent)) *
+        (tex_size / kWorldSideLength));
+    return clamp(
+        int2(data_coord),
+        int2(0, 0),
+        int2(int(tex_width) - 1, int(tex_height) - 1));
 }
 
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    float2 worldUV = WorldToFieldUv(posW.xz);
-    const float2 sample_uv = ComputeWaterSampleUv(worldUV);
-    const float water_surface_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).y;
-    posW.y = water_surface_height;
+    const int2 coord = WorldToHeightCoord(posW.xz);
+    const float4 water_data = water_surface_height_tex.Load(int3(coord, 0));
+    // water_data: .x = terrain_height, .y = surface_height, .z = water_depth
+    const float terrain_height = water_data.x;
+    const float water_depth = max(water_data.z, 0.0f);
+    const float surface_height = max(water_data.y, terrain_height);
+    posW.y = water_depth > 0.0f ? surface_height : terrain_height;
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;

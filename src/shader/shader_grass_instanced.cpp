@@ -79,7 +79,7 @@ bool ShaderGrassInstanced_Initialize()
 		return false;
 	}
 
-	std::ifstream ifs_ps("resource/shader/shader_pixel_billboard.cso", std::ios::binary);
+	std::ifstream ifs_ps("resource/shader/shader_pixel_grass_instanced.cso", std::ios::binary);
 	if (!ifs_ps)
 	{
 		MessageBox(nullptr, "grass instanced pixel shader load failed", "Error", MB_OK);

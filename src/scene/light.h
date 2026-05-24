@@ -19,6 +19,7 @@ void Light_SetDirectionalWorld(const DirectX::XMFLOAT4& world_directional,
 
 void Light_SetSpecularWorld(const DirectX::XMFLOAT3& camera_position,
 	float power, const DirectX::XMFLOAT4& color);
+void Light_SetCameraPosition(const DirectX::XMFLOAT3& camera_position);
 
 void Light_SetPointLightCount(int count);
 void Light_SetPointLight(int n,const DirectX::XMFLOAT3& position,

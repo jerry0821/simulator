@@ -19,7 +19,6 @@ cbuffer CB_Light : register(b3)
 };
 
 Texture2D g_HeightMap : register(t0);
-Texture2D g_TerrainNormalMap : register(t1);
 Texture2D<float4> g_MeteorographMap : register(t2);
 SamplerState g_Sampler : register(s0);
 
@@ -86,14 +85,27 @@ struct VS_OUT
     float2 macroData : TEXCOORD3;
 };
 
-float SampleTerrainHeight(float2 uv)
+int2 WorldToHeightCoord(float2 world_xz)
 {
     uint height_width = 0;
     uint height_height = 0;
     g_HeightMap.GetDimensions(height_width, height_height);
-    float2 height_resolution = max(float2(height_width, height_height), 1.0f.xx);
-    int2 coord = int2(saturate(uv) * (height_resolution - 1.0f) + 0.5f);
-    return g_HeightMap.Load(int3(coord, 0)).x;
+    height_width = max(height_width, 1u);
+    height_height = max(height_height, 1u);
+
+    const float2 tex_size = float2(height_width, height_height);
+    const float2 data_coord = floor(
+        (world_xz + float2(kWorldHalfExtent, kWorldHalfExtent)) *
+        (tex_size / kWorldSideLength));
+    return clamp(
+        int2(data_coord),
+        int2(0, 0),
+        int2(int(height_width) - 1, int(height_height) - 1));
+}
+
+float SampleTerrainHeightWorld(float2 world_xz)
+{
+    return g_HeightMap.Load(int3(WorldToHeightCoord(world_xz), 0)).x;
 }
 
 float2 WorldToFieldUv(float2 world_xz)
@@ -103,35 +115,19 @@ float2 WorldToFieldUv(float2 world_xz)
         saturate((world_xz.y + kWorldHalfExtent) / kWorldSideLength));
 }
 
-float3 DecodeUpNormal(float2 encoded)
-{
-    const float2 xz = clamp(encoded, -1.0f.xx, 1.0f.xx);
-    const float y = sqrt(saturate(1.0f - dot(xz, xz)));
-    return float3(xz.x, y, xz.y);
-}
-
 VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
 
-    float3 tempWorldPos = mul(float4(vi.posL.xyz, 1.0f), world).xyz;
-    float2 fieldUV = WorldToFieldUv(tempWorldPos.xz);
+    float4 posW = mul(float4(vi.posL.xyz, 1.0f), world);
+    float2 fieldUV = WorldToFieldUv(posW.xz);
+    posW.y = SampleTerrainHeightWorld(posW.xz);
 
-    float4 displacedPosL = vi.posL;
-    displacedPosL.y = SampleTerrainHeight(fieldUV);
-    float4 encodedNormal = g_TerrainNormalMap.SampleLevel(g_Sampler, fieldUV, 0.0f);
-    float3 displacedNormalL = DecodeUpNormal(encodedNormal.xy);
-    if (dot(displacedNormalL, displacedNormalL) < 1.0e-4f)
-    {
-        displacedNormalL = float3(0.0f, 1.0f, 0.0f);
-    }
+    float4 posV = mul(posW, view);
+    vo.posH = mul(posV, proj);
 
-    float4x4 mtxWV = mul(world, view);
-    float4x4 mtxWVP = mul(mtxWV, proj);
-    vo.posH = mul(displacedPosL, mtxWVP);
-
-    vo.normalW = mul(float4(displacedNormalL, 0.0f), world);
-    vo.posW = mul(displacedPosL, world);
+    vo.normalW = mul(float4(vi.normalL.xyz, 0.0f), world);
+    vo.posW = posW;
     vo.blend = vi.blend;
     vo.uv = fieldUV;
     vo.shadowPos = mul(vo.posW, lightViewProj);
