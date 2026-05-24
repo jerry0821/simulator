@@ -21,6 +21,7 @@ void ShaderWater_SetWaterSediment(ID3D11ShaderResourceView* water_sediment_srv);
 void ShaderWater_SetTerrainNormal(ID3D11ShaderResourceView* terrain_normal_srv);
 void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv);
 void ShaderWater_SetFlowNormal(ID3D11ShaderResourceView* flow_normal_srv);
+void ShaderWater_SetInverseViewProjection(const DirectX::XMFLOAT4X4& inverse_view_projection);
 void ShaderWater_Begin();
 void ShaderWater_End();
 

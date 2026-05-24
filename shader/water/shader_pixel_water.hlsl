@@ -3,7 +3,7 @@ cbuffer PS_CONSTANT_BUFFER0 : register(b0)
     float4 diffuse_color;
 };
 
-cbuffer PS_CONSTANT_BUFFER1 : register(b1)
+cbuffer PS_CONSTANT_BUFFER1 : register(b6)
 {
     float3 camera_position;
     float fresnel_power;
@@ -11,6 +11,11 @@ cbuffer PS_CONSTANT_BUFFER1 : register(b1)
     float time_seconds;
     float padding0;
     float padding1;
+};
+
+cbuffer PS_CONSTANT_BUFFER2 : register(b7)
+{
+    float4x4 inverse_view_projection;
 };
 
 struct PS_INPUT
@@ -67,13 +72,26 @@ float3 DecodeUpNormal(float2 encoded)
     return float3(xz.x, y, xz.y);
 }
 
+float2 ComputeScreenUv(float4 posH)
+{
+    uint width = 0;
+    uint height = 0;
+    scene_depth_tex.GetDimensions(width, height);
+    const float2 inv_size = 1.0f / max(float2(width, height), 1.0f.xx);
+    return saturate(posH.xy * inv_size);
+}
+
+float3 ComputeSceneWorldPos(float2 uv, float raw_depth)
+{
+    const float2 ndc_xy = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
+    const float4 clip_pos = float4(ndc_xy, raw_depth, 1.0f);
+    float4 world_pos = mul(clip_pos, inverse_view_projection);
+    world_pos.xyz /= max(world_pos.w, 1.0e-6f);
+    return world_pos.xyz;
+}
+
 float4 main(PS_INPUT ps_in) : SV_TARGET
 {
-    const float edge_u = min(ps_in.uv.x, 1.0f - ps_in.uv.x);
-    const float edge_v = min(ps_in.uv.y, 1.0f - ps_in.uv.y);
-    const float patch_edge_distance = min(edge_u, edge_v);
-    const float patch_edge_mask = smoothstep(0.035f, 0.110f, patch_edge_distance);
-
     float2 worldUV = WorldToFieldUv(ps_in.posW.xz);
     const float2 sample_uv = ComputeWaterSampleUv(worldUV);
     const float2 terrain_water_height = water_surface_height_tex.SampleLevel(samp, sample_uv, 0.0f).xy;
@@ -99,7 +117,7 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         smoothstep(0.010f, 0.040f, water_depth) *
         slope_flatness *
         lerp(0.30f, 0.72f, water_speed_factor);
-    const float water_presence = max(standing_visibility, runoff_visibility) * patch_edge_mask;
+    const float water_presence = max(standing_visibility, runoff_visibility);
     surface_normal = lerp(surface_normal, normalize(float3(surface_normal.xy * 2.0f, surface_normal.z)), water_speed_factor);
 
     const float camera_distance = length(ps_in.posW - camera_position);
@@ -149,21 +167,28 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
 
     const int2 pixel = int2(ps_in.posH.xy);
     const float scene_depth = scene_depth_tex.Load(int3(pixel, 0)).r;
-    const float pixel_depth = ps_in.posH.z;
-    const float depth_fade = max(scene_depth - pixel_depth, 0.0f);
+    const float2 screen_uv = ComputeScreenUv(ps_in.posH);
+    const float3 scene_world_pos = ComputeSceneWorldPos(screen_uv, scene_depth);
+    const float scene_sample_valid = scene_depth < 0.99995f ? 1.0f : 0.0f;
+    const float true_depth_fade =
+        scene_sample_valid > 0.5f
+            ? length(scene_world_pos - ps_in.posW)
+            : 0.0f;
     const float depth_factor = smoothstep(0.012f, 0.22f, water_depth);
     const float deep_factor = smoothstep(0.04f, 0.34f, water_depth);
-    const float scene_edge_alpha = pow(saturate(depth_fade * 24.0f), 0.24f);
-    const float base_alpha =
-        diffuse_color.a * water_presence * (0.66f + depth_factor * 0.54f + deep_factor * 0.28f) +
-        fresnel * water_presence * 0.08f +
-        water_speed_factor * water_presence * 0.06f;
-    float alpha = max(base_alpha, scene_edge_alpha * diffuse_color.a * water_presence);
-    alpha = max(alpha, water_presence * (0.40f + deep_factor * 0.18f));
-    alpha = lerp(alpha, alpha * 0.94f + deep_factor * 0.05f, ps_in.isFrontFace ? 1.0f : 0.0f);
+    const float standing_alpha = smoothstep(0.012f, 0.090f, water_depth);
+    const float runoff_alpha =
+        smoothstep(0.006f, 0.038f, water_depth) *
+        slope_flatness *
+        lerp(0.26f, 0.65f, water_speed_factor);
+    const float depth_edge = smoothstep(0.03f, 0.45f, true_depth_fade);
+    float alpha = max(standing_alpha, runoff_alpha);
+    alpha = lerp(alpha, 1.0f, depth_edge * (0.18f + depth_factor * 0.32f));
+    alpha *= water_presence;
     alpha *= saturate(0.72f + log(length(ps_in.posW - camera_position) + 1.0f) * 0.16f);
+    alpha *= lerp(0.82f, 1.0f, saturate(depth_factor * 0.65f + deep_factor * 0.35f));
     alpha = saturate(alpha);
-    clip(alpha - 0.010f);
+    clip(alpha - 0.003f);
 
     return float4(saturate(water_color), alpha);
 }

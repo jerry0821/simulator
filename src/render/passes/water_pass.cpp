@@ -26,7 +26,7 @@ using namespace DirectX;
 namespace
 {
 constexpr bool kEnableWaterSurfaceRender = true;
-constexpr float kWaterPatchCoverage = 0.75f; // Push the local water patch boundary farther from the camera.
+constexpr float kWaterPatchCoverage = 0.5f; // Match Afterglow-style local patch coverage.
 int g_WaterFlowNormalTextureId = -1;
 }
 
@@ -118,12 +118,17 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 
 	const XMMATRIX view = XMLoadFloat4x4(&frame_context.globals.view_matrix);
 	const XMMATRIX proj = XMLoadFloat4x4(&frame_context.globals.projection_matrix);
+	XMFLOAT4X4 inverse_view_projection{};
+	XMStoreFloat4x4(
+		&inverse_view_projection,
+		XMMatrixTranspose(XMMatrixInverse(nullptr, view * proj)));
 	Shader3D_SetViewMatrix(view);
 	Shader3D_SetProjMatrix(proj);
 	Shader3D_Unlit_SetViewMatrix(view);
 	Shader3D_Unlit_SetProjMatrix(proj);
 	ShaderWater_SetViewMatrix(view);
 	ShaderWater_SetProjMatrix(proj);
+	ShaderWater_SetInverseViewProjection(inverse_view_projection);
 	if (g_WaterFlowNormalTextureId < 0)
 	{
 		g_WaterFlowNormalTextureId = Texture_Load(L"resource/texture/noise.png");
