@@ -121,8 +121,8 @@ void EnsureWaterGeometry()
 		return;
 	}
 
-	constexpr int vertex_side = kWaterGridResolution + 1;
-	constexpr int quad_count = kWaterGridResolution * kWaterGridResolution;
+	constexpr int vertex_side = kWaterGridResolution;
+	constexpr int quad_count = (vertex_side - 1) * (vertex_side - 1);
 	const UINT vertex_count = static_cast<UINT>(vertex_side * vertex_side);
 	const UINT index_count = static_cast<UINT>(quad_count * 6);
 
@@ -133,22 +133,26 @@ void EnsureWaterGeometry()
 	{
 		for (int x = 0; x < vertex_side; ++x)
 		{
-			const float u = static_cast<float>(x) / static_cast<float>(kWaterGridResolution);
-			const float v = static_cast<float>(y) / static_cast<float>(kWaterGridResolution);
+			const float u = static_cast<float>(x) / static_cast<float>(vertex_side - 1);
+			const float v = static_cast<float>(y) / static_cast<float>(vertex_side - 1);
 			Vertex3D& vertex = vertices[static_cast<size_t>(y) * vertex_side + x];
-			// RotateX maps local Y to world Z, so flip V to keep the same
-			// world-space quad diagonals as the terrain grid.
-			vertex.position = { u - 0.5f, 0.5f - v, 0.0f };
-			vertex.normal = { 0.0f, 0.0f, -1.0f };
+			const float grid_x =
+				(static_cast<float>(y) - static_cast<float>(vertex_side) * 0.5f) *
+				ComputeTextureDimensions::kWaterMeshInterval;
+			const float grid_z =
+				(static_cast<float>(x) - static_cast<float>(vertex_side) * 0.5f) *
+				ComputeTextureDimensions::kWaterMeshInterval;
+			vertex.position = { grid_x, 0.0f, grid_z };
+			vertex.normal = { 0.0f, 1.0f, 0.0f };
 			vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
 			vertex.texcoord = { u, v };
 		}
 	}
 
 	UINT index_cursor = 0;
-	for (int y = 0; y < kWaterGridResolution; ++y)
+	for (int y = 0; y < vertex_side - 1; ++y)
 	{
-		for (int x = 0; x < kWaterGridResolution; ++x)
+		for (int x = 0; x < vertex_side - 1; ++x)
 		{
 			const unsigned int top_left = static_cast<unsigned int>(y * vertex_side + x);
 			const unsigned int top_right = top_left + 1;

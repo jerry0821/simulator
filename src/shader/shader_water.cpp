@@ -2,6 +2,7 @@
 
 #include <DirectXMath.h>
 #include <fstream>
+#include "compute_texture_dimensions.h"
 #include "debug_ostream.h"
 #include "direct3d.h"
 #include "sampler.h"
@@ -16,6 +17,7 @@ ID3D11InputLayout* g_pInputLayout = nullptr;
 ID3D11Buffer* g_pVSConstantBuffer0 = nullptr;
 ID3D11Buffer* g_pVSConstantBuffer1 = nullptr;
 ID3D11Buffer* g_pVSConstantBuffer2 = nullptr;
+ID3D11Buffer* g_pVSConstantBuffer3 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer0 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer1 = nullptr;
 ID3D11Buffer* g_pPSConstantBuffer2 = nullptr;
@@ -31,7 +33,15 @@ struct WaterSurfaceSettings
 	float highlight_strength = 0.0f;
 };
 
+struct WaterVertexSettings
+{
+	XMFLOAT2 camera_xz{ 0.0f, 0.0f };
+	float water_mesh_interval = ComputeTextureDimensions::kWaterMeshInterval;
+	float padding0 = 0.0f;
+};
+
 WaterSurfaceSettings g_surface_settings{};
+WaterVertexSettings g_vertex_settings{};
 DirectX::XMFLOAT4X4 g_inverse_view_projection{};
 }
 
@@ -91,6 +101,8 @@ bool ShaderWater_Initialize()
 	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pVSConstantBuffer0);
 	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pVSConstantBuffer1);
 	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pVSConstantBuffer2);
+	buffer_desc.ByteWidth = sizeof(WaterVertexSettings);
+	Direct3D_GetDevice()->CreateBuffer(&buffer_desc, nullptr, &g_pVSConstantBuffer3);
 
 	std::ifstream ifs_ps("resource/shader/shader_pixel_water.cso", std::ios::binary);
 	if (!ifs_ps)
@@ -131,6 +143,7 @@ void ShaderWater_Finalize()
 	SAFE_RELEASE(g_pPSConstantBuffer2);
 	SAFE_RELEASE(g_pPSConstantBuffer0);
 	SAFE_RELEASE(g_pPixelShader);
+	SAFE_RELEASE(g_pVSConstantBuffer3);
 	SAFE_RELEASE(g_pVSConstantBuffer2);
 	SAFE_RELEASE(g_pVSConstantBuffer1);
 	SAFE_RELEASE(g_pVSConstantBuffer0);
@@ -173,6 +186,8 @@ void ShaderWater_SetCameraPosition(const XMFLOAT3& camera_position)
 {
 	g_surface_settings.camera_position = camera_position;
 	Direct3D_GetContext()->UpdateSubresource(g_pPSConstantBuffer1, 0, nullptr, &g_surface_settings, 0, 0);
+	g_vertex_settings.camera_xz = { camera_position.x, camera_position.z };
+	Direct3D_GetContext()->UpdateSubresource(g_pVSConstantBuffer3, 0, nullptr, &g_vertex_settings, 0, 0);
 }
 
 void ShaderWater_SetSurfaceSettings(float highlight_strength)
@@ -222,6 +237,7 @@ void ShaderWater_Begin()
 	Direct3D_GetContext()->VSSetConstantBuffers(0, 1, &g_pVSConstantBuffer0);
 	Direct3D_GetContext()->VSSetConstantBuffers(1, 1, &g_pVSConstantBuffer1);
 	Direct3D_GetContext()->VSSetConstantBuffers(2, 1, &g_pVSConstantBuffer2);
+	Direct3D_GetContext()->VSSetConstantBuffers(3, 1, &g_pVSConstantBuffer3);
 	Direct3D_GetContext()->PSSetConstantBuffers(0, 1, &g_pPSConstantBuffer0);
 	Direct3D_GetContext()->PSSetConstantBuffers(6, 1, &g_pPSConstantBuffer1);
 	Direct3D_GetContext()->PSSetConstantBuffers(7, 1, &g_pPSConstantBuffer2);
@@ -244,6 +260,8 @@ void ShaderWater_End()
 	ID3D11ShaderResourceView* null_srv[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	Direct3D_GetContext()->PSSetShaderResources(0, 5, null_srv);
 	Direct3D_GetContext()->VSSetShaderResources(0, 1, null_srv);
+	ID3D11Buffer* null_vs_buffer = nullptr;
+	Direct3D_GetContext()->VSSetConstantBuffers(3, 1, &null_vs_buffer);
 	ID3D11Buffer* null_ps_buffer = nullptr;
 	Direct3D_GetContext()->PSSetConstantBuffers(6, 1, &null_ps_buffer);
 	Direct3D_GetContext()->PSSetConstantBuffers(7, 1, &null_ps_buffer);

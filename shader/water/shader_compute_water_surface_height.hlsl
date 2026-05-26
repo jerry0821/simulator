@@ -376,16 +376,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float atmospheric_humidity = saturate(meteorograph_sample.z);
     const float atmospheric_temperature = NormalizeClimateTemperature(meteorograph_sample.w);
     const float wind_strength = saturate(length(atmospheric_wind)) * 0.35f;
-    const float2 wind_dir = SafeNormalize(atmospheric_wind);
-    const float wind_surface_factor =
-        smoothstep(0.02f, 0.14f, next_depth) *
-        wind_strength *
-        (0.70f + basin_factor * 0.45f);
     float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
-    water_velocity_xy += wind_dir * ((0.0045f + next_depth * 0.0180f) * wind_surface_factor);
     float water_speed = saturate(length(water_velocity_xy) * 2.8f);
     float transport_energy =
-        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f + wind_surface_factor * 0.05f));
+        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f));
 
     const float east_terrain = SampleWorkingTerrainHeight(coord + int2(1, 0));
     const float west_terrain = SampleWorkingTerrainHeight(coord + int2(-1, 0));

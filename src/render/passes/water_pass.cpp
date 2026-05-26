@@ -129,13 +129,15 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 	ShaderWater_SetInverseViewProjection(inverse_view_projection);
 	const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
 	ID3D11ShaderResourceView* terrain_height_srv =
-		frame_context.resources.terrain_height.isValid()
-			? frame_context.resources.terrain_height.shaderResourceView()
-			: (terrain_water.terrain_height.isValid()
-				? terrain_water.terrain_height.shaderResourceView()
-				: (frame_context.resources.water_surface_height.isValid()
-					? frame_context.resources.water_surface_height.shaderResourceView()
-					: nullptr));
+		terrain_water.water_surface_height_texture.isValid()
+			? terrain_water.water_surface_height_texture.shaderResourceView()
+			: (frame_context.resources.water_surface_height.isValid()
+				? frame_context.resources.water_surface_height.shaderResourceView()
+				: (frame_context.resources.terrain_height.isValid()
+					? frame_context.resources.terrain_height.shaderResourceView()
+					: (terrain_water.terrain_height.isValid()
+						? terrain_water.terrain_height.shaderResourceView()
+						: nullptr)));
 	ID3D11ShaderResourceView* water_velocity_srv =
 		terrain_water.water_velocity.isValid()
 			? terrain_water.water_velocity.shaderResourceView()
@@ -152,23 +154,7 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
-	const float world_width = TerrainHeightField::FieldWidth();
-	const float world_depth = TerrainHeightField::FieldDepth();
-	const float patch_width = world_width * ComputeTextureDimensions::kWaterPatchCoverage;
-	const float patch_depth = world_depth * ComputeTextureDimensions::kWaterPatchCoverage;
-	const float patch_cell_width =
-		patch_width / static_cast<float>(ComputeTextureDimensions::kWaterMeshResolution);
-	const float patch_cell_depth =
-		patch_depth / static_cast<float>(ComputeTextureDimensions::kWaterMeshResolution);
-	const float snapped_x =
-		std::floor(frame_context.globals.camera_position.x / patch_cell_width) * patch_cell_width;
-	const float snapped_z =
-		std::floor(frame_context.globals.camera_position.z / patch_cell_depth) * patch_cell_depth;
-
-	const XMMATRIX water_world =
-		XMMatrixScaling(patch_width, patch_depth, 1.0f) *
-		XMMatrixRotationX(XM_PIDIV2) *
-		XMMatrixTranslation(snapped_x, water_desc.height, snapped_z);
+	const XMMATRIX water_world = XMMatrixIdentity();
 	XMFLOAT4 base_color{ 1.0f, 1.0f, 1.0f, std::clamp(water_desc.base_color.w, 0.34f, 0.70f) };
 
 	Sprite3D_DrawWaterSRV(

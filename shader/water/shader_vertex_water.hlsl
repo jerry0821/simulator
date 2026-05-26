@@ -13,6 +13,13 @@ cbuffer VS_CONSTANT_BUFFER2 : register(b2)
     float4x4 proj;
 };
 
+cbuffer VS_CONSTANT_BUFFER3 : register(b3)
+{
+    float2 camera_xz;
+    float water_mesh_interval;
+    float padding0;
+};
+
 Texture2D g_TerrainHeight : register(t0);
 
 #include "shader_water_common.hlsli"
@@ -36,12 +43,13 @@ VS_OUT main(VS_IN vi)
 {
     VS_OUT vo;
     float4 posW = mul(vi.posL, world);
-    const float base_water_height = posW.y;
+    const float2 global_offset =
+        floor(camera_xz / max(water_mesh_interval, 1.0e-4f)) * water_mesh_interval;
+    posW.xz += global_offset;
+
     const float2 terrain_water = LoadTerrainWater(posW.xz);
     // g_TerrainHeight: .x = terrain_height, .y = water_height
-    const float water_depth = terrain_water.y - terrain_water.x;
-    const float simulated_height_weight = smoothstep(0.35f, 1.20f, water_depth);
-    posW.y = lerp(base_water_height, terrain_water.y, simulated_height_weight);
+    posW.y = terrain_water.y;
     float4 posV = mul(posW, view);
     vo.posH = mul(posV, proj);
     vo.posW = posW.xyz;
