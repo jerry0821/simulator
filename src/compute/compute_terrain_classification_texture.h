@@ -21,8 +21,6 @@ public:
 	void Update(
 		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* terrain_normal_srv,
-		ID3D11ShaderResourceView* water_interaction_srv,
-		ID3D11ShaderResourceView* erosion_delta_srv,
 		ID3D11ShaderResourceView* meteorograph_srv,
 		const TerrainMaterialSettings& material_settings);
 	bool IsValid() const;
@@ -57,8 +55,8 @@ private:
 		unsigned int padding1 = 0;
 	};
 
-	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kHydrologyResolution;
-	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kHydrologyResolution;
+	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kTerrainClassificationResolution;
+	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kTerrainClassificationResolution;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

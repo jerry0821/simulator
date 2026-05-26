@@ -37,7 +37,9 @@ struct TerrainClipmapConfig
 };
 
 constexpr std::array<TerrainClipmapConfig, 1> kTerrainClipmapConfigs = {
-	TerrainClipmapConfig{512, 4.0f},
+	TerrainClipmapConfig{
+		static_cast<int>(ComputeTextureDimensions::kTerrainMeshResolution),
+		ComputeTextureDimensions::kTerrainMeshInterval},
 };
 
 struct Vertex3D

@@ -7,16 +7,22 @@ void RenderBackendDX11::bindScenePass() const
 	Direct3D_SetSceneRenderTarget();
 }
 
+void RenderBackendDX11::bindScenePassReadOnlyDepth() const
+{
+	Direct3D_SetSceneRenderTargetReadOnlyDepth();
+}
+
 void RenderBackendDX11::beginDepthPrePass() const
 {
-	bindScenePass();
-	Direct3D_ClearSceneDepth();
+	Direct3D_SetSceneDepthOnlyRenderTarget();
+	Direct3D_ClearSceneSampleDepth();
 }
 
 void RenderBackendDX11::beginOpaquePass() const
 {
 	bindScenePass();
 	Direct3D_ClearSceneColor();
+	Direct3D_ClearSceneDepth();
 }
 
 void RenderBackendDX11::beginScenePass() const
@@ -47,6 +53,11 @@ void RenderBackendDX11::beginBackbufferPass() const
 {
 	Direct3D_ClearBackbuffer();
 	Direct3D_SetBackbuffer();
+}
+
+void RenderBackendDX11::resolveSceneColor() const
+{
+	Direct3D_ResolveSceneMSAA();
 }
 
 Backend::RenderSceneColorResource RenderBackendDX11::sceneColorResource() const

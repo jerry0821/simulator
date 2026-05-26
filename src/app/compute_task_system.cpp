@@ -303,8 +303,6 @@ void Application::RefreshDerivedComputeResources(double current_time)
 			m_simulation.compute_terrain_classification_texture.Update(
 				SimulationTerrainHeightResource().shaderResourceView(),
 				ActiveTerrainNormalResource().shaderResourceView(),
-				m_simulation.compute_water_surface_height_texture.WaterInteractionResource().shaderResourceView(),
-				m_simulation.compute_water_surface_height_texture.ErosionDeltaResource().shaderResourceView(),
 				m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
 				terrain_material_settings);
 			if (kEnableGrassSystems && m_simulation.compute_grass_data_texture.IsValid())

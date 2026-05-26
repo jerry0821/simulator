@@ -16,8 +16,8 @@ namespace
 {
 constexpr float kCpuReadbackIntervalSeconds = 0.5f;
 constexpr bool kEnableCpuReadback =
-	ComputeTextureDimensions::kHydrologyResolution <= 1024u;
-constexpr DXGI_FORMAT kHeightfieldTextureFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	ComputeTextureDimensions::kWaterDataResolution <= 1024u;
+constexpr DXGI_FORMAT kHeightfieldTextureFormat = DXGI_FORMAT_R32G32_FLOAT;
 constexpr DXGI_FORMAT kTerrainNormalTextureFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 constexpr DXGI_FORMAT kFlowTextureFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 constexpr DXGI_FORMAT kAuxiliaryTextureFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -184,22 +184,6 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 				m_device,
 				kTextureWidth,
 				kTextureHeight,
-				&m_water_interaction_textures[index],
-				&m_water_interaction_srvs[index],
-				&m_water_interaction_uavs[index],
-				kAuxiliaryTextureFormat) ||
-			!CreateFloat4Texture(
-				m_device,
-				kTextureWidth,
-				kTextureHeight,
-				&m_soil_moisture_textures[index],
-				&m_soil_moisture_srvs[index],
-				&m_soil_moisture_uavs[index],
-				kAuxiliaryTextureFormat) ||
-			!CreateFloat4Texture(
-				m_device,
-				kTextureWidth,
-				kTextureHeight,
 				&m_velocity_textures[index],
 				&m_velocity_srvs[index],
 				&m_velocity_uavs[index],
@@ -226,19 +210,6 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 			&m_terrain_normal_srv,
 			&m_terrain_normal_uav,
 			kTerrainNormalTextureFormat))
-	{
-		Finalize();
-		return false;
-	}
-
-	if (!CreateFloat4Texture(
-			m_device,
-			kTextureWidth,
-			kTextureHeight,
-			&m_erosion_delta_texture,
-			&m_erosion_delta_srv,
-			&m_erosion_delta_uav,
-			kAuxiliaryTextureFormat))
 	{
 		Finalize();
 		return false;
@@ -310,12 +281,6 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 	SafeRelease(m_terrain_normal_texture);
 	for (unsigned int index = 0; index < 2; ++index)
 	{
-		SafeRelease(m_water_interaction_uavs[index]);
-		SafeRelease(m_water_interaction_srvs[index]);
-		SafeRelease(m_water_interaction_textures[index]);
-		SafeRelease(m_soil_moisture_uavs[index]);
-		SafeRelease(m_soil_moisture_srvs[index]);
-		SafeRelease(m_soil_moisture_textures[index]);
 		SafeRelease(m_surface_uavs[index]);
 		SafeRelease(m_surface_srvs[index]);
 		SafeRelease(m_surface_textures[index]);
@@ -329,9 +294,6 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 		SafeRelease(m_flow_srvs[index]);
 		SafeRelease(m_flow_textures[index]);
 	}
-	SafeRelease(m_erosion_delta_uav);
-	SafeRelease(m_erosion_delta_srv);
-	SafeRelease(m_erosion_delta_texture);
 	for (unsigned int index = 0; index < 2; ++index)
 	{
 		SafeRelease(m_uavs[index]);
@@ -361,12 +323,9 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 		m_context->ClearUnorderedAccessViewFloat(m_uavs[index], clear_values);
 		m_context->ClearUnorderedAccessViewFloat(m_flow_uavs[index], clear_values);
 		m_context->ClearUnorderedAccessViewFloat(m_surface_uavs[index], clear_values);
-		m_context->ClearUnorderedAccessViewFloat(m_water_interaction_uavs[index], clear_values);
-		m_context->ClearUnorderedAccessViewFloat(m_soil_moisture_uavs[index], clear_values);
 		m_context->ClearUnorderedAccessViewFloat(m_velocity_uavs[index], clear_values);
 		m_context->ClearUnorderedAccessViewFloat(m_sediment_uavs[index], clear_values);
 	}
-	m_context->ClearUnorderedAccessViewFloat(m_erosion_delta_uav, clear_values);
 	m_context->ClearUnorderedAccessViewFloat(m_terrain_normal_uav, clear_values);
 	m_current_index = 0u;
 	m_has_bootstrapped_state = false;
@@ -435,17 +394,13 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 		nullptr,
 		m_flow_srvs[previous_index],
 		m_sediment_srvs[previous_index],
-		meteorograph_srv,
-		m_soil_moisture_srvs[previous_index]
+		meteorograph_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = {
 		m_uavs[next_index],
 		m_flow_uavs[next_index],
 		m_velocity_uavs[next_index],
 		m_sediment_uavs[next_index],
-		m_erosion_delta_uav,
-		m_soil_moisture_uavs[next_index],
-		m_water_interaction_uavs[next_index],
 		m_surface_uavs[next_index]
 	};
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
@@ -453,21 +408,21 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 7, srvs);
+	m_context->CSSetShaderResources(0, 6, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 8, uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 5, uavs, nullptr);
 	m_context->Dispatch(
 		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
-	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 7, null_srvs);
+	m_context->CSSetShaderResources(0, 6, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
-	m_context->CSSetUnorderedAccessViews(0, 8, null_uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 5, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 
@@ -541,17 +496,13 @@ void ComputeWaterSurfaceHeightTexture::Update(
 		rain_map_srv,
 		m_flow_srvs[previous_index],
 		m_sediment_srvs[previous_index],
-		meteorograph_srv,
-		m_soil_moisture_srvs[previous_index]
+		meteorograph_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = {
 		m_uavs[next_index],
 		m_flow_uavs[next_index],
 		m_velocity_uavs[next_index],
 		m_sediment_uavs[next_index],
-		m_erosion_delta_uav,
-		m_soil_moisture_uavs[next_index],
-		m_water_interaction_uavs[next_index],
 		m_surface_uavs[next_index]
 	};
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
@@ -559,21 +510,21 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 7, srvs);
+	m_context->CSSetShaderResources(0, 6, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 8, uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 5, uavs, nullptr);
 	m_context->Dispatch(
 		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
-	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 7, null_srvs);
+	m_context->CSSetShaderResources(0, 6, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
-	m_context->CSSetUnorderedAccessViews(0, 8, null_uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 5, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 
@@ -703,8 +654,8 @@ void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
 		for (unsigned int col = 0; col < kTextureWidth; ++col)
 		{
 			const size_t sample_index = static_cast<size_t>(row) * kTextureWidth + col;
-			m_terrain_height_samples[sample_index] = source_row[col * 4 + 0];
-			m_water_height_samples[sample_index] = source_row[col * 4 + 1];
+			m_terrain_height_samples[sample_index] = source_row[col * 2 + 0];
+			m_water_height_samples[sample_index] = source_row[col * 2 + 1];
 		}
 	}
 }
@@ -734,18 +685,6 @@ bool ComputeWaterSurfaceHeightTexture::IsValid() const
 		   m_surface_srvs[1] != nullptr &&
 		   m_surface_uavs[0] != nullptr &&
 		   m_surface_uavs[1] != nullptr &&
-		   m_water_interaction_textures[0] != nullptr &&
-		   m_water_interaction_textures[1] != nullptr &&
-		   m_water_interaction_srvs[0] != nullptr &&
-		   m_water_interaction_srvs[1] != nullptr &&
-		   m_water_interaction_uavs[0] != nullptr &&
-		   m_water_interaction_uavs[1] != nullptr &&
-		   m_soil_moisture_textures[0] != nullptr &&
-		   m_soil_moisture_textures[1] != nullptr &&
-		   m_soil_moisture_srvs[0] != nullptr &&
-		   m_soil_moisture_srvs[1] != nullptr &&
-		   m_soil_moisture_uavs[0] != nullptr &&
-		   m_soil_moisture_uavs[1] != nullptr &&
 		   m_velocity_textures[0] != nullptr &&
 		   m_velocity_textures[1] != nullptr &&
 		   m_velocity_srvs[0] != nullptr &&
@@ -758,9 +697,6 @@ bool ComputeWaterSurfaceHeightTexture::IsValid() const
 		   m_sediment_srvs[1] != nullptr &&
 		   m_sediment_uavs[0] != nullptr &&
 		   m_sediment_uavs[1] != nullptr &&
-		   m_erosion_delta_texture != nullptr &&
-		   m_erosion_delta_srv != nullptr &&
-		   m_erosion_delta_uav != nullptr &&
 		   m_constant_buffer != nullptr &&
 		   m_terrain_normal_constant_buffer != nullptr;
 }
@@ -793,21 +729,6 @@ Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::VelocityResource
 Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::SedimentResource() const
 {
 	return Backend::RenderShaderResource(m_sediment_srvs[m_current_index]);
-}
-
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::WaterInteractionResource() const
-{
-	return Backend::RenderShaderResource(m_water_interaction_srvs[m_current_index]);
-}
-
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::SoilMoistureResource() const
-{
-	return Backend::RenderShaderResource(m_soil_moisture_srvs[m_current_index]);
-}
-
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::ErosionDeltaResource() const
-{
-	return Backend::RenderShaderResource(m_erosion_delta_srv);
 }
 
 bool ComputeWaterSurfaceHeightTexture::ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const

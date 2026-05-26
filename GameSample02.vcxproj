@@ -262,6 +262,7 @@
     <ClCompile Include="WICTextureLoader11.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shader\water\shader_water_common.hlsli" />
     <ClInclude Include="src\app\application.h" />
     <ClInclude Include="src\app\compute_task_publish.h" />
     <ClInclude Include="src\app\runtime_system.h" />

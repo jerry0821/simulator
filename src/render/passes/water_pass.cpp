@@ -5,6 +5,7 @@
 #include <cmath>
 #include <DirectXMath.h>
 
+#include "compute_texture_dimensions.h"
 #include "cube.h"
 #include "direct3d.h"
 #include "render_backend_dx11.h"
@@ -18,7 +19,6 @@
 #include "shader3d_unlit.h"
 #include "sprite3d.h"
 #include "terrain_height_field.h"
-#include "texture.h"
 
 
 using namespace DirectX;
@@ -26,8 +26,6 @@ using namespace DirectX;
 namespace
 {
 constexpr bool kEnableWaterSurfaceRender = true;
-constexpr float kWaterPatchCoverage = 0.5f; // Match Afterglow-style local patch coverage.
-int g_WaterFlowNormalTextureId = -1;
 }
 
 WaterPass::WaterPass(RenderBackendDX11& backend)
@@ -96,8 +94,8 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		return;
 	}
 
-	// Water is rendered after opaque geometry.
-	backend_.bindScenePass();
+	// Water samples scene depth while depth-testing against it.
+	backend_.bindScenePassReadOnlyDepth();
 
 	if (frame_context.render_scene == nullptr)
 	{
@@ -129,17 +127,15 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 	ShaderWater_SetViewMatrix(view);
 	ShaderWater_SetProjMatrix(proj);
 	ShaderWater_SetInverseViewProjection(inverse_view_projection);
-	if (g_WaterFlowNormalTextureId < 0)
-	{
-		g_WaterFlowNormalTextureId = Texture_Load(L"resource/texture/noise.png");
-	}
 	const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
-	ID3D11ShaderResourceView* water_surface_height_srv =
-		frame_context.resources.water_surface_height.isValid()
-			? frame_context.resources.water_surface_height.shaderResourceView()
-			: (terrain_water.water_surface_height_texture.isValid()
-				? terrain_water.water_surface_height_texture.shaderResourceView()
-				: nullptr);
+	ID3D11ShaderResourceView* terrain_height_srv =
+		frame_context.resources.terrain_height.isValid()
+			? frame_context.resources.terrain_height.shaderResourceView()
+			: (terrain_water.terrain_height.isValid()
+				? terrain_water.terrain_height.shaderResourceView()
+				: (frame_context.resources.water_surface_height.isValid()
+					? frame_context.resources.water_surface_height.shaderResourceView()
+					: nullptr));
 	ID3D11ShaderResourceView* water_velocity_srv =
 		terrain_water.water_velocity.isValid()
 			? terrain_water.water_velocity.shaderResourceView()
@@ -156,14 +152,14 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr;
-	ID3D11ShaderResourceView* flow_normal_srv = Texture_GetSRV(g_WaterFlowNormalTextureId);
-	ShaderWater_SetFlowNormal(flow_normal_srv);
 	const float world_width = TerrainHeightField::FieldWidth();
 	const float world_depth = TerrainHeightField::FieldDepth();
-	const float patch_width = world_width * kWaterPatchCoverage;
-	const float patch_depth = world_depth * kWaterPatchCoverage;
-	const float patch_cell_width = patch_width / 256.0f;
-	const float patch_cell_depth = patch_depth / 256.0f;
+	const float patch_width = world_width * ComputeTextureDimensions::kWaterPatchCoverage;
+	const float patch_depth = world_depth * ComputeTextureDimensions::kWaterPatchCoverage;
+	const float patch_cell_width =
+		patch_width / static_cast<float>(ComputeTextureDimensions::kWaterMeshResolution);
+	const float patch_cell_depth =
+		patch_depth / static_cast<float>(ComputeTextureDimensions::kWaterMeshResolution);
 	const float snapped_x =
 		std::floor(frame_context.globals.camera_position.x / patch_cell_width) * patch_cell_width;
 	const float snapped_z =
@@ -173,15 +169,10 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		XMMatrixScaling(patch_width, patch_depth, 1.0f) *
 		XMMatrixRotationX(XM_PIDIV2) *
 		XMMatrixTranslation(snapped_x, water_desc.height, snapped_z);
-	XMFLOAT4 base_color = water_desc.base_color;
-	base_color.x *= 0.72f;
-	base_color.y *= 0.86f;
-	base_color.z *= 1.28f;
-	base_color.w = std::clamp(base_color.w * 1.45f, 0.34f, 0.62f);
-	const float ripple_strength = std::clamp(water_desc.ripple_strength, 0.0f, 3.0f);
+	XMFLOAT4 base_color{ 1.0f, 1.0f, 1.0f, std::clamp(water_desc.base_color.w, 0.34f, 0.70f) };
 
 	Sprite3D_DrawWaterSRV(
-		water_surface_height_srv,
+		terrain_height_srv,
 		water_velocity_srv,
 		water_sediment_srv,
 		terrain_normal_srv,
@@ -189,11 +180,9 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 		water_world,
 		base_color,
 		frame_context.globals.camera_position,
-		static_cast<float>(frame_context.globals.time_seconds),
-		3.0f + water_desc.edge_emphasis * 1.2f,
-		0.72f + ripple_strength * 0.32f);
+		0.0f);
 
-	(void)water_surface_height_srv;
+	(void)terrain_height_srv;
 	(void)water_velocity_srv;
 	(void)water_sediment_srv;
 	(void)terrain_normal_srv;

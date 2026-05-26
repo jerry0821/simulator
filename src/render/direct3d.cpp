@@ -60,7 +60,15 @@ static ID3D11RenderTargetView* g_pSceneRTV = nullptr;
 static ID3D11ShaderResourceView* g_pSceneSRV = nullptr;
 static ID3D11Texture2D* g_pSceneDepthTex = nullptr;
 static ID3D11DepthStencilView* g_pSceneDSV = nullptr;
+static ID3D11DepthStencilView* g_pSceneReadOnlyDSV = nullptr;
 static ID3D11ShaderResourceView* g_pSceneDepthSRV = nullptr;
+static ID3D11Texture2D* g_pSceneMSAATex = nullptr;
+static ID3D11RenderTargetView* g_pSceneMSAARTV = nullptr;
+static ID3D11Texture2D* g_pSceneMSAADepthTex = nullptr;
+static ID3D11DepthStencilView* g_pSceneMSAADSV = nullptr;
+static UINT g_SceneMSAASampleCount = 1;
+static UINT g_SceneMSAAQuality = 0;
+static bool g_SceneMSAAEnabled = false;
 static D3D11_VIEWPORT            g_SceneViewport = {};
 
 /* オフスクリーンレンダリング(minimap) */
@@ -87,6 +95,12 @@ static D3D11_VIEWPORT            g_PlayerViewport = {};
 
 //static bool configureOffscreenBuffer(); // オフスクリーンバッファの設定・生成
 //static void releaseOffscreenBuffer(); // オフスクリーンバッファの解放
+static constexpr UINT kRequestedSceneMSAASamples = 4;
+static constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+static void ConfigureSceneMSAA();
+static bool CreateSceneMSAATargets(int width, int height);
+static void ReleaseSceneMSAATargets();
+static bool CreateSceneReadOnlyDepthView();
 static bool MakeRenderTarget(int w, int h,
 	ID3D11Texture2D** ppTex,
 	ID3D11RenderTargetView** ppRTV,
@@ -212,6 +226,156 @@ static bool MakeRenderTarget(int w, int h,
 	return true;
 }
 
+static bool AreSceneMSAATargetsReady()
+{
+	return g_SceneMSAASampleCount > 1 &&
+		g_pSceneMSAATex != nullptr &&
+		g_pSceneMSAARTV != nullptr &&
+		g_pSceneMSAADepthTex != nullptr &&
+		g_pSceneMSAADSV != nullptr;
+}
+
+static bool IsSceneMSAAActive()
+{
+	return g_SceneMSAAEnabled && AreSceneMSAATargetsReady();
+}
+
+static ID3D11RenderTargetView* ActiveSceneRTV()
+{
+	return IsSceneMSAAActive() ? g_pSceneMSAARTV : g_pSceneRTV;
+}
+
+static ID3D11DepthStencilView* ActiveSceneDSV()
+{
+	return IsSceneMSAAActive() ? g_pSceneMSAADSV : g_pSceneDSV;
+}
+
+static void UnbindSceneShaderResources()
+{
+	ID3D11ShaderResourceView* null_srvs[8] = {
+		nullptr, nullptr, nullptr, nullptr,
+		nullptr, nullptr, nullptr, nullptr
+	};
+	g_pDeviceContext->VSSetShaderResources(0, 1, null_srvs);
+	g_pDeviceContext->PSSetShaderResources(0, 8, null_srvs);
+}
+
+static void ConfigureSceneMSAA()
+{
+	g_SceneMSAASampleCount = 1;
+	g_SceneMSAAQuality = 0;
+	g_SceneMSAAEnabled = false;
+
+	if (g_pDevice == nullptr)
+	{
+		return;
+	}
+
+	UINT color_quality = 0;
+	UINT depth_quality = 0;
+	const HRESULT color_result = g_pDevice->CheckMultisampleQualityLevels(
+		kSceneColorFormat,
+		kRequestedSceneMSAASamples,
+		&color_quality);
+	const HRESULT depth_result = g_pDevice->CheckMultisampleQualityLevels(
+		DXGI_FORMAT_D24_UNORM_S8_UINT,
+		kRequestedSceneMSAASamples,
+		&depth_quality);
+
+	if (SUCCEEDED(color_result) &&
+		SUCCEEDED(depth_result) &&
+		color_quality > 0 &&
+		depth_quality > 0)
+	{
+		const UINT matched_quality = color_quality < depth_quality ? color_quality : depth_quality;
+		g_SceneMSAASampleCount = kRequestedSceneMSAASamples;
+		g_SceneMSAAQuality = matched_quality - 1;
+		g_SceneMSAAEnabled = true;
+	}
+}
+
+static void ReleaseSceneMSAATargets()
+{
+	SAFE_RELEASE(g_pSceneMSAADSV);
+	SAFE_RELEASE(g_pSceneMSAADepthTex);
+	SAFE_RELEASE(g_pSceneMSAARTV);
+	SAFE_RELEASE(g_pSceneMSAATex);
+}
+
+static bool CreateSceneMSAATargets(int width, int height)
+{
+	ReleaseSceneMSAATargets();
+
+	if (g_pDevice == nullptr || g_SceneMSAASampleCount <= 1)
+	{
+		return true;
+	}
+
+	D3D11_TEXTURE2D_DESC color_desc{};
+	color_desc.Width = width;
+	color_desc.Height = height;
+	color_desc.MipLevels = 1;
+	color_desc.ArraySize = 1;
+	color_desc.Format = kSceneColorFormat;
+	color_desc.SampleDesc.Count = g_SceneMSAASampleCount;
+	color_desc.SampleDesc.Quality = g_SceneMSAAQuality;
+	color_desc.Usage = D3D11_USAGE_DEFAULT;
+	color_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+	if (FAILED(g_pDevice->CreateTexture2D(&color_desc, nullptr, &g_pSceneMSAATex)))
+	{
+		ReleaseSceneMSAATargets();
+		return false;
+	}
+
+	if (FAILED(g_pDevice->CreateRenderTargetView(g_pSceneMSAATex, nullptr, &g_pSceneMSAARTV)))
+	{
+		ReleaseSceneMSAATargets();
+		return false;
+	}
+
+	D3D11_TEXTURE2D_DESC depth_desc = color_desc;
+	depth_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+	if (FAILED(g_pDevice->CreateTexture2D(&depth_desc, nullptr, &g_pSceneMSAADepthTex)))
+	{
+		ReleaseSceneMSAATargets();
+		return false;
+	}
+
+	D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+	dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+
+	if (FAILED(g_pDevice->CreateDepthStencilView(g_pSceneMSAADepthTex, &dsv_desc, &g_pSceneMSAADSV)))
+	{
+		ReleaseSceneMSAATargets();
+		return false;
+	}
+
+	return true;
+}
+
+static bool CreateSceneReadOnlyDepthView()
+{
+	SAFE_RELEASE(g_pSceneReadOnlyDSV);
+	if (g_pDevice == nullptr || g_pSceneDepthTex == nullptr)
+	{
+		return false;
+	}
+
+	D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc{};
+	dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+	dsv_desc.Texture2D.MipSlice = 0;
+	dsv_desc.Flags = D3D11_DSV_READ_ONLY_DEPTH;
+	return SUCCEEDED(g_pDevice->CreateDepthStencilView(
+		g_pSceneDepthTex,
+		&dsv_desc,
+		&g_pSceneReadOnlyDSV));
+}
+
 static void ReleaseRenderTarget(
 	ID3D11Texture2D*& pTex,
 	ID3D11RenderTargetView*& pRTV,
@@ -291,6 +455,8 @@ bool Direct3D_Initialize(HWND hWnd)
 		return false;
 	}
 
+	ConfigureSceneMSAA();
+
 	if (!configureBackBuffer()) {
 		MessageBox(hWnd, "バックバッファの設定に失敗しました", "エラー", MB_OK);
 		return false;
@@ -302,8 +468,18 @@ bool Direct3D_Initialize(HWND hWnd)
 	int screenH = Direct3D_GetBackBufferHeight();
 	if (!MakeRenderTarget(screenW, screenH,
 		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV,
-		DXGI_FORMAT_R16G16B16A16_FLOAT, &g_pSceneDepthSRV, &g_SceneViewport))
+		kSceneColorFormat, &g_pSceneDepthSRV, &g_SceneViewport))
 		return false;
+	if (!CreateSceneReadOnlyDepthView())
+		return false;
+	if (!CreateSceneMSAATargets(screenW, screenH))
+	{
+		hal::dout << "Direct3D_Initialize(): 4x MSAA scene target creation failed; falling back to single-sample scene rendering." << std::endl;
+		g_SceneMSAASampleCount = 1;
+		g_SceneMSAAQuality = 0;
+		g_SceneMSAAEnabled = false;
+		ReleaseSceneMSAATargets();
+	}
 
 	// ミニマップ用のオフスクリーンバッファ
 	if (!MakeRenderTarget(512, 512,
@@ -393,7 +569,7 @@ bool Direct3D_Initialize(HWND hWnd)
 	rd.CullMode = D3D11_CULL_BACK;
 	//rd.CullMode = D3D11_CULL_NONE;
 	rd.DepthClipEnable = TRUE;
-	rd.MultisampleEnable = FALSE;
+	rd.MultisampleEnable = g_SceneMSAASampleCount > 1;
 	g_pDevice->CreateRasterizerState(&rd, &g_pRasterizerStateCullBack);
 
 	rd.CullMode = D3D11_CULL_FRONT;
@@ -432,8 +608,10 @@ void Direct3D_Finalize()
 	SAFE_RELEASE(g_pSceneRTV);
 	SAFE_RELEASE(g_pSceneTex);
 	SAFE_RELEASE(g_pSceneDepthSRV);
+	SAFE_RELEASE(g_pSceneReadOnlyDSV);
 	SAFE_RELEASE(g_pSceneDSV);
 	SAFE_RELEASE(g_pSceneDepthTex);
+	ReleaseSceneMSAATargets();
 
 	SAFE_RELEASE(g_pMiniMapSRV);
 	SAFE_RELEASE(g_pMiniMapRTV);
@@ -452,7 +630,9 @@ void Direct3D_Resize(int width, int height) {
 	if (g_pDevice == nullptr) return;
 
 	releaseBackBuffer();
+	ReleaseSceneMSAATargets();
 	SAFE_RELEASE(g_pSceneDepthSRV);
+	SAFE_RELEASE(g_pSceneReadOnlyDSV);
 	ReleaseRenderTarget(g_pSceneTex, g_pSceneRTV, g_pSceneSRV, g_pSceneDepthTex, g_pSceneDSV);
 
 	g_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
@@ -461,7 +641,16 @@ void Direct3D_Resize(int width, int height) {
 
 	MakeRenderTarget(width, height,
 		&g_pSceneTex, &g_pSceneRTV, &g_pSceneSRV, &g_pSceneDepthTex, &g_pSceneDSV,
-		DXGI_FORMAT_R16G16B16A16_FLOAT, &g_pSceneDepthSRV, &g_SceneViewport);
+		kSceneColorFormat, &g_pSceneDepthSRV, &g_SceneViewport);
+	CreateSceneReadOnlyDepthView();
+	if (!CreateSceneMSAATargets(width, height))
+	{
+		hal::dout << "Direct3D_Resize(): MSAA scene target recreation failed; falling back to single-sample scene rendering." << std::endl;
+		g_SceneMSAASampleCount = 1;
+		g_SceneMSAAQuality = 0;
+		g_SceneMSAAEnabled = false;
+		ReleaseSceneMSAATargets();
+	}
 }
 
 
@@ -485,6 +674,46 @@ void Direct3D_SetVSyncEnabled(bool enabled)
 bool Direct3D_IsVSyncEnabled()
 {
 	return g_VSyncEnabled;
+}
+
+bool Direct3D_SetSceneMSAAEnabled(bool enabled)
+{
+	if (!enabled)
+	{
+		g_SceneMSAAEnabled = false;
+		return false;
+	}
+
+	if (g_pDevice == nullptr || g_SceneMSAASampleCount <= 1)
+	{
+		g_SceneMSAAEnabled = false;
+		return false;
+	}
+
+	if (!AreSceneMSAATargetsReady())
+	{
+		const unsigned int width = Direct3D_GetBackBufferWidth();
+		const unsigned int height = Direct3D_GetBackBufferHeight();
+		if (!CreateSceneMSAATargets(static_cast<int>(width), static_cast<int>(height)))
+		{
+			hal::dout << "Direct3D_SetSceneMSAAEnabled(): failed to recreate MSAA scene target." << std::endl;
+			g_SceneMSAAEnabled = false;
+			return false;
+		}
+	}
+
+	g_SceneMSAAEnabled = true;
+	return true;
+}
+
+bool Direct3D_ToggleSceneMSAA()
+{
+	return Direct3D_SetSceneMSAAEnabled(!g_SceneMSAAEnabled);
+}
+
+bool Direct3D_IsSceneMSAAEnabled()
+{
+	return IsSceneMSAAActive();
 }
 
 unsigned int Direct3D_GetBackBufferWidth()
@@ -751,20 +980,42 @@ void Backend::DX11::releaseBackBuffer()
 
 void Direct3D_SetSceneRenderTarget()
 {
-	ID3D11ShaderResourceView* nullSRV[1] = { nullptr };
-	g_pDeviceContext->PSSetShaderResources(0, 1, nullSRV);
+	UnbindSceneShaderResources();
 
 	g_pDeviceContext->RSSetViewports(1, &g_SceneViewport); 
-	g_pDeviceContext->OMSetRenderTargets(1, &g_pSceneRTV, g_pSceneDSV);
+	ID3D11RenderTargetView* scene_rtv = ActiveSceneRTV();
+	g_pDeviceContext->OMSetRenderTargets(1, &scene_rtv, ActiveSceneDSV());
+}
+
+void Direct3D_SetSceneRenderTargetReadOnlyDepth()
+{
+	UnbindSceneShaderResources();
+
+	g_pDeviceContext->RSSetViewports(1, &g_SceneViewport);
+	ID3D11RenderTargetView* scene_rtv = ActiveSceneRTV();
+	g_pDeviceContext->OMSetRenderTargets(
+		1,
+		&scene_rtv,
+		IsSceneMSAAActive()
+			? g_pSceneMSAADSV
+			: (g_pSceneReadOnlyDSV != nullptr ? g_pSceneReadOnlyDSV : g_pSceneDSV));
+}
+
+void Direct3D_SetSceneDepthOnlyRenderTarget()
+{
+	UnbindSceneShaderResources();
+
+	g_pDeviceContext->RSSetViewports(1, &g_SceneViewport);
+	g_pDeviceContext->OMSetRenderTargets(0, nullptr, g_pSceneDSV);
 }
 
 void Direct3D_SetSceneColorOnlyRenderTarget()
 {
-	ID3D11ShaderResourceView* nullSRV[1] = { nullptr };
-	g_pDeviceContext->PSSetShaderResources(0, 1, nullSRV);
+	UnbindSceneShaderResources();
 
 	g_pDeviceContext->RSSetViewports(1, &g_SceneViewport);
-	g_pDeviceContext->OMSetRenderTargets(1, &g_pSceneRTV, nullptr);
+	ID3D11RenderTargetView* scene_rtv = ActiveSceneRTV();
+	g_pDeviceContext->OMSetRenderTargets(1, &scene_rtv, nullptr);
 }
 
 void Direct3D_SetMiniMapRenderTarget()
@@ -788,17 +1039,26 @@ void Direct3D_SetPlayerRenderTarget()
 void Direct3D_ClearScene()
 {
 	float clear_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; 
-	g_pDeviceContext->ClearRenderTargetView(g_pSceneRTV, clear_color);
-	g_pDeviceContext->ClearDepthStencilView(g_pSceneDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	g_pDeviceContext->ClearRenderTargetView(ActiveSceneRTV(), clear_color);
+	g_pDeviceContext->ClearDepthStencilView(ActiveSceneDSV(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+	if (IsSceneMSAAActive())
+	{
+		g_pDeviceContext->ClearDepthStencilView(g_pSceneDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+	}
 }
 
 void Direct3D_ClearSceneColor()
 {
 	float clear_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-	g_pDeviceContext->ClearRenderTargetView(g_pSceneRTV, clear_color);
+	g_pDeviceContext->ClearRenderTargetView(ActiveSceneRTV(), clear_color);
 }
 
 void Direct3D_ClearSceneDepth()
+{
+	g_pDeviceContext->ClearDepthStencilView(ActiveSceneDSV(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+}
+
+void Direct3D_ClearSceneSampleDepth()
 {
 	g_pDeviceContext->ClearDepthStencilView(g_pSceneDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
@@ -815,6 +1075,18 @@ void Direct3D_ClearPlayer()
 	float clear_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	g_pDeviceContext->ClearRenderTargetView(g_pPlayerRTV, clear_color);
 	g_pDeviceContext->ClearDepthStencilView(g_pPlayerDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+}
+
+void Direct3D_ResolveSceneMSAA()
+{
+	if (!IsSceneMSAAActive())
+	{
+		return;
+	}
+
+	UnbindSceneShaderResources();
+	g_pDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+	g_pDeviceContext->ResolveSubresource(g_pSceneTex, 0, g_pSceneMSAATex, 0, kSceneColorFormat);
 }
 
 void Direct3D_SetCustomRenderTarget(ID3D11RenderTargetView* pRTV, ID3D11DepthStencilView* pDSV)

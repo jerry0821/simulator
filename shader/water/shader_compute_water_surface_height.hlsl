@@ -35,27 +35,24 @@ cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
 };
 
 Texture2D g_TerrainHeight : register(t0);
-Texture2D<float4> g_PreviousTerrainWaterHeight : register(t1);
+Texture2D<float2> g_PreviousTerrainWaterHeight : register(t1);
 Texture2D<float> g_RainMap : register(t2);
 Texture2D<float4> g_PreviousWaterFlow : register(t3);
 Texture2D<float4> g_PreviousWaterSediment : register(t4);
 Texture2D<float4> g_Meteorograph : register(t5);
-Texture2D<float4> g_PreviousSoilMoisture : register(t6);
 SamplerState g_TerrainSampler : register(s0);
-RWTexture2D<float4> g_WaterSurfaceHeight : register(u0);
+RWTexture2D<float2> g_WaterSurfaceHeight : register(u0);
 RWTexture2D<float4> g_WaterFlowOut : register(u1);
 RWTexture2D<float4> g_WaterVelocityOut : register(u2);
 RWTexture2D<float4> g_WaterSedimentOut : register(u3);
-RWTexture2D<float4> g_ErosionDeltaOut : register(u4);
-RWTexture2D<float4> g_SoilMoistureOut : register(u5);
-RWTexture2D<float4> g_WaterInteractionOut : register(u6);
-RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u7);
+RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u4);
 
 static const float kWaterDeltaTime = 1.0f / 60.0f;
 static const float kWaterFlowDamping = 0.020f;
 static const float kHydrologicalCycleRate = 0.5f;
 static const float kWaterBaseHeight = 0.0f;
 static const float kDryDepthEpsilon = 0.008f;
+static const float kDryWaterSurfaceDrop = 0.25f;
 static const float kHydraulicErosionRate = 0.020f;
 static const float kHydraulicDepositionRate = 0.016f;
 static const float kThermalErosionRate = 0.030f;
@@ -207,21 +204,16 @@ float SampleBaseTerrainHeight(int2 coord)
     return g_TerrainHeight.Load(int3(terrain_coord, 0)).r;
 }
 
-float4 SamplePreviousStateRaw(int2 coord)
+float2 SamplePreviousStateRaw(int2 coord)
 {
     return g_PreviousTerrainWaterHeight.Load(int3(ClampCoord(coord), 0));
 }
 
 float SampleWorkingTerrainHeight(int2 coord)
 {
-    float terrain_height = SampleBaseTerrainHeight(coord);
-    if (initialize_from_water_level != 0u)
-    {
-        return terrain_height;
-    }
-
-    terrain_height = SamplePreviousStateRaw(coord).x;
-    return terrain_height;
+    const float base_terrain_height = SampleBaseTerrainHeight(coord);
+    const float previous_terrain_height = SamplePreviousStateRaw(coord).x;
+    return initialize_from_water_level != 0u ? base_terrain_height : previous_terrain_height;
 }
 
 float SamplePreviousSurfaceHeight(int2 coord)
@@ -243,11 +235,6 @@ float SampleRainAmount(int2 coord)
     return max(g_RainMap.SampleLevel(g_TerrainSampler, uv, 0.0f), 0.0f);
 }
 
-float4 SamplePreviousSoilMoistureState(int2 coord)
-{
-    return g_PreviousSoilMoisture.Load(int3(ClampCoord(coord), 0));
-}
-
 float2 ComputeWorldPosition(int2 coord)
 {
     float2 uv = (float2(coord) + 0.5f) / float2(width, height);
@@ -264,39 +251,27 @@ float ComputeBasinFactor(float terrain_height)
 
 float ComputeInjectedWater(int2 coord)
 {
-    float injected_water = 0.0f;
-    if (injection_enabled == 0u || injection_radius <= 1.0e-4f || injection_amount <= 1.0e-4f)
-    {
-        return 0.0f;
-    }
-
+    const float injection_active =
+        injection_enabled != 0u && injection_radius > 1.0e-4f && injection_amount > 1.0e-4f
+            ? 1.0f
+            : 0.0f;
+    const float safe_radius = max(injection_radius, 1.0e-4f);
     const float2 world_pos = ComputeWorldPosition(coord);
     const float distance_to_injection =
         length(world_pos - float2(injection_center_x, injection_center_z));
     const float injection_falloff =
-        1.0f - smoothstep(injection_radius * 0.30f, injection_radius, distance_to_injection);
-    injected_water = injection_amount * saturate(injection_falloff);
-    return injected_water;
+        1.0f - smoothstep(safe_radius * 0.30f, safe_radius, distance_to_injection);
+    return injection_amount * saturate(injection_falloff) * injection_active;
 }
 
 float4 ComputeOutflowFromPreviousState(int2 coord)
 {
-    float4 outflow = 0.0f.xxxx;
-    if (!InBounds(coord))
-    {
-        return 0.0f.xxxx;
-    }
-
+    const float coord_active = InBounds(coord) ? 1.0f : 0.0f;
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
     const float4 previous_flow = max(g_PreviousWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
     const float previous_flow_retention = 0.0f;
     const float4 retained_previous_flow = previous_flow * previous_flow_retention;
-    const float available_water = SamplePreviousDepth(coord);
-    if (available_water <= 1.0e-5f)
-    {
-        outflow = max(retained_previous_flow * saturate(1.0f - water_dt * 6.0f), 0.0f.xxxx);
-        return outflow;
-    }
+    const float available_water = SamplePreviousDepth(coord) * coord_active;
 
     const float center_surface = SamplePreviousSurfaceHeight(coord);
     float4 surface_delta_heights = float4(
@@ -310,16 +285,17 @@ float4 ComputeOutflowFromPreviousState(int2 coord)
 
     float4 candidate = max(retained_previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
     const float total_candidate = dot(candidate, 1.0f.xxxx);
-    if (total_candidate <= 1.0e-5f)
-    {
-        outflow = max(retained_previous_flow * saturate(1.0f - water_dt * 5.0f), 0.0f.xxxx);
-        return outflow;
-    }
-
     const float movable_water = available_water * max_outflow_fraction;
-    const float scale = min((movable_water / total_candidate) * (1.0f - kWaterFlowDamping), 1.0f);
-    outflow = candidate * scale;
-    return outflow;
+    const float candidate_active = total_candidate > 1.0e-5f ? 1.0f : 0.0f;
+    const float scale =
+        min((movable_water / max(total_candidate, 1.0e-5f)) * (1.0f - kWaterFlowDamping), 1.0f);
+    const float4 no_candidate_outflow =
+        max(retained_previous_flow * saturate(1.0f - water_dt * 5.0f), 0.0f.xxxx);
+    const float4 wet_outflow = lerp(no_candidate_outflow, candidate * scale, candidate_active);
+    const float4 dry_outflow =
+        max(retained_previous_flow * saturate(1.0f - water_dt * 6.0f), 0.0f.xxxx);
+    const float water_active = available_water > 1.0e-5f ? 1.0f : 0.0f;
+    return lerp(dry_outflow, wet_outflow, water_active) * coord_active;
 }
 
 float4 ComputeApproxVisibleWaterAtCoord(int2 coord)
@@ -338,97 +314,6 @@ float4 ComputeApproxVisibleWaterAtCoord(int2 coord)
         SampleWorkingTerrainHeight(down_coord),
         SamplePreviousDepth(clamped),
         ComputeOutflowFromPreviousState(clamped));
-}
-
-float4 ComputeSoilMoistureSample(
-    int2 coord,
-    float water_dt,
-    float rain_amount,
-    float next_depth,
-    float sheet_absorption,
-    float4 water_mask)
-{
-    static const float rain_absorption = 0.16f;
-    static const float wetness_absorption = 0.14f;
-    static const float shoreline_absorption = 0.10f;
-    static const float evaporation_rate = 0.045f;
-    static const float diffusion_rate = 0.16f;
-    static const float saturation_decay = 0.12f;
-    static const float moisture_step_scale = 4.0f;
-
-    const float moisture_dt = saturate(water_dt * moisture_step_scale);
-    const float4 previous_state = SamplePreviousSoilMoistureState(coord);
-    const float previous = previous_state.r;
-    const float neighbor_average =
-        (SamplePreviousSoilMoistureState(coord + int2(1, 0)).r +
-         SamplePreviousSoilMoistureState(coord + int2(-1, 0)).r +
-         SamplePreviousSoilMoistureState(coord + int2(0, 1)).r +
-         SamplePreviousSoilMoistureState(coord + int2(0, -1)).r) * 0.25f;
-
-    rain_amount = max(rain_amount, 0.0f);
-    const float rain_wet_hint =
-        saturate(rain_amount * 0.92f + saturate(next_depth) * 0.24f);
-    const float water_coverage = saturate(water_mask.r);
-    const float shoreline_contact = saturate(water_mask.g);
-    const float pooled_contact = saturate(water_mask.b);
-    const float standing_water = smoothstep(0.04f, 0.16f, next_depth);
-
-    const float rain_gain = rain_amount * rain_absorption;
-    const float seep_gain =
-        standing_water * (wetness_absorption * 1.10f) +
-        next_depth * 0.28f +
-        sheet_absorption * 0.95f;
-    const float bank_gain =
-        max(water_coverage * shoreline_absorption, shoreline_contact * (shoreline_absorption * 1.20f));
-    const float evaporation =
-        evaporation_rate * (1.0f - saturate(rain_amount * 0.80f + water_coverage * 0.55f));
-    const float saturation_loss = max(previous - 0.82f, 0.0f) * (saturation_decay * 0.65f);
-
-    float moisture =
-        previous +
-        (rain_gain + seep_gain + bank_gain - evaporation - saturation_loss) * moisture_dt;
-    moisture = lerp(moisture, neighbor_average, diffusion_rate * moisture_dt);
-    moisture = saturate(moisture + rain_wet_hint * (0.06f * moisture_dt));
-
-    const float shoreline_band =
-        saturate(max(shoreline_contact, water_coverage * 0.75f + standing_water * 0.50f));
-    const float retained_rainfall_memory = previous_state.b * saturate(1.0f - moisture_dt * 0.65f);
-    const float rainfall_memory =
-        saturate(max(retained_rainfall_memory, rain_amount * 0.65f + rain_wet_hint * 0.35f));
-    const float retained_saturation = previous_state.a * saturate(1.0f - moisture_dt * 0.22f);
-    const float saturation =
-        saturate(max(max(next_depth * 1.10f, moisture), max(pooled_contact, retained_saturation)));
-
-    return float4(moisture, shoreline_band, rainfall_memory, saturation);
-}
-
-float4 ComputeWaterInteractionSample(
-    float4 visible_water,
-    float4 water_mask,
-    float4 soil_moisture)
-{
-    const float surface_interaction = saturate(
-        max(
-            water_mask.r,
-            visible_water.r * 0.88f + visible_water.g * 0.22f));
-    const float shoreline_influence = saturate(
-        max(
-            water_mask.g,
-            max(soil_moisture.g, water_mask.b * 0.28f)));
-    const float pooled_interaction = saturate(
-        max(
-            water_mask.b,
-            visible_water.b * 0.92f));
-    const float retained_wetness = saturate(
-        max(
-            soil_moisture.r * 0.72f,
-            soil_moisture.a * 0.38f + soil_moisture.b * 0.08f));
-
-    return float4(
-        surface_interaction,
-        shoreline_influence,
-        pooled_interaction,
-        retained_wetness);
 }
 
 int2 ComputeUpstreamCoord(int2 coord, float2 flow_vector)
@@ -481,6 +366,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         ComputeOutflowFromPreviousState(coord + int2(0, 1)).w;
 
     float next_depth = max(source_depth - dot(outflow, 1.0f.xxxx) + incoming, 0.0f);
+
     const float total_flux = dot(outflow, 1.0f.xxxx);
     const float2 flow_vector = float2(outflow.x - outflow.y, outflow.w - outflow.z);
     const float average_depth = max((source_depth + next_depth) * 0.5f, 1.0e-3f);
@@ -631,7 +517,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     }
     else
     {
-        resolved_surface_height = max(resolved_surface_height, kWaterBaseHeight);
+        resolved_surface_height = max(resolved_surface_height, water_surface_height);
         next_depth = max(resolved_surface_height - terrain_height, 0.0f);
     }
 
@@ -643,7 +529,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     if (next_depth < kDryDepthEpsilon)
     {
         next_depth = 0.0f;
-        resolved_surface_height = terrain_height;
+        resolved_surface_height = water_surface_height;
         water_velocity_xy = 0.0f.xx;
         water_speed = 0.0f;
         transport_energy = 0.0f;
@@ -655,24 +541,6 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         resolved_erosion_tendency = 0.0f;
     }
 
-    const float depth_preview = smoothstep(0.01f, 0.12f, next_depth);
-    const float wind_glint =
-        pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector + wind_dir * 0.25f), wind_dir)), 2.2f) *
-        smoothstep(0.015f, 0.10f, max(next_depth, resolved_runoff * 0.08f)) *
-        wind_strength;
-    const float flow_sheen =
-        pow(saturate(0.5f + 0.5f * dot(SafeNormalize(flow_vector), wind_dir)), 2.0f) *
-        water_speed * 0.30f;
-
-    float3 preview_color = lerp(
-        float3(0.035f, 0.075f, 0.120f),
-        float3(0.140f, 0.235f, 0.325f),
-        saturate(next_depth * 1.45f + water_speed * 0.22f));
-    preview_color = lerp(preview_color, float3(0.82f, 0.90f, 0.98f), wind_glint * 0.48f);
-    preview_color += float3(0.16f, 0.20f, 0.24f) * flow_sheen;
-
-    const float preview_alpha =
-        saturate(max(standing_water * 0.24f, resolved_runoff * 0.30f) + wind_glint * 0.18f);
     const float4 visible_water = ComputeVisibleWaterSample(
         terrain_height,
         west_terrain,
@@ -691,15 +559,6 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         visible_right,
         visible_up,
         visible_down);
-    const float4 soil_moisture = ComputeSoilMoistureSample(
-        coord,
-        water_dt,
-        rain_amount,
-        next_depth,
-        sheet_absorption,
-        water_mask);
-    const float4 water_interaction =
-        ComputeWaterInteractionSample(visible_water, water_mask, soil_moisture);
     const float normal_y = rsqrt(1.0f + dot(terrain_gradient, terrain_gradient));
     const float slope_amount = saturate(1.0f - normal_y);
     const float surface_slope =
@@ -709,10 +568,10 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
             water_surface_height + shoreline_offset_start,
             water_surface_height + shoreline_offset_end,
             terrain_height);
-    const float shoreline_wetness = water_interaction.g;
-    const float pooled_wetness = water_interaction.b;
-    const float retained_wetness = water_interaction.a;
-    const float surface_wetness = water_interaction.r;
+    const float surface_wetness = saturate(max(water_mask.r, visible_water.r * 0.88f + visible_water.g * 0.22f));
+    const float shoreline_wetness = saturate(max(water_mask.g, water_mask.b * 0.28f));
+    const float pooled_wetness = saturate(max(water_mask.b, visible_water.b * 0.92f));
+    const float retained_wetness = saturate(max(surface_wetness * 0.55f, pooled_wetness * 0.38f));
     const float erosion_mask =
         saturate(erosion_amount * 1.85f + max(erosion_amount - deposition_amount, 0.0f) * 0.65f);
     const float wetness =
@@ -728,16 +587,12 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
 
     g_WaterFlowOut[dispatch_thread_id.xy] = resolved_outflow;
-    g_SoilMoistureOut[dispatch_thread_id.xy] = soil_moisture;
-    g_WaterInteractionOut[dispatch_thread_id.xy] = water_interaction;
     g_TerrainSurfaceDataOut[dispatch_thread_id.xy] =
         float4(surface_slope, beach_mask, humidity, roughness);
     g_WaterVelocityOut[dispatch_thread_id.xy] =
         float4(water_velocity_xy, water_speed, transport_energy);
     g_WaterSedimentOut[dispatch_thread_id.xy] =
         float4(suspended_sediment, resolved_deposition_tendency, resolved_erosion_tendency, resolved_sediment_capacity);
-    g_ErosionDeltaOut[dispatch_thread_id.xy] =
-        float4(erosion_amount, deposition_amount, deposition_amount - erosion_amount, saturate(max(transport_energy, water_speed)));
     g_WaterSurfaceHeight[dispatch_thread_id.xy] =
-        float4(terrain_height, resolved_surface_height, next_depth, depth_preview);
+        float2(terrain_height, resolved_surface_height);
 }

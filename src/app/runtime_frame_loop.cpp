@@ -20,8 +20,8 @@ void Application::TickFrame(double current_time)
 	m_exec_last_time = current_time;
 
 	BeginFrame(current_time, elapsed_time);
-	RenderDebugText();
 	RenderCurrentFrame(current_time, elapsed_time);
+	RenderDebugText();
 
 	DebugMenu_SetInstancingStats(InstancingDebug_GetStats());
 	DebugMenu_SetFrustumCullingStats(FrustumCullingDebug_GetStats());

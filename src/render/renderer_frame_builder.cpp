@@ -176,12 +176,6 @@ RenderFrameContext BuildRendererFrameContext(const RendererFrameBuildInputs& inp
 		frame_context.resources.terrain_water.water_velocity;
 	frame_context.resources.water_sediment =
 		frame_context.resources.terrain_water.water_sediment;
-	frame_context.resources.water_interaction_data =
-		frame_context.resources.terrain_water.water_interaction_data;
-	frame_context.resources.soil_moisture =
-		frame_context.resources.terrain_water.soil_moisture;
-	frame_context.resources.erosion_delta =
-		frame_context.resources.terrain_water.erosion_delta;
 
 	if (inputs.floating_lights != nullptr)
 	{

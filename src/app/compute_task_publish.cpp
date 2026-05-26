@@ -28,10 +28,7 @@ void PublishComputeTaskResources(const ComputeTaskPublishInputs& inputs)
 		inputs.water->Resource(),
 		inputs.water->FlowResource(),
 		inputs.water->VelocityResource(),
-		inputs.water->SedimentResource(),
-		inputs.water->WaterInteractionResource(),
-		inputs.water->SoilMoistureResource(),
-		inputs.water->ErosionDeltaResource());
+		inputs.water->SedimentResource());
 	inputs.terrain_water_state->PublishTo(*inputs.registry);
 
 	inputs.registry->PublishShaderResource(

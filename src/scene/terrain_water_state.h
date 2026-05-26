@@ -15,16 +15,12 @@ struct TerrainWaterFrameState
 	Backend::RenderShaderResource surface_water_flow{};
 	Backend::RenderShaderResource water_velocity{};
 	Backend::RenderShaderResource water_sediment{};
-	Backend::RenderShaderResource water_interaction_data{};
-	Backend::RenderShaderResource soil_moisture{};
-	Backend::RenderShaderResource erosion_delta{};
 
 	bool HasHydrologyData() const
 	{
 		return water_surface_height_texture.isValid() ||
 			water_velocity.isValid() ||
-			water_sediment.isValid() ||
-			water_interaction_data.isValid();
+			water_sediment.isValid();
 	}
 
 	bool HasWaterSurfaceHeight() const
@@ -39,10 +35,7 @@ struct TerrainWaterFrameState
 
 	bool HasSurfaceMaterialData() const
 	{
-		return terrain_surface_data.isValid() ||
-			water_interaction_data.isValid() ||
-			soil_moisture.isValid() ||
-			erosion_delta.isValid();
+		return terrain_surface_data.isValid();
 	}
 
 };
@@ -64,10 +57,7 @@ public:
 		Backend::RenderShaderResource water_surface_height_texture,
 		Backend::RenderShaderResource surface_water_flow,
 		Backend::RenderShaderResource water_velocity,
-		Backend::RenderShaderResource water_sediment,
-		Backend::RenderShaderResource water_interaction_data,
-		Backend::RenderShaderResource soil_moisture,
-		Backend::RenderShaderResource erosion_delta)
+		Backend::RenderShaderResource water_sediment)
 	{
 		frame_state_.water_surface_level = water_surface_height;
 		frame_state_.water_surface_desc = water_surface_desc;
@@ -78,9 +68,6 @@ public:
 		frame_state_.surface_water_flow = surface_water_flow;
 		frame_state_.water_velocity = water_velocity;
 		frame_state_.water_sediment = water_sediment;
-		frame_state_.water_interaction_data = water_interaction_data;
-		frame_state_.soil_moisture = soil_moisture;
-		frame_state_.erosion_delta = erosion_delta;
 	}
 
 	const TerrainWaterFrameState& FrameState() const
@@ -118,18 +105,6 @@ public:
 			ComputeSharedResourceId::WaterSediment,
 			"WaterSediment",
 			frame_state_.water_sediment);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::WaterInteractionData,
-			"WaterInteractionData",
-			frame_state_.water_interaction_data);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::SoilMoisture,
-			"SoilMoisture",
-			frame_state_.soil_moisture);
-		registry.PublishShaderResource(
-			ComputeSharedResourceId::ErosionDelta,
-			"ErosionDelta",
-			frame_state_.erosion_delta);
 	}
 
 private:

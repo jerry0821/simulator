@@ -122,8 +122,7 @@ void GameController::Draw(const RenderFrameContext& frame_context)
 
 void GameController::DrawDepthPrePass(const RenderFrameContext& frame_context)
 {
-	(void)frame_context;
-	m_map_controller.DrawDepthPrePass();
+	m_map_controller.DrawDepthPrePass(frame_context);
 }
 
 bool GameController::GetWaterSurfaceDesc(WaterSurfaceDesc& out_desc)

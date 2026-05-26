@@ -279,12 +279,6 @@ const char* ToString(ComputeSharedResourceId id)
         return "WaterVelocity";
     case ComputeSharedResourceId::WaterSediment:
         return "WaterSediment";
-    case ComputeSharedResourceId::WaterInteractionData:
-        return "WaterInteractionData";
-    case ComputeSharedResourceId::SoilMoisture:
-        return "SoilMoisture";
-    case ComputeSharedResourceId::ErosionDelta:
-        return "ErosionDelta";
     case ComputeSharedResourceId::ComputeNoise:
         return "ComputeNoise";
     case ComputeSharedResourceId::MeteorographField:
@@ -794,6 +788,13 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     {
         Direct3D_SetVSyncEnabled(vsync_enabled);
     }
+    bool msaa_enabled = Direct3D_IsSceneMSAAEnabled();
+    if (ImGui::Checkbox("MSAA (F8)", &msaa_enabled))
+    {
+        Direct3D_SetSceneMSAAEnabled(msaa_enabled);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", Direct3D_IsSceneMSAAEnabled() ? "4x" : "off");
     ImGui::Separator();
     ImGui::Text("FPS: %.1f", g_DebugFps);
     ImGui::Text("Frame Time: %.2f ms", g_DebugFrameTimeMs);
@@ -963,7 +964,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     ImGui::SliderFloat("Evaporation", &g_SurfaceWaterSimulationSettings.evaporation_rate, 0.0f, 0.02f);
     ImGui::SliderFloat("Seepage", &g_SurfaceWaterSimulationSettings.seepage_rate, 0.0f, 0.02f);
     ImGui::SliderFloat("Basin Fade", &g_SurfaceWaterSimulationSettings.basin_fade, 2.0f, 12.0f);
-    ImGui::SliderFloat("Downhill Flow", &g_SurfaceWaterSimulationSettings.downhill_flow_rate, 0.05f, 0.60f);
+    ImGui::SliderFloat("Downhill Flow", &g_SurfaceWaterSimulationSettings.downhill_flow_rate, 0.05f, 1.60f);
     ImGui::SliderFloat("Max Outflow", &g_SurfaceWaterSimulationSettings.max_outflow_fraction, 0.10f, 0.95f);
     ImGui::Separator();
     ImGui::TextDisabled("One-shot Water Injection Test");

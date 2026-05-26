@@ -24,8 +24,8 @@ struct SurfaceWaterSimulationSettings
 	float evaporation_rate = 0.0048f;
 	float seepage_rate = 0.0020f;
 	float basin_fade = 5.0f;
-	float downhill_flow_rate = 0.54f;
-	float max_outflow_fraction = 0.84f;
+	float downhill_flow_rate = 1.10f;
+	float max_outflow_fraction = 0.90f;
 	float debug_injection_x = 46.0f;
 	float debug_injection_z = 118.0f;
 	float debug_injection_radius = 14.0f;

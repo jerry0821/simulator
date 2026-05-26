@@ -32,7 +32,7 @@ void Sprite3D_DrawAdditiveSRV(
 	const DirectX::XMFLOAT4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
 
 void Sprite3D_DrawWaterSRV(
-	ID3D11ShaderResourceView* water_surface_height_srv,
+	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* water_velocity_srv,
 	ID3D11ShaderResourceView* water_sediment_srv,
 	ID3D11ShaderResourceView* terrain_normal_srv,
@@ -40,9 +40,7 @@ void Sprite3D_DrawWaterSRV(
 	const DirectX::XMMATRIX& world_matrix,
 	const DirectX::XMFLOAT4& color,
 	const DirectX::XMFLOAT3& camera_position,
-	float time_seconds,
-	float fresnel_power = 4.5f,
-	float highlight_strength = 0.28f);
+	float highlight_strength = 0.0f);
 
 void Sprite3D_DrawTransparentInstanced(
 	int texid,

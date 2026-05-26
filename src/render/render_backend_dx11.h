@@ -19,10 +19,12 @@ public:
 	RenderBackendInfo info() const;
 
 	void bindScenePass() const;
+	void bindScenePassReadOnlyDepth() const;
 	void beginDepthPrePass() const;
 	void beginOpaquePass() const;
 	void beginScenePass() const;
 	void beginBackbufferPass() const;
+	void resolveSceneColor() const;
 
 	Backend::RenderSceneColorResource sceneColorResource() const;
 	Backend::RenderDepthResource sceneDepthResource() const;

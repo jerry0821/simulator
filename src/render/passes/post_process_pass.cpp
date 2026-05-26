@@ -269,6 +269,8 @@ ID3D11ShaderResourceView* PostProcessPass::RenderBloom(
 
 void PostProcessPass::execute(const RenderFrameContext& frame_context)
 {
+	backend_.resolveSceneColor();
+
 	const PostProcessSettings& post_process_settings = DebugMenu_GetPostProcessSettings();
 	ID3D11ShaderResourceView* bloom_srv = RenderBloom(
 		frame_context.resources.scene_color.shaderResourceView(),
@@ -290,16 +292,14 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 	{
 		water_desc_ptr = &water_desc;
 	}
-	ID3D11ShaderResourceView* water_presence_srv =
-		terrain_water.water_interaction_data.isValid()
-			? terrain_water.water_interaction_data.shaderResourceView()
-			: nullptr;
-	ID3D11ShaderResourceView* water_surface_height_srv =
-		frame_context.resources.water_surface_height.isValid()
-			? frame_context.resources.water_surface_height.shaderResourceView()
-			: (terrain_water.water_surface_height_texture.isValid()
-				? terrain_water.water_surface_height_texture.shaderResourceView()
-				: nullptr);
+	ID3D11ShaderResourceView* terrain_height_srv =
+		frame_context.resources.terrain_height.isValid()
+			? frame_context.resources.terrain_height.shaderResourceView()
+			: (terrain_water.terrain_height.isValid()
+				? terrain_water.terrain_height.shaderResourceView()
+				: (frame_context.resources.water_surface_height.isValid()
+					? frame_context.resources.water_surface_height.shaderResourceView()
+					: nullptr));
 	const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&frame_context.globals.view_matrix);
 	const DirectX::XMMATRIX proj = DirectX::XMLoadFloat4x4(&frame_context.globals.projection_matrix);
 	DirectX::XMFLOAT4X4 inverse_view_projection{};
@@ -308,12 +308,11 @@ void PostProcessPass::execute(const RenderFrameContext& frame_context)
 		DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, view * proj)));
 	ShaderGlitch_Draw(
 		frame_context.resources.scene_color.shaderResourceView(),
-		water_presence_srv,
 		bloom_srv,
 		frame_context.resources.scene_depth.isValid()
 			? frame_context.resources.scene_depth.shaderResourceView()
 			: nullptr,
-		water_surface_height_srv,
+		terrain_height_srv,
 		static_cast<float>(frame_context.globals.time_seconds),
 		frame_context.globals.glitch_amount,
 		frame_context.globals.camera_position,

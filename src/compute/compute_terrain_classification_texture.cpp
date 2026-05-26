@@ -118,16 +118,12 @@ void ComputeTerrainClassificationTexture::Finalize()
 void ComputeTerrainClassificationTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* terrain_normal_srv,
-	ID3D11ShaderResourceView* water_interaction_srv,
-	ID3D11ShaderResourceView* erosion_delta_srv,
 	ID3D11ShaderResourceView* meteorograph_srv,
 	const TerrainMaterialSettings& material_settings)
 {
 	if (!IsValid() ||
 		terrain_height_srv == nullptr ||
 		terrain_normal_srv == nullptr ||
-		water_interaction_srv == nullptr ||
-		erosion_delta_srv == nullptr ||
 		meteorograph_srv == nullptr)
 	{
 		return;
@@ -165,8 +161,6 @@ void ComputeTerrainClassificationTexture::Update(
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_height_srv,
 		terrain_normal_srv,
-		water_interaction_srv,
-		erosion_delta_srv,
 		meteorograph_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_vegetation_uav };
@@ -175,7 +169,7 @@ void ComputeTerrainClassificationTexture::Update(
 
 	m_context->CSSetShader(m_compute_shader, nullptr, 0);
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
-	m_context->CSSetShaderResources(0, 5, srvs);
+	m_context->CSSetShaderResources(0, 3, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
 	m_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
 	m_context->Dispatch(
@@ -183,11 +177,11 @@ void ComputeTerrainClassificationTexture::Update(
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
-	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr };
 	ID3D11UnorderedAccessView* null_uavs[] = { nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
-	m_context->CSSetShaderResources(0, 5, null_srvs);
+	m_context->CSSetShaderResources(0, 3, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
 	m_context->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);

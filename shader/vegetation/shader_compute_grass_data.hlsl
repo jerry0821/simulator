@@ -7,7 +7,7 @@ cbuffer GRASS_DATA_CONSTANT_BUFFER : register(b0)
 };
 
 Texture2D g_TerrainNormal : register(t0);
-Texture2D<float4> g_WaterSurfaceHeight : register(t1);
+Texture2D g_TerrainHeight : register(t1);
 Texture2D g_TerrainVegetationSuitability : register(t2);
 SamplerState g_GrassDataSampler : register(s0);
 RWTexture2D<float4> g_GrassData : register(u0);
@@ -50,14 +50,14 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 
     float4 normal_sample = g_TerrainNormal.SampleLevel(g_GrassDataSampler, uv, 0.0f);
     float normal_y = saturate(TerrainNormalYFromPacked(normal_sample.xy));
-    float4 water_surface_height = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv, 0.0f);
-    float terrain_height = water_surface_height.x;
-    float water_depth = max(water_surface_height.z, 0.0f);
+    float2 terrain_water_height = g_TerrainHeight.SampleLevel(g_GrassDataSampler, uv, 0.0f).xy;
+    float terrain_height = terrain_water_height.x;
+    float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     float2 texel = 1.0f / float2(width, height);
-    float terrain_height_xp = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv + float2(texel.x, 0.0f), 0.0f).x;
-    float terrain_height_xm = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv - float2(texel.x, 0.0f), 0.0f).x;
-    float terrain_height_yp = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv + float2(0.0f, texel.y), 0.0f).x;
-    float terrain_height_ym = g_WaterSurfaceHeight.SampleLevel(g_GrassDataSampler, uv - float2(0.0f, texel.y), 0.0f).x;
+    float terrain_height_xp = g_TerrainHeight.SampleLevel(g_GrassDataSampler, uv + float2(texel.x, 0.0f), 0.0f).x;
+    float terrain_height_xm = g_TerrainHeight.SampleLevel(g_GrassDataSampler, uv - float2(texel.x, 0.0f), 0.0f).x;
+    float terrain_height_yp = g_TerrainHeight.SampleLevel(g_GrassDataSampler, uv + float2(0.0f, texel.y), 0.0f).x;
+    float terrain_height_ym = g_TerrainHeight.SampleLevel(g_GrassDataSampler, uv - float2(0.0f, texel.y), 0.0f).x;
     float vegetation_suitability = g_TerrainVegetationSuitability.SampleLevel(g_GrassDataSampler, uv, 0.0f).r;
 
     float slope_factor = saturate(length(normal_sample.xy) * 1.85f);

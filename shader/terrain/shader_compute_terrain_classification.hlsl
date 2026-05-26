@@ -28,9 +28,7 @@ cbuffer TERRAIN_CLASSIFICATION_CONSTANT_BUFFER : register(b0)
 
 Texture2D g_TerrainHeight : register(t0);
 Texture2D g_TerrainNormal : register(t1);
-Texture2D g_WaterInteractionData : register(t2);
-Texture2D g_ErosionDelta : register(t3);
-Texture2D<float4> g_Meteorograph : register(t4);
+Texture2D<float4> g_Meteorograph : register(t2);
 SamplerState g_ClassificationSampler : register(s0);
 RWTexture2D<float> g_TerrainVegetationSuitability : register(u0);
 
@@ -90,19 +88,11 @@ float TerrainNormalYFromPacked(float2 encoded)
     return sqrt(saturate(1.0f - dot(xz, xz)));
 }
 
-float SampleTerrainHeight(float2 world_xz)
+float2 SampleTerrainWaterHeight(float2 world_xz)
 {
-    return g_TerrainHeight.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).r;
-}
-
-float4 SampleWaterInteraction(float2 world_xz)
-{
-    return g_WaterInteractionData.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
-}
-
-float4 SampleErosionDelta(float2 world_xz)
-{
-    return g_ErosionDelta.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f);
+    float2 terrain_water = g_TerrainHeight.SampleLevel(g_ClassificationSampler, WorldToUv(world_xz), 0.0f).xy;
+    terrain_water.y = max(terrain_water.y, terrain_water.x);
+    return terrain_water;
 }
 
 float4 SampleMeteorograph(float2 world_xz)
@@ -134,15 +124,13 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         uv.x * field_width - field_width * 0.5f,
         uv.y * field_depth - field_depth * 0.5f);
 
-    float terrain_height = SampleTerrainHeight(world_xz);
-    float4 water_interaction = SampleWaterInteraction(world_xz);
-    float4 erosion_delta = SampleErosionDelta(world_xz);
+    float2 terrain_water_height = SampleTerrainWaterHeight(world_xz);
+    float terrain_height = terrain_water_height.x;
+    float water_depth = max(terrain_water_height.y - terrain_water_height.x, 0.0f);
     float4 meteorograph = SampleMeteorograph(world_xz);
     float normal_y = SampleNormalY(world_xz);
-    float surface_wetness = water_interaction.r;
-    float shoreline_wetness = water_interaction.g;
-    float pooled_wetness = water_interaction.b;
-    float retained_moisture = water_interaction.a;
+    float surface_wetness = smoothstep(0.004f, 0.050f, water_depth);
+    float pooled_wetness = smoothstep(0.040f, 0.160f, water_depth);
 
     float grass_flatness = saturate((normal_y - grass_slope_min) / max(grass_slope_max - grass_slope_min, 1.0e-5f));
     float lowland = 1.0f - smoothstep(lowland_height_end, lowland_height_end + 30.0f, terrain_height);
@@ -160,7 +148,6 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         0.72f,
         patch_noise * 0.7f + detail_noise * 0.3f + (macro_noise - 0.5f) * grass_noise_strength);
 
-    float erosion_mask = saturate(erosion_delta.r * 1.85f + max(-erosion_delta.b, 0.0f) * 0.65f);
     float vegetation_noise = smoothstep(0.22f, 0.70f, macro_noise * 0.65f + patch_noise * 0.35f);
     float climate_humidity = saturate(meteorograph.z);
     float climate_temperature = NormalizeClimateTemperature(meteorograph.w);
@@ -168,7 +155,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     float moisture_support = lerp(
         0.92f,
         1.0f,
-        saturate(retained_moisture * 0.82f + climate_humidity * 0.18f));
+        climate_humidity);
     float vegetation_suitability =
         grass_flatness *
         above_water *
@@ -177,8 +164,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         lerp(0.68f, 1.0f, vegetation_noise) *
         moisture_support *
         lerp(1.0f, 0.82f, max(surface_wetness, pooled_wetness * 0.92f)) *
-        lerp(1.0f, 0.82f, 1.0f - climate_mildness) *
-        lerp(1.0f, 0.96f, erosion_mask);
+        lerp(1.0f, 0.82f, 1.0f - climate_mildness);
     vegetation_suitability = saturate(vegetation_suitability);
     g_TerrainVegetationSuitability[dispatch_thread_id.xy] = vegetation_suitability;
 }

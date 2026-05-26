@@ -10,6 +10,7 @@
 #include <cstring>
 #include <vector>
 
+#include "compute_texture_dimensions.h"
 #include "direct3d.h"
 #include "shader_sprite3d_cutout.h"
 #include "shader_sprite3d_cutout_instanced.h"
@@ -43,7 +44,8 @@ ID3D11ShaderResourceView* g_instance_buffer_srv = nullptr;
 size_t g_instance_buffer_capacity = 0;
 ID3D11Buffer* g_transparent_instance_buffer = nullptr;
 size_t g_transparent_instance_buffer_capacity = 0;
-constexpr int kWaterGridResolution = 256;
+constexpr int kWaterGridResolution =
+	static_cast<int>(ComputeTextureDimensions::kWaterMeshResolution);
 
 struct InstanceData
 {
@@ -134,9 +136,9 @@ void EnsureWaterGeometry()
 			const float u = static_cast<float>(x) / static_cast<float>(kWaterGridResolution);
 			const float v = static_cast<float>(y) / static_cast<float>(kWaterGridResolution);
 			Vertex3D& vertex = vertices[static_cast<size_t>(y) * vertex_side + x];
-			// Match the terrain heightfield's UV-to-world mapping:
-			// terrain uses v=0 at -depth/2 and v=1 at +depth/2.
-			vertex.position = { u - 0.5f, v - 0.5f, 0.0f };
+			// RotateX maps local Y to world Z, so flip V to keep the same
+			// world-space quad diagonals as the terrain grid.
+			vertex.position = { u - 0.5f, 0.5f - v, 0.0f };
 			vertex.normal = { 0.0f, 0.0f, -1.0f };
 			vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
 			vertex.texcoord = { u, v };
@@ -408,7 +410,7 @@ void Sprite3D_DrawAdditiveSRV(ID3D11ShaderResourceView* texture_srv,
 	Direct3D_SetCullMode(Direct3DCullMode::Back);
 }
 
-void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* water_surface_height_srv,
+void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* terrain_height_srv,
 						   ID3D11ShaderResourceView* water_velocity_srv,
 						   ID3D11ShaderResourceView* water_sediment_srv,
 						   ID3D11ShaderResourceView* terrain_normal_srv,
@@ -416,11 +418,9 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* water_surface_height_srv,
 						   const XMMATRIX& world_matrix,
 						   const XMFLOAT4& color,
 						   const XMFLOAT3& camera_position,
-						   float time_seconds,
-						   float fresnel_power,
 						   float highlight_strength)
 {
-	if (water_surface_height_srv == nullptr || g_device == nullptr || g_context == nullptr)
+	if (terrain_height_srv == nullptr || g_device == nullptr || g_context == nullptr)
 	{
 		return;
 	}
@@ -434,11 +434,8 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* water_surface_height_srv,
 	ShaderWater_SetWorldMatrix(world_matrix);
 	ShaderWater_SetMaterialColor(color);
 	ShaderWater_SetCameraPosition(camera_position);
-	ShaderWater_SetSurfaceSettings(
-		fresnel_power,
-		highlight_strength,
-		time_seconds);
-	ShaderWater_SetWaterSurfaceHeight(water_surface_height_srv);
+	ShaderWater_SetSurfaceSettings(highlight_strength);
+	ShaderWater_SetTerrainHeight(terrain_height_srv);
 	ShaderWater_SetWaterVelocity(water_velocity_srv);
 	ShaderWater_SetWaterSediment(water_sediment_srv);
 	ShaderWater_SetTerrainNormal(terrain_normal_srv);

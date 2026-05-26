@@ -115,12 +115,12 @@ void ComputeGrassDataTexture::Finalize()
 
 void ComputeGrassDataTexture::Update(
 	ID3D11ShaderResourceView* terrain_normal_srv,
-	ID3D11ShaderResourceView* water_surface_height_srv,
+	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* terrain_vegetation_suitability_srv)
 {
 	if (!IsValid() ||
 		terrain_normal_srv == nullptr ||
-		water_surface_height_srv == nullptr ||
+		terrain_height_srv == nullptr ||
 		terrain_vegetation_suitability_srv == nullptr)
 	{
 		return;
@@ -135,7 +135,7 @@ void ComputeGrassDataTexture::Update(
 
 	ID3D11ShaderResourceView* srvs[] = {
 		terrain_normal_srv,
-		water_surface_height_srv,
+		terrain_height_srv,
 		terrain_vegetation_suitability_srv
 	};
 	ID3D11UnorderedAccessView* uavs[] = { m_uav };

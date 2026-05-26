@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "debug_menu.h"
+#include "direct3d.h"
 #include "frustum_culling_debug.h"
 #include "instancing_debug.h"
 #include "key_logger.h"
@@ -38,6 +39,11 @@ void Application::BeginFrame(double current_time, double elapsed_time)
 	if (KeyLogger_IsTrigger(KK_F5) || DebugMenu_ConsumeShaderReloadRequest())
 	{
 		ReloadComputeResources();
+	}
+
+	if (KeyLogger_IsTrigger(KK_F8))
+	{
+		Direct3D_ToggleSceneMSAA();
 	}
 
 	m_simulation.active_water_surface_desc = ResolveActiveWaterSurfaceDesc();

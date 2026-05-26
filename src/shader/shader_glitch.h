@@ -10,10 +10,9 @@
 bool ShaderGlitch_Initialize();
 void ShaderGlitch_Finalize();
 void ShaderGlitch_Draw(ID3D11ShaderResourceView* scene_srv,
-					   ID3D11ShaderResourceView* water_interaction_srv,
 					   ID3D11ShaderResourceView* bloom_srv,
 					   ID3D11ShaderResourceView* scene_depth_srv,
-					   ID3D11ShaderResourceView* water_surface_height_srv,
+					   ID3D11ShaderResourceView* terrain_height_srv,
 					   float time,
 					   float amount,
 					   const DirectX::XMFLOAT3& camera_position,

@@ -352,6 +352,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shader\water\shader_water_common.hlsli">
+      <Filter>Shader Files\Water</Filter>
+    </ClInclude>
     <ClInclude Include="src\app\application.h">
       <Filter>Header Files\App</Filter>
     </ClInclude>

@@ -53,7 +53,7 @@ public:
   void Finalize();
 
   void Draw(const RenderFrameContext& frame_context);
-  void DrawDepthPrePass();
+  void DrawDepthPrePass(const RenderFrameContext& frame_context);
   bool GetWaterSurfaceDesc(WaterSurfaceDesc& out_desc) const;
   void DrawTransparency(const RenderFrameContext& frame_context);
   void DrawParticles(const RenderFrameContext& frame_context);

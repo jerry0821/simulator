@@ -33,6 +33,9 @@ void Direct3D_Finalize(); // Direct3Dの終了処理
 void Direct3D_Present(); // バックバッファの表示
 void Direct3D_SetVSyncEnabled(bool enabled);
 bool Direct3D_IsVSyncEnabled();
+bool Direct3D_SetSceneMSAAEnabled(bool enabled);
+bool Direct3D_ToggleSceneMSAA();
+bool Direct3D_IsSceneMSAAEnabled();
 
 unsigned int Direct3D_GetBackBufferWidth();
 unsigned int Direct3D_GetBackBufferHeight();
@@ -81,6 +84,8 @@ void Direct3D_SetBackbuffer();
 void Direct3D_UnbindRenderTargets();
 
 void Direct3D_SetSceneRenderTarget();
+void Direct3D_SetSceneRenderTargetReadOnlyDepth();
+void Direct3D_SetSceneDepthOnlyRenderTarget();
 void Direct3D_SetSceneColorOnlyRenderTarget();
 void Direct3D_SetMiniMapRenderTarget();
 void Direct3D_SetPlayerRenderTarget();
@@ -88,8 +93,10 @@ void Direct3D_SetPlayerRenderTarget();
 void Direct3D_ClearScene();
 void Direct3D_ClearSceneColor();
 void Direct3D_ClearSceneDepth();
+void Direct3D_ClearSceneSampleDepth();
 void Direct3D_ClearMiniMap();
 void Direct3D_ClearPlayer();
+void Direct3D_ResolveSceneMSAA();
 
 void Direct3D_SetCustomRenderTarget(ID3D11RenderTargetView * pRTV, ID3D11DepthStencilView * pDSV);
 

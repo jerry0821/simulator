@@ -1748,9 +1748,18 @@ void MapController::DrawParticles(const RenderFrameContext& frame_context)
       { 1.0f, 1.0f, 1.0f, 1.0f });
 }
 
-void MapController::DrawDepthPrePass()
+void MapController::DrawDepthPrePass(const RenderFrameContext& frame_context)
 {
   DrawShadow(nullptr);
+
+  if (m_terrain_visible)
+  {
+    const XMMATRIX view = XMLoadFloat4x4(&frame_context.globals.view_matrix);
+    const XMMATRIX proj = XMLoadFloat4x4(&frame_context.globals.projection_matrix);
+    ShaderField_SetViewMatrix(view);
+    ShaderField_SetProjectionMatrix(proj);
+    MeshFieldRenderer::Draw();
+  }
 }
 
 void MapController::DrawShadow(const RenderFrameContext* frame_context)

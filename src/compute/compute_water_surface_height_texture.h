@@ -50,10 +50,7 @@ public:
 			ComputeSharedResourceId::TerrainSurfaceData,
 			ComputeSharedResourceId::SurfaceWaterFlow,
 			ComputeSharedResourceId::WaterVelocity,
-			ComputeSharedResourceId::WaterSediment,
-			ComputeSharedResourceId::WaterInteractionData,
-			ComputeSharedResourceId::SoilMoisture,
-			ComputeSharedResourceId::ErosionDelta
+			ComputeSharedResourceId::WaterSediment
 		};
 		return kWriteResources;
 	}
@@ -86,9 +83,6 @@ public:
 	Backend::RenderShaderResource FlowResource() const;
 	Backend::RenderShaderResource VelocityResource() const;
 	Backend::RenderShaderResource SedimentResource() const;
-	Backend::RenderShaderResource WaterInteractionResource() const;
-	Backend::RenderShaderResource SoilMoistureResource() const;
-	Backend::RenderShaderResource ErosionDeltaResource() const;
 	bool ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const;
 	bool ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const;
 
@@ -148,8 +142,8 @@ private:
 		unsigned int padding4 = 0u;
 	};
 
-	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kHydrologyResolution;
-	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kHydrologyResolution;
+	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kWaterDataResolution;
+	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kWaterDataResolution;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;
@@ -168,21 +162,12 @@ private:
 	ID3D11Texture2D* m_surface_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_surface_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_surface_uavs[2] = { nullptr, nullptr };
-	ID3D11Texture2D* m_water_interaction_textures[2] = { nullptr, nullptr };
-	ID3D11ShaderResourceView* m_water_interaction_srvs[2] = { nullptr, nullptr };
-	ID3D11UnorderedAccessView* m_water_interaction_uavs[2] = { nullptr, nullptr };
-	ID3D11Texture2D* m_soil_moisture_textures[2] = { nullptr, nullptr };
-	ID3D11ShaderResourceView* m_soil_moisture_srvs[2] = { nullptr, nullptr };
-	ID3D11UnorderedAccessView* m_soil_moisture_uavs[2] = { nullptr, nullptr };
 	ID3D11Texture2D* m_velocity_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_velocity_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_velocity_uavs[2] = { nullptr, nullptr };
 	ID3D11Texture2D* m_sediment_textures[2] = { nullptr, nullptr };
 	ID3D11ShaderResourceView* m_sediment_srvs[2] = { nullptr, nullptr };
 	ID3D11UnorderedAccessView* m_sediment_uavs[2] = { nullptr, nullptr };
-	ID3D11Texture2D* m_erosion_delta_texture = nullptr;
-	ID3D11ShaderResourceView* m_erosion_delta_srv = nullptr;
-	ID3D11UnorderedAccessView* m_erosion_delta_uav = nullptr;
 	ID3D11Texture2D* m_readback_texture = nullptr;
 	ID3D11Buffer* m_constant_buffer = nullptr;
 	ID3D11Buffer* m_terrain_normal_constant_buffer = nullptr;

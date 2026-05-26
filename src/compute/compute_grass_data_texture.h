@@ -19,7 +19,7 @@ public:
 	void Finalize();
 	void Update(
 		ID3D11ShaderResourceView* terrain_normal_srv,
-		ID3D11ShaderResourceView* water_surface_height_srv,
+		ID3D11ShaderResourceView* terrain_height_srv,
 		ID3D11ShaderResourceView* terrain_vegetation_suitability_srv);
 	bool IsValid() const;
 	Backend::RenderShaderResource Resource() const;
@@ -33,8 +33,8 @@ private:
 		unsigned int height = 0;
 	};
 
-	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kHydrologyResolution;
-	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kHydrologyResolution;
+	static constexpr unsigned int kTextureWidth = ComputeTextureDimensions::kGrassDataResolution;
+	static constexpr unsigned int kTextureHeight = ComputeTextureDimensions::kGrassDataResolution;
 	static constexpr unsigned int kThreadGroupSize = 8;
 
 	ID3D11Device* m_device = nullptr;

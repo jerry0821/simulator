@@ -18,7 +18,7 @@
 
 namespace
 {
-	constexpr bool kDrawAtmospherePreview = true;
+	constexpr bool kDrawAtmospherePreview = false;
 	constexpr float kPreviewSize = 192.0f;
 	constexpr float kPreviewMargin = 16.0f;
 	constexpr int kWindOverlayCols = 20;

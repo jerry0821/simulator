@@ -84,10 +84,9 @@ void ShaderGlitch_Finalize()
 }
 
 void ShaderGlitch_Draw(ID3D11ShaderResourceView* scene_srv,
-					   ID3D11ShaderResourceView* water_interaction_srv,
 					   ID3D11ShaderResourceView* bloom_srv,
 					   ID3D11ShaderResourceView* scene_depth_srv,
-					   ID3D11ShaderResourceView* water_surface_height_srv,
+					   ID3D11ShaderResourceView* terrain_height_srv,
 					   float time,
 					   float amount,
 					   const DirectX::XMFLOAT3& camera_position,
@@ -151,20 +150,19 @@ void ShaderGlitch_Draw(ID3D11ShaderResourceView* scene_srv,
 	ShaderPost_BindVS();
 	Direct3D_GetContext()->PSSetShader(g_glitch_pixel_shader, nullptr, 0);
 	Direct3D_GetContext()->PSSetConstantBuffers(0, 1, &g_glitch_constant_buffer);
-	ID3D11ShaderResourceView* srvs[5] = {
+	ID3D11ShaderResourceView* srvs[4] = {
 		scene_srv,
-		water_interaction_srv,
 		bloom_srv,
 		scene_depth_srv,
-		water_surface_height_srv
+		terrain_height_srv
 	};
-	Direct3D_GetContext()->PSSetShaderResources(0, 5, srvs);
+	Direct3D_GetContext()->PSSetShaderResources(0, 4, srvs);
 	Backend::DX11::Sampler::SetLinearFilter();
 
 	ShaderPost_Draw();
 
-	ID3D11ShaderResourceView* null_srvs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
-	Direct3D_GetContext()->PSSetShaderResources(0, 5, null_srvs);
+	ID3D11ShaderResourceView* null_srvs[4] = { nullptr, nullptr, nullptr, nullptr };
+	Direct3D_GetContext()->PSSetShaderResources(0, 4, null_srvs);
 	Direct3D_GetContext()->PSSetShader(nullptr, nullptr, 0);
 	Direct3D_SetDepthEnable(true);
 }

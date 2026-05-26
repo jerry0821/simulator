@@ -18,7 +18,7 @@ cbuffer CB_Light : register(b3)
     float4x4 lightViewProj;
 };
 
-Texture2D g_HeightMap : register(t0);
+Texture2D g_TerrainHeight : register(t0);
 Texture2D<float4> g_MeteorographMap : register(t2);
 SamplerState g_Sampler : register(s0);
 
@@ -89,7 +89,7 @@ int2 WorldToHeightCoord(float2 world_xz)
 {
     uint height_width = 0;
     uint height_height = 0;
-    g_HeightMap.GetDimensions(height_width, height_height);
+    g_TerrainHeight.GetDimensions(height_width, height_height);
     height_width = max(height_width, 1u);
     height_height = max(height_height, 1u);
 
@@ -105,7 +105,7 @@ int2 WorldToHeightCoord(float2 world_xz)
 
 float SampleTerrainHeightWorld(float2 world_xz)
 {
-    return g_HeightMap.Load(int3(WorldToHeightCoord(world_xz), 0)).x;
+    return g_TerrainHeight.Load(int3(WorldToHeightCoord(world_xz), 0)).x;
 }
 
 float2 WorldToFieldUv(float2 world_xz)
