@@ -48,7 +48,7 @@ RWTexture2D<float4> g_WaterSedimentOut : register(u3);
 RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u4);
 
 static const float kWaterDeltaTime = 1.0f / 60.0f;
-static const float kWaterFlowDamping = 0.005f;
+static const float kWaterFlowDamping = 0.020f;
 static const float kHydrologicalCycleRate = 0.5f;
 static const float kWorldGravity = 9.8f;
 static const float kWaterViscosity = 1.0f;
@@ -232,12 +232,27 @@ float2 ComputeUpstreamCoordOffset(float2 flow_vector)
 [numthreads(8, 8, 1)]
 void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 {
-    if (dispatch_thread_id.x >= width || dispatch_thread_id.y >= height)
+    const bool valid = dispatch_thread_id.x < width && dispatch_thread_id.y < height;
+    const int2 coord = int2(dispatch_thread_id.xy);
+
+    // --- Phase 1: Compute outflow and write to UAV (all threads must participate) ---
+    float4 outflow = 0.0f.xxxx;
+    if (valid)
+    {
+        outflow = ComputeOutflowFromPreviousState(coord);
+    }
+    g_WaterFlowOut[dispatch_thread_id.xy] = outflow;
+
+    // All threads (including out-of-bounds) must reach this barrier.
+    DeviceMemoryBarrierWithGroupSync();
+
+    // Out-of-bounds threads exit after the barrier.
+    if (!valid)
     {
         return;
     }
 
-    const int2 coord = int2(dispatch_thread_id.xy);
+    // --- Phase 2: Read neighbor outflow from UAV ---
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
     const float cell_size_x = field_width / max(float(width), 1.0f);
     const float cell_size_z = field_depth / max(float(height), 1.0f);
@@ -257,12 +272,11 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         lerp(0.55f, 1.0f, basin_factor);
     water_height += rain_input + ComputeInjectedWater(coord);
 
-    const float4 outflow = ComputeOutflowFromPreviousState(coord);
     const float incoming =
-        ComputeOutflowFromPreviousState(coord + int2(-1, 0)).x +
-        ComputeOutflowFromPreviousState(coord + int2(1, 0)).y +
-        ComputeOutflowFromPreviousState(coord + int2(0, -1)).z +
-        ComputeOutflowFromPreviousState(coord + int2(0, 1)).w;
+        g_WaterFlowOut[uint2(ClampCoord(coord + int2(-1, 0)))].x +
+        g_WaterFlowOut[uint2(ClampCoord(coord + int2(1, 0)))].y +
+        g_WaterFlowOut[uint2(ClampCoord(coord + int2(0, -1)))].z +
+        g_WaterFlowOut[uint2(ClampCoord(coord + int2(0, 1)))].w;
     water_height += water_dt * (incoming - dot(outflow, 1.0f.xxxx)) / cell_area;
 
     const float4 meteorograph_sample =

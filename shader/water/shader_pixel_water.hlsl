@@ -59,13 +59,15 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float suspended_sediment = saturate(sediment_sample.x);
 
     const float2 coord_offset =
-        Snorm2(Hash2D(ceil((ps_in.posH.xy + ps_in.posW.xz) * 128.0f) * 0.001f)) * 0.35f;
+        Snorm2(Hash2D(ceil(ps_in.posW.xz * 128.0f) * 0.001f)) * 0.35f;
     const float4 packed_normal_sample = SampleTerrain4(terrain_normal_tex, samp, ps_in.posW.xz + coord_offset);
     float3 surface_normal = ReconstructUpNormal(packed_normal_sample.zw);
+    const float shallow_normal_fade = smoothstep(0.08f, 0.35f, max(water_depth, 0.0f));
+    surface_normal = normalize(lerp(float3(0.0f, 1.0f, 0.0f), surface_normal, shallow_normal_fade));
     surface_normal = lerp(
         surface_normal,
         normalize(float3(surface_normal.x * 2.0f, surface_normal.y, surface_normal.z * 2.0f)),
-        water_speed_factor);
+        water_speed_factor * shallow_normal_fade);
     surface_normal = normalize(surface_normal);
 
     const float3 view_dir = normalize(camera_position - ps_in.posW);
