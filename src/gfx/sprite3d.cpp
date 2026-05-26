@@ -160,11 +160,11 @@ void EnsureWaterGeometry()
 			const unsigned int bottom_right = bottom_left + 1;
 
 			indices[index_cursor++] = top_left;
-			indices[index_cursor++] = bottom_right;
 			indices[index_cursor++] = top_right;
-			indices[index_cursor++] = top_left;
-			indices[index_cursor++] = bottom_left;
 			indices[index_cursor++] = bottom_right;
+			indices[index_cursor++] = top_left;
+			indices[index_cursor++] = bottom_right;
+			indices[index_cursor++] = bottom_left;
 		}
 	}
 

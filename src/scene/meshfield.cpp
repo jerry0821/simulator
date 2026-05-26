@@ -79,11 +79,11 @@ void BuildTerrainClipmapMesh(
 	std::vector<Vertex3D>& vertices,
 	std::vector<unsigned int>& indices)
 {
-	const int mesh_h_count = resolution;
-	const int mesh_v_count = resolution;
-	const int mesh_h_vertex_count = mesh_h_count + 1;
-	const int mesh_v_vertex_count = mesh_v_count + 1;
-	const float side_length = interval * static_cast<float>(mesh_h_count);
+	const int mesh_h_vertex_count = resolution;
+	const int mesh_v_vertex_count = resolution;
+	const int mesh_h_count = mesh_h_vertex_count - 1;
+	const int mesh_v_count = mesh_v_vertex_count - 1;
+	const float side_length = interval * static_cast<float>(mesh_h_vertex_count);
 	const float half_side_length = side_length * 0.5f;
 	const float inner_half_extent = inner_side_length * 0.5f;
 
@@ -96,15 +96,15 @@ void BuildTerrainClipmapMesh(
 		for (int x = 0; x < mesh_h_vertex_count; ++x)
 		{
 			const int index = x + mesh_h_vertex_count * z;
-			const float local_x = static_cast<float>(x) * interval;
-			const float local_z = static_cast<float>(z) * interval;
+			const float local_x = (static_cast<float>(z) - static_cast<float>(mesh_v_vertex_count) * 0.5f) * interval;
+			const float local_z = (static_cast<float>(x) - static_cast<float>(mesh_h_vertex_count) * 0.5f) * interval;
 
 			vertices[index].position = {local_x, 0.0f, local_z};
 			vertices[index].normal = {0.0f, 1.0f, 0.0f};
 			vertices[index].color = {1.0f, 1.0f, 1.0f, 1.0f};
 			vertices[index].texcoord = {
-				static_cast<float>(x) / static_cast<float>(mesh_h_count),
-				static_cast<float>(z) / static_cast<float>(mesh_v_count)};
+				static_cast<float>(x) / static_cast<float>(std::max(mesh_h_count, 1)),
+				static_cast<float>(z) / static_cast<float>(std::max(mesh_v_count, 1))};
 		}
 	}
 
@@ -126,11 +126,11 @@ void BuildTerrainClipmapMesh(
 			const unsigned int i0 = static_cast<unsigned int>(h + (v + 0) * mesh_h_vertex_count);
 			const unsigned int i1 = static_cast<unsigned int>(h + (v + 1) * mesh_h_vertex_count + 1);
 			indices.push_back(i0);
-			indices.push_back(i1);
 			indices.push_back(i0 + 1);
-			indices.push_back(i0);
-			indices.push_back(i1 - 1);
 			indices.push_back(i1);
+			indices.push_back(i0);
+			indices.push_back(i1);
+			indices.push_back(i1 - 1);
 		}
 	}
 }
@@ -219,9 +219,7 @@ void DrawTerrainClipmapLevel(const TerrainClipmapLevel& level, const XMFLOAT3& c
 
 	const float snapped_center_x = SnapToInterval(camera_position.x, level.interval);
 	const float snapped_center_z = SnapToInterval(camera_position.z, level.interval);
-	const float origin_x = snapped_center_x - level.side_length * 0.5f;
-	const float origin_z = snapped_center_z - level.side_length * 0.5f;
-	ShaderField_SetWorldMatrix(XMMatrixTranslation(origin_x, 0.0f, origin_z));
+	ShaderField_SetWorldMatrix(XMMatrixTranslation(snapped_center_x, 0.0f, snapped_center_z));
 
 	g_context->DrawIndexed(level.index_count, 0, 0);
 }

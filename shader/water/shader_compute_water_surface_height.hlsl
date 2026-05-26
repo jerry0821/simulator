@@ -48,11 +48,14 @@ RWTexture2D<float4> g_WaterSedimentOut : register(u3);
 RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u4);
 
 static const float kWaterDeltaTime = 1.0f / 60.0f;
-static const float kWaterFlowDamping = 0.020f;
+static const float kWaterFlowDamping = 0.005f;
 static const float kHydrologicalCycleRate = 0.5f;
+static const float kWorldGravity = 9.8f;
+static const float kWaterViscosity = 1.0f;
+static const float kWindEffectIntensity = 0.65f;
+static const uint kWindEffectWaveSize = 64u;
 static const float kWaterBaseHeight = 0.0f;
 static const float kDryDepthEpsilon = 0.008f;
-static const float kDryWaterSurfaceDrop = 0.25f;
 static const float kHydraulicErosionRate = 0.020f;
 static const float kHydraulicDepositionRate = 0.016f;
 static const float kThermalErosionRate = 0.030f;
@@ -77,119 +80,9 @@ bool IsEdgeCell(int2 coord)
     return coord.x <= 0 || coord.y <= 0 || coord.x >= int(width) - 1 || coord.y >= int(height) - 1;
 }
 
-float2 SafeNormalize(float2 value)
-{
-    const float len_sq = dot(value, value);
-    return len_sq > 1.0e-6f ? value * rsqrt(len_sq) : float2(1.0f, 0.0f);
-}
-
-float Smoothstep01(float v)
-{
-    const float t = saturate(v);
-    return t * t * (3.0f - 2.0f * t);
-}
-
 float NormalizeClimateTemperature(float temperature_celsius)
 {
     return saturate((temperature_celsius - kPolarTemperature) / max(kEquatorialTemperature - kPolarTemperature, 1.0e-4f));
-}
-
-float4 ComputeVisibleWaterSample(
-    float terrain_center,
-    float terrain_left,
-    float terrain_right,
-    float terrain_up,
-    float terrain_down,
-    float water_depth,
-    float4 flow)
-{
-    static const float runoff_depth_min = 0.02f;
-    static const float visible_depth_min = 0.10f;
-    static const float standing_water_min = 0.22f;
-    static const float slope_suppress_start = 0.08f;
-    static const float slope_suppress_end = 0.34f;
-    static const float flow_runoff_scale = 0.85f;
-    static const float flow_visibility_suppress = 0.30f;
-
-    const float slope =
-        max(abs(terrain_right - terrain_left), abs(terrain_down - terrain_up));
-    const float slope_keep =
-        1.0f - Smoothstep01(saturate((slope - slope_suppress_start) / max(slope_suppress_end - slope_suppress_start, 1.0e-4f)));
-
-    const float standing_water =
-        Smoothstep01(saturate((water_depth - visible_depth_min) / max(standing_water_min - visible_depth_min, 1.0e-4f)));
-    const float flow_strength = saturate(dot(flow, 1.0f.xxxx) * 5.0f);
-
-    const float pooled_core =
-        Smoothstep01(saturate((standing_water - standing_water_min) / 0.42f));
-    const float depth_core =
-        Smoothstep01(saturate((water_depth - visible_depth_min) / 0.28f));
-    float visible_water =
-        max(
-            pooled_core * lerp(0.45f, 1.0f, slope_keep),
-            depth_core * slope_keep * (1.0f - flow_strength * flow_visibility_suppress * 0.35f));
-    visible_water = saturate(visible_water);
-
-    float runoff_hint =
-        Smoothstep01(saturate((water_depth - runoff_depth_min) / max(visible_depth_min - runoff_depth_min, 1.0e-4f))) *
-        (1.0f - visible_water) *
-        max(flow_strength, 0.15f) *
-        flow_runoff_scale;
-    runoff_hint *= lerp(0.45f, 1.0f, 1.0f - slope_keep);
-
-    const float pooled_preview = saturate(pooled_core);
-    const float preview_alpha = saturate(max(visible_water, runoff_hint * 0.75f));
-    return float4(visible_water, runoff_hint, pooled_preview, preview_alpha);
-}
-
-float4 ComputeWaterMaskSample(
-    float4 visible_water,
-    float4 surface_left,
-    float4 surface_right,
-    float4 surface_up,
-    float4 surface_down)
-{
-    static const float shore_band = 0.24f;
-
-    float water_alpha = visible_water.r;
-    const float runoff_hint = visible_water.g;
-    const float pooled_water = visible_water.b;
-
-    const float visible_left = surface_left.r;
-    const float visible_right = surface_right.r;
-    const float visible_up = surface_up.r;
-    const float visible_down = surface_down.r;
-
-    const float neighbor_average = 0.25f * (visible_left + visible_right + visible_up + visible_down);
-    const float edge_soften =
-        saturate(lerp(neighbor_average * 0.10f, neighbor_average * 0.32f, water_alpha));
-    water_alpha = max(water_alpha, edge_soften * smoothstep(0.10f, 0.42f, water_alpha));
-
-    const float runoff_edge =
-        max(max(surface_left.g, surface_right.g), max(surface_up.g, surface_down.g));
-    water_alpha = max(water_alpha, runoff_edge * 0.02f);
-
-    const float pooled_neighbor =
-        max(pooled_water, max(surface_left.b, max(surface_right.b, max(surface_up.b, surface_down.b))));
-
-    float water_gradient =
-        abs(surface_left.r - surface_right.r) +
-        abs(surface_up.r - surface_down.r) +
-        0.45f * (abs(surface_left.b - surface_right.b) + abs(surface_up.b - surface_down.b));
-    float shore_mask = Smoothstep01(saturate(water_gradient / max(shore_band, 1.0e-4f)));
-    shore_mask *= smoothstep(0.12f, 0.55f, max(water_alpha, neighbor_average));
-    shore_mask *= smoothstep(0.08f, 0.45f, pooled_neighbor);
-
-    const float water_contact = saturate(max(water_alpha, runoff_hint * 0.22f));
-    const float shoreline_contact = saturate(shore_mask);
-    const float pooled_contact = saturate(pooled_neighbor);
-    const float composite_alpha = saturate(max(water_contact, shoreline_contact * 0.04f));
-
-    return float4(
-        water_contact,
-        shoreline_contact,
-        pooled_contact,
-        composite_alpha);
 }
 
 float SampleBaseTerrainHeight(int2 coord)
@@ -216,17 +109,17 @@ float SampleWorkingTerrainHeight(int2 coord)
     return initialize_from_water_level != 0u ? base_terrain_height : previous_terrain_height;
 }
 
-float SamplePreviousSurfaceHeight(int2 coord)
+float SamplePreviousWaterHeight(int2 coord)
 {
-    const float terrain_height = SampleWorkingTerrainHeight(coord);
-    const float previous_surface = SamplePreviousStateRaw(coord).y;
-    return max(previous_surface, terrain_height);
+    const float previous_water_height = SamplePreviousStateRaw(coord).y;
+    return initialize_from_water_level != 0u
+        ? kWaterBaseHeight
+        : previous_water_height;
 }
 
 float SamplePreviousDepth(int2 coord)
 {
-    const float terrain_height = SampleWorkingTerrainHeight(coord);
-    return max(SamplePreviousSurfaceHeight(coord) - terrain_height, 0.0f);
+    return max(SamplePreviousWaterHeight(coord) - SampleWorkingTerrainHeight(coord), 0.0f);
 }
 
 float SampleRainAmount(int2 coord)
@@ -237,10 +130,8 @@ float SampleRainAmount(int2 coord)
 
 float2 ComputeWorldPosition(int2 coord)
 {
-    float2 uv = (float2(coord) + 0.5f) / float2(width, height);
-    return float2(
-        (uv.x - 0.5f) * field_width,
-        (uv.y - 0.5f) * field_depth);
+    const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
+    return float2((uv.x - 0.5f) * field_width, (uv.y - 0.5f) * field_depth);
 }
 
 float ComputeBasinFactor(float terrain_height)
@@ -255,71 +146,87 @@ float ComputeInjectedWater(int2 coord)
         injection_enabled != 0u && injection_radius > 1.0e-4f && injection_amount > 1.0e-4f
             ? 1.0f
             : 0.0f;
-    const float safe_radius = max(injection_radius, 1.0e-4f);
     const float2 world_pos = ComputeWorldPosition(coord);
-    const float distance_to_injection =
-        length(world_pos - float2(injection_center_x, injection_center_z));
-    const float injection_falloff =
-        1.0f - smoothstep(safe_radius * 0.30f, safe_radius, distance_to_injection);
-    return injection_amount * saturate(injection_falloff) * injection_active;
+    const float safe_radius = max(injection_radius, 1.0e-4f);
+    const float distance_to_injection = length(world_pos - float2(injection_center_x, injection_center_z));
+    return injection_amount *
+        saturate(1.0f - smoothstep(safe_radius * 0.30f, safe_radius, distance_to_injection)) *
+        injection_active;
+}
+
+float2 ClampVectorWithLength(float2 value, float min_length, float max_length)
+{
+    const float length_sq = dot(value, value);
+    const float value_length = sqrt(max(length_sq, 1.0e-8f));
+    const float active = length_sq > 1.0e-8f ? 1.0f : 0.0f;
+    return value * (clamp(value_length, min_length, max_length) / value_length) * active;
 }
 
 float4 ComputeOutflowFromPreviousState(int2 coord)
 {
-    const float coord_active = InBounds(coord) ? 1.0f : 0.0f;
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
-    const float4 previous_flow = max(g_PreviousWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
-    const float previous_flow_retention = 0.0f;
-    const float4 retained_previous_flow = previous_flow * previous_flow_retention;
-    const float available_water = SamplePreviousDepth(coord) * coord_active;
+    const float terrain_height = SampleWorkingTerrainHeight(coord);
+    const float water_height = SamplePreviousWaterHeight(coord);
+    const float available_depth = max(water_height - terrain_height, 0.0f);
+    const float coord_active = InBounds(coord) && available_depth > kDryDepthEpsilon ? 1.0f : 0.0f;
 
-    const float center_surface = SamplePreviousSurfaceHeight(coord);
-    float4 surface_delta_heights = float4(
-        max(center_surface - SamplePreviousSurfaceHeight(coord + int2(1, 0)), 0.0f),
-        max(center_surface - SamplePreviousSurfaceHeight(coord + int2(-1, 0)), 0.0f),
-        max(center_surface - SamplePreviousSurfaceHeight(coord + int2(0, 1)), 0.0f),
-        max(center_surface - SamplePreviousSurfaceHeight(coord + int2(0, -1)), 0.0f));
+    const float4 previous_flow_raw = max(g_PreviousWaterFlow.Load(int3(ClampCoord(coord), 0)), 0.0f.xxxx);
+    const float cell_size_x = field_width / max(float(width), 1.0f);
+    const float cell_size_z = field_depth / max(float(height), 1.0f);
+    const float cell_area = max(cell_size_x * cell_size_z, 1.0e-4f);
+    const float cell_interval = max(max(cell_size_x, cell_size_z), 1.0e-4f);
+    const float water_flow_pipe_area = cell_area / kWaterViscosity;
 
-    const float2 uv = (float2(ClampCoord(coord)) + 0.5f) / float2(width, height);
-    const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
+    const float4 neighbor_terrain_height = float4(
+        SampleWorkingTerrainHeight(coord + int2(1, 0)),
+        SampleWorkingTerrainHeight(coord + int2(-1, 0)),
+        SampleWorkingTerrainHeight(coord + int2(0, 1)),
+        SampleWorkingTerrainHeight(coord + int2(0, -1)));
+    const float4 neighbor_water_height = float4(
+        SamplePreviousWaterHeight(coord + int2(1, 0)),
+        SamplePreviousWaterHeight(coord + int2(-1, 0)),
+        SamplePreviousWaterHeight(coord + int2(0, 1)),
+        SamplePreviousWaterHeight(coord + int2(0, -1)));
+    const float4 neighbor_surface_height = max(neighbor_terrain_height, neighbor_water_height);
+    const float surface_height = max(terrain_height, water_height);
+    const float4 terrain_barrier =
+        max(sign(surface_height - (neighbor_terrain_height + kDryDepthEpsilon)), 0.0f.xxxx);
+    const float4 previous_flow = previous_flow_raw * terrain_barrier;
+    float4 surface_delta_height = surface_height - neighbor_surface_height;
 
-    float4 candidate = max(retained_previous_flow + water_dt * flow_rate * surface_delta_heights, 0.0f.xxxx);
+    const float4 meteorograph_sample =
+        g_Meteorograph.SampleLevel(g_TerrainSampler, (float2(ClampCoord(coord)) + 0.5f) / float2(width, height), 0.0f);
+    if ((uint(coord.x) % kWindEffectWaveSize) == 0u || (uint(coord.y) % kWindEffectWaveSize) == 0u)
+    {
+        const float2 resized_wind = ClampVectorWithLength(meteorograph_sample.xy, 0.8f, 64.0f);
+        const float4 wind_effect = float4(-resized_wind.x, resized_wind.x, -resized_wind.y, resized_wind.y);
+        const float4 max_disturbance = max(neighbor_surface_height - neighbor_terrain_height, 0.0f.xxxx) * water_dt;
+        surface_delta_height -= clamp(
+            wind_effect * kWindEffectIntensity * max(length(surface_delta_height), 0.001f),
+            -max_disturbance,
+            max_disturbance) * terrain_barrier;
+    }
+    surface_delta_height *= terrain_barrier;
+
+    float4 candidate = max(
+        previous_flow +
+            water_dt *
+            max(flow_rate, 0.0f) *
+            water_flow_pipe_area *
+            ((kWorldGravity * surface_delta_height) / cell_interval),
+        0.0f.xxxx) * terrain_barrier;
     const float total_candidate = dot(candidate, 1.0f.xxxx);
-    const float movable_water = available_water * max_outflow_fraction;
-    const float candidate_active = total_candidate > 1.0e-5f ? 1.0f : 0.0f;
-    const float scale =
-        min((movable_water / max(total_candidate, 1.0e-5f)) * (1.0f - kWaterFlowDamping), 1.0f);
-    const float4 no_candidate_outflow =
-        max(retained_previous_flow * saturate(1.0f - water_dt * 5.0f), 0.0f.xxxx);
-    const float4 wet_outflow = lerp(no_candidate_outflow, candidate * scale, candidate_active);
-    const float4 dry_outflow =
-        max(retained_previous_flow * saturate(1.0f - water_dt * 6.0f), 0.0f.xxxx);
-    const float water_active = available_water > 1.0e-5f ? 1.0f : 0.0f;
-    return lerp(dry_outflow, wet_outflow, water_active) * coord_active;
+
+    const float movable_volume = available_depth * cell_area * max_outflow_fraction;
+    const float scale = total_candidate > 1.0e-6f
+        ? min((movable_volume / max(total_candidate * water_dt, 1.0e-6f)) * (1.0f - kWaterFlowDamping), 1.0f)
+        : 1.0f;
+    return candidate * scale * coord_active;
 }
 
-float4 ComputeApproxVisibleWaterAtCoord(int2 coord)
+float2 ComputeUpstreamCoordOffset(float2 flow_vector)
 {
-    const int2 clamped = ClampCoord(coord);
-    const int2 left_coord = ClampCoord(clamped + int2(-1, 0));
-    const int2 right_coord = ClampCoord(clamped + int2(1, 0));
-    const int2 up_coord = ClampCoord(clamped + int2(0, -1));
-    const int2 down_coord = ClampCoord(clamped + int2(0, 1));
-
-    return ComputeVisibleWaterSample(
-        SampleWorkingTerrainHeight(clamped),
-        SampleWorkingTerrainHeight(left_coord),
-        SampleWorkingTerrainHeight(right_coord),
-        SampleWorkingTerrainHeight(up_coord),
-        SampleWorkingTerrainHeight(down_coord),
-        SamplePreviousDepth(clamped),
-        ComputeOutflowFromPreviousState(clamped));
-}
-
-int2 ComputeUpstreamCoord(int2 coord, float2 flow_vector)
-{
-    const float2 upstream = clamp(flow_vector * 4.0f, -1.0f, 1.0f);
-    return ClampCoord(coord - int2((int)round(upstream.x), (int)round(upstream.y)));
+    return clamp(flow_vector * 4.0f, -1.0f.xx, 1.0f.xx);
 }
 
 [numthreads(8, 8, 1)]
@@ -331,32 +238,24 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     }
 
     const int2 coord = int2(dispatch_thread_id.xy);
-    float terrain_height = SampleWorkingTerrainHeight(coord);
     const float water_dt = max(min(delta_time_seconds, kWaterDeltaTime), 1.0e-4f);
-    const float basin_factor = ComputeBasinFactor(terrain_height);
-    const float rain_amount = SampleRainAmount(coord);
+    const float cell_size_x = field_width / max(float(width), 1.0f);
+    const float cell_size_z = field_depth / max(float(height), 1.0f);
+    const float cell_area = max(cell_size_x * cell_size_z, 1.0e-4f);
 
-    const float previous_depth = SamplePreviousDepth(coord);
+    float terrain_height = SampleWorkingTerrainHeight(coord);
+    float water_height = initialize_from_water_level != 0u
+        ? kWaterBaseHeight
+        : SamplePreviousWaterHeight(coord);
+
+    const float basin_factor = ComputeBasinFactor(terrain_height);
     const float rain_input =
-        rain_amount *
+        SampleRainAmount(coord) *
         accumulation_rate *
         kHydrologicalCycleRate *
         water_dt *
         lerp(0.55f, 1.0f, basin_factor);
-    const float injected_water = ComputeInjectedWater(coord);
-    const float seeded_min_depth =
-        minimum_depth_for_surface *
-        smoothstep(-minimum_depth_for_surface, basin_fade * 0.35f, water_surface_height - terrain_height);
-
-    float source_depth =
-        initialize_from_water_level != 0u
-            ? max(water_surface_height - terrain_height, 0.0f)
-            : max(previous_depth + rain_input + injected_water, 0.0f);
-
-    if (initialize_from_water_level != 0u && source_depth > 1.0e-5f)
-    {
-        source_depth = max(source_depth, seeded_min_depth);
-    }
+    water_height += rain_input + ComputeInjectedWater(coord);
 
     const float4 outflow = ComputeOutflowFromPreviousState(coord);
     const float incoming =
@@ -364,229 +263,104 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         ComputeOutflowFromPreviousState(coord + int2(1, 0)).y +
         ComputeOutflowFromPreviousState(coord + int2(0, -1)).z +
         ComputeOutflowFromPreviousState(coord + int2(0, 1)).w;
+    water_height += water_dt * (incoming - dot(outflow, 1.0f.xxxx)) / cell_area;
 
-    float next_depth = max(source_depth - dot(outflow, 1.0f.xxxx) + incoming, 0.0f);
-
-    const float total_flux = dot(outflow, 1.0f.xxxx);
-    const float2 flow_vector = float2(outflow.x - outflow.y, outflow.w - outflow.z);
-    const float average_depth = max((source_depth + next_depth) * 0.5f, 1.0e-3f);
-    const float2 uv = (float2(coord) + 0.5f) / float2(width, height);
-    const float4 meteorograph_sample = g_Meteorograph.SampleLevel(g_TerrainSampler, uv, 0.0f);
-    const float2 atmospheric_wind = meteorograph_sample.xy;
+    const float4 meteorograph_sample =
+        g_Meteorograph.SampleLevel(g_TerrainSampler, (float2(coord) + 0.5f) / float2(width, height), 0.0f);
+    const float wind_strength = saturate(length(meteorograph_sample.xy)) * 0.35f;
     const float atmospheric_humidity = saturate(meteorograph_sample.z);
     const float atmospheric_temperature = NormalizeClimateTemperature(meteorograph_sample.w);
-    const float wind_strength = saturate(length(atmospheric_wind)) * 0.35f;
-    float2 water_velocity_xy = flow_vector / max(average_depth * 4.0f + 0.04f, 0.08f);
-    float water_speed = saturate(length(water_velocity_xy) * 2.8f);
-    float transport_energy =
-        saturate(water_speed * (0.55f + saturate(total_flux * 5.0f) * 0.45f));
+    const float evaporation_loss =
+        evaporation_rate *
+        water_dt *
+        60.0f *
+        lerp(1.08f, 0.58f, basin_factor) *
+        lerp(0.88f, 1.18f, wind_strength) *
+        lerp(0.84f, 1.16f, atmospheric_temperature) *
+        lerp(1.08f, 0.82f, atmospheric_humidity);
+    water_height = max(water_height - min(max(water_height - terrain_height, 0.0f), evaporation_loss), kWaterBaseHeight);
 
-    const float east_terrain = SampleWorkingTerrainHeight(coord + int2(1, 0));
-    const float west_terrain = SampleWorkingTerrainHeight(coord + int2(-1, 0));
-    const float north_terrain = SampleWorkingTerrainHeight(coord + int2(0, 1));
-    const float south_terrain = SampleWorkingTerrainHeight(coord + int2(0, -1));
     const float2 terrain_gradient = float2(
-        east_terrain - west_terrain,
-        north_terrain - south_terrain) * 0.5f;
+        SampleWorkingTerrainHeight(coord + int2(1, 0)) - SampleWorkingTerrainHeight(coord + int2(-1, 0)),
+        SampleWorkingTerrainHeight(coord + int2(0, 1)) - SampleWorkingTerrainHeight(coord + int2(0, -1))) * 0.5f;
     const float terrain_slope = saturate(length(terrain_gradient) * 0.55f);
 
-    const float standing_water = smoothstep(0.03f, 0.18f, next_depth);
-    const float runoff = smoothstep(0.004f, 0.045f, total_flux);
-    const float sediment_capacity =
-        saturate(water_speed * 0.62f + terrain_slope * 0.38f) *
-        saturate(next_depth * 2.8f + 0.12f);
-    const float erosion_tendency =
-        saturate(terrain_slope * water_speed * 1.2f + runoff * 0.22f);
-    const float deposition_tendency =
-        saturate((1.0f - water_speed) * (standing_water * 0.70f + 0.18f));
+    const float source_depth = max(SamplePreviousWaterHeight(coord) - terrain_height, 0.0f);
+    float next_depth = max(water_height - terrain_height, 0.0f);
+    const float average_depth = max((source_depth + next_depth) * 0.5f, 1.0e-3f);
+    const float2 flow_vector = float2(outflow.x - outflow.y, outflow.z - outflow.w);
+    float2 water_velocity_xy = flow_vector / max(average_depth * max(cell_size_x, cell_size_z), 0.1f) * water_dt;
+    float water_speed = next_depth > kDryDepthEpsilon ? saturate(length(water_velocity_xy) * 2.8f) : 0.0f;
+    float transport_energy = saturate(water_speed * (0.55f + saturate(dot(outflow, 1.0f.xxxx) * 5.0f) * 0.45f));
 
     float suspended_sediment = 0.0f;
-    float erosion_amount = 0.0f;
-    float deposition_amount = 0.0f;
-
-    if (initialize_from_water_level == 0u && next_depth > 1.0e-5f)
+    float deposition_tendency = 0.0f;
+    float erosion_tendency = 0.0f;
+    float sediment_capacity = 0.0f;
+    if (next_depth > kDryDepthEpsilon)
     {
-        const int2 upstream_coord = ComputeUpstreamCoord(coord, flow_vector);
-        const float previous_suspended_sediment =
-            saturate(g_PreviousWaterSediment.Load(int3(upstream_coord, 0)).x);
-        const float sediment_gap = sediment_capacity - previous_suspended_sediment;
-        const float hydraulic_support =
-            saturate((0.25f + next_depth * 0.75f) *
-                     (0.20f + terrain_slope * 0.80f) *
-                     (0.35f + transport_energy * 0.65f));
-
-        float hydraulic_erosion =
-            max(sediment_gap, 0.0f) *
-            kHydraulicErosionRate *
-            hydraulic_support *
-            (0.55f + erosion_tendency * 0.45f) *
-            water_dt * 12.0f;
-        float hydraulic_deposition =
-            max(-sediment_gap, 0.0f) *
-            kHydraulicDepositionRate *
-            (0.45f + standing_water * 0.55f) *
-            (0.35f + deposition_tendency * 0.65f) *
-            (1.0f - terrain_slope * 0.35f) *
-            water_dt * 12.0f;
+        const int2 upstream_coord = ClampCoord(coord - int2(round(ComputeUpstreamCoordOffset(flow_vector))));
+        const float previous_sediment = saturate(g_PreviousWaterSediment.Load(int3(upstream_coord, 0)).x);
+        sediment_capacity =
+            saturate(water_speed * 0.62f + terrain_slope * 0.38f) *
+            saturate(next_depth * 2.8f + 0.12f);
+        const float sediment_delta = sediment_capacity - previous_sediment;
+        const float erosion_amount =
+            min(max(sediment_delta, 0.0f) * kHydraulicErosionRate * water_dt * 12.0f, kMaxHydraulicErosion);
+        const float deposition_amount =
+            min(max(-sediment_delta, 0.0f) * kHydraulicDepositionRate * water_dt * 12.0f, kMaxHydraulicDeposition);
+        terrain_height += deposition_amount - erosion_amount;
+        suspended_sediment = saturate(previous_sediment + erosion_amount - deposition_amount * 0.85f);
+        erosion_tendency = saturate(erosion_amount * 50.0f);
+        deposition_tendency = saturate(deposition_amount * 60.0f);
 
         const float neighbor_height =
-            (east_terrain + west_terrain + north_terrain + south_terrain) * 0.25f;
-        const float thermal_drive = max(terrain_height - neighbor_height, 0.0f);
-        const float underwater_factor = lerp(1.0f, 0.42f, standing_water);
-        const float thermal_excess =
-            max(terrain_slope - kThermalSlopeThreshold * underwater_factor, 0.0f);
-        const float thermal_erosion =
-            thermal_drive *
-            kThermalErosionRate *
-            thermal_excess *
-            (0.30f + next_depth * 0.20f + transport_energy * 0.20f) *
-            water_dt * 12.0f;
-
-        hydraulic_erosion = min(hydraulic_erosion + thermal_erosion, kMaxHydraulicErosion);
-        hydraulic_deposition = min(hydraulic_deposition, kMaxHydraulicDeposition);
-
-        erosion_amount = hydraulic_erosion;
-        deposition_amount = hydraulic_deposition;
-
-        const float terrain_delta = deposition_amount - erosion_amount;
-        terrain_height += terrain_delta;
-        next_depth = max(next_depth - terrain_delta, 0.0f);
-        suspended_sediment =
-            saturate(previous_suspended_sediment + erosion_amount - deposition_amount * 0.85f);
+            (SampleWorkingTerrainHeight(coord + int2(1, 0)) +
+             SampleWorkingTerrainHeight(coord + int2(-1, 0)) +
+             SampleWorkingTerrainHeight(coord + int2(0, 1)) +
+             SampleWorkingTerrainHeight(coord + int2(0, -1))) * 0.25f;
+        const float thermal_excess = max(terrain_slope - kThermalSlopeThreshold * 0.42f, 0.0f);
+        terrain_height = lerp(
+            terrain_height,
+            neighbor_height,
+            saturate(water_dt * kThermalErosionRate * thermal_excess));
     }
 
-    const float evaporation_loss =
-        min(
-            next_depth,
-            evaporation_rate *
-                water_dt *
-                60.0f *
-                lerp(1.08f, 0.58f, basin_factor) *
-                lerp(0.88f, 1.18f, wind_strength) *
-                lerp(0.84f, 1.16f, atmospheric_temperature) *
-                lerp(1.08f, 0.82f, atmospheric_humidity));
-    next_depth = max(next_depth - evaporation_loss, 0.0f);
+    next_depth = max(water_height - terrain_height, 0.0f);
+    const float shallow_sheet = 1.0f - smoothstep(0.04f, 0.16f, next_depth);
+    const float steep_sheet = smoothstep(0.22f, 0.55f, terrain_slope);
+    const float basin_keep = smoothstep(0.15f, 0.65f, basin_factor);
+    const float sheet_prune = saturate(shallow_sheet * steep_sheet * (1.0f - basin_keep * 0.85f));
+    const float sheet_loss = next_depth * sheet_prune * 0.90f;
+    water_height -= sheet_loss;
+    next_depth = max(water_height - terrain_height, 0.0f);
 
-    const float seepage_loss =
-        min(
-            next_depth,
-            seepage_rate * water_dt * 60.0f * (1.0f - basin_factor));
-    next_depth = max(next_depth - seepage_loss, 0.0f);
-
-    const float shallow_sheet_factor = 1.0f - smoothstep(0.018f, 0.060f, next_depth);
-    const float slope_sheet_factor = smoothstep(0.08f, 0.24f, terrain_slope);
-    const float basin_sheet_factor = 1.0f - smoothstep(0.12f, 0.52f, basin_factor);
-    const float sheet_prune_factor =
-        shallow_sheet_factor *
-        slope_sheet_factor *
-        basin_sheet_factor *
-        (1.0f - standing_water) *
-        (0.42f + runoff * 0.58f);
-    const float sheet_absorption = next_depth * saturate(sheet_prune_factor * 0.92f);
-    next_depth = max(next_depth - sheet_absorption, 0.0f);
-
-    float resolved_surface_height = terrain_height + next_depth;
-    if (!IsEdgeCell(coord))
+    if (next_depth <= kDryDepthEpsilon || IsEdgeCell(coord))
     {
-        const float neighbor_surface_average =
-            (SamplePreviousSurfaceHeight(coord + int2(1, 0)) +
-             SamplePreviousSurfaceHeight(coord + int2(-1, 0)) +
-             SamplePreviousSurfaceHeight(coord + int2(0, 1)) +
-             SamplePreviousSurfaceHeight(coord + int2(0, -1)) +
-             resolved_surface_height) * 0.2f;
-        const float local_surface_slope =
-            max(
-                abs(SamplePreviousSurfaceHeight(coord + int2(1, 0)) - SamplePreviousSurfaceHeight(coord + int2(-1, 0))),
-                abs(SamplePreviousSurfaceHeight(coord + int2(0, 1)) - SamplePreviousSurfaceHeight(coord + int2(0, -1))));
-        const float standing_settle =
-            standing_water *
-            (1.0f - runoff) *
-            (1.0f - saturate(local_surface_slope * 6.0f)) *
-            saturate(1.0f - terrain_slope * 1.8f) *
-            lerp(0.55f, 1.0f, basin_factor);
-        const float settled_surface_height =
-            max(terrain_height, lerp(resolved_surface_height, neighbor_surface_average, standing_settle * 0.55f));
-        resolved_surface_height = settled_surface_height;
-        next_depth = max(resolved_surface_height - terrain_height, 0.0f);
-    }
-    else
-    {
-        resolved_surface_height = max(resolved_surface_height, water_surface_height);
-        next_depth = max(resolved_surface_height - terrain_height, 0.0f);
-    }
-
-    float4 resolved_outflow = outflow;
-    float resolved_runoff = runoff;
-    float resolved_sediment_capacity = sediment_capacity;
-    float resolved_deposition_tendency = deposition_tendency;
-    float resolved_erosion_tendency = erosion_tendency;
-    if (next_depth < kDryDepthEpsilon)
-    {
-        next_depth = 0.0f;
-        resolved_surface_height = water_surface_height;
         water_velocity_xy = 0.0f.xx;
         water_speed = 0.0f;
         transport_energy = 0.0f;
-        suspended_sediment = 0.0f;
-        resolved_outflow = 0.0f.xxxx;
-        resolved_runoff = 0.0f;
-        resolved_sediment_capacity = 0.0f;
-        resolved_deposition_tendency = 0.0f;
-        resolved_erosion_tendency = 0.0f;
     }
 
-    const float4 visible_water = ComputeVisibleWaterSample(
-        terrain_height,
-        west_terrain,
-        east_terrain,
-        south_terrain,
-        north_terrain,
-        next_depth,
-        resolved_outflow);
-    const float4 visible_left = ComputeApproxVisibleWaterAtCoord(coord + int2(-1, 0));
-    const float4 visible_right = ComputeApproxVisibleWaterAtCoord(coord + int2(1, 0));
-    const float4 visible_up = ComputeApproxVisibleWaterAtCoord(coord + int2(0, -1));
-    const float4 visible_down = ComputeApproxVisibleWaterAtCoord(coord + int2(0, 1));
-    const float4 water_mask = ComputeWaterMaskSample(
-        visible_water,
-        visible_left,
-        visible_right,
-        visible_up,
-        visible_down);
-    const float normal_y = rsqrt(1.0f + dot(terrain_gradient, terrain_gradient));
-    const float slope_amount = saturate(1.0f - normal_y);
-    const float surface_slope =
-        smoothstep(1.0f - rock_slope_end, 1.0f - rock_slope_start, slope_amount);
-    const float shoreline =
-        smoothstep(
-            water_surface_height + shoreline_offset_start,
-            water_surface_height + shoreline_offset_end,
-            terrain_height);
-    const float surface_wetness = saturate(max(water_mask.r, visible_water.r * 0.88f + visible_water.g * 0.22f));
-    const float shoreline_wetness = saturate(max(water_mask.g, water_mask.b * 0.28f));
-    const float pooled_wetness = saturate(max(water_mask.b, visible_water.b * 0.92f));
-    const float retained_wetness = saturate(max(surface_wetness * 0.55f, pooled_wetness * 0.38f));
-    const float erosion_mask =
-        saturate(erosion_amount * 1.85f + max(erosion_amount - deposition_amount, 0.0f) * 0.65f);
-    const float wetness =
-        saturate(
-            max(shoreline * (0.68f + shoreline_wetness * 0.32f), retained_wetness * 0.55f) * wetness_gain +
-            surface_wetness * 0.18f +
-            pooled_wetness * 0.12f);
-    const float beach_mask =
-        saturate(max(shoreline_wetness, shoreline * (1.0f - pooled_wetness * 0.25f)));
-    const float humidity =
-        saturate(retained_wetness * 0.48f + wetness * 0.20f);
-    const float roughness =
-        saturate(lerp(0.24f, 0.92f, max(erosion_mask, surface_slope * 0.65f)));
+    water_height = next_depth > kDryDepthEpsilon
+        ? max(water_height, terrain_height)
+        : min(water_height, terrain_height - kDryDepthEpsilon);
 
-    g_WaterFlowOut[dispatch_thread_id.xy] = resolved_outflow;
+    const float normal_y = rsqrt(1.0f + dot(terrain_gradient, terrain_gradient));
+    const float surface_slope =
+        smoothstep(1.0f - rock_slope_end, 1.0f - rock_slope_start, saturate(1.0f - normal_y));
+    const float water_to_terrain = terrain_height - water_height;
+    const float beach_mask = max(1.0f - max(water_to_terrain * 10.0f, 0.0f), 0.0f);
+    const float humidity = max((water_to_terrain - 0.5f) / max(basin_fade, 1.0e-4f), 0.0f);
+    const float roughness = saturate(lerp(0.24f, 0.92f, max(erosion_tendency, surface_slope * 0.65f)));
+
+    g_WaterFlowOut[dispatch_thread_id.xy] = next_depth > kDryDepthEpsilon ? outflow : 0.0f.xxxx;
     g_TerrainSurfaceDataOut[dispatch_thread_id.xy] =
         float4(surface_slope, beach_mask, humidity, roughness);
     g_WaterVelocityOut[dispatch_thread_id.xy] =
         float4(water_velocity_xy, water_speed, transport_energy);
     g_WaterSedimentOut[dispatch_thread_id.xy] =
-        float4(suspended_sediment, resolved_deposition_tendency, resolved_erosion_tendency, resolved_sediment_capacity);
+        float4(suspended_sediment, deposition_tendency, erosion_tendency, sediment_capacity);
     g_WaterSurfaceHeight[dispatch_thread_id.xy] =
-        float2(terrain_height, resolved_surface_height);
+        float2(terrain_height, water_height);
 }

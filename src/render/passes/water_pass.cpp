@@ -116,17 +116,12 @@ void WaterPass::execute(const RenderFrameContext& frame_context)
 
 	const XMMATRIX view = XMLoadFloat4x4(&frame_context.globals.view_matrix);
 	const XMMATRIX proj = XMLoadFloat4x4(&frame_context.globals.projection_matrix);
-	XMFLOAT4X4 inverse_view_projection{};
-	XMStoreFloat4x4(
-		&inverse_view_projection,
-		XMMatrixTranspose(XMMatrixInverse(nullptr, view * proj)));
 	Shader3D_SetViewMatrix(view);
 	Shader3D_SetProjMatrix(proj);
 	Shader3D_Unlit_SetViewMatrix(view);
 	Shader3D_Unlit_SetProjMatrix(proj);
 	ShaderWater_SetViewMatrix(view);
 	ShaderWater_SetProjMatrix(proj);
-	ShaderWater_SetInverseViewProjection(inverse_view_projection);
 	const TerrainWaterFrameState& terrain_water = frame_context.resources.terrain_water;
 	ID3D11ShaderResourceView* terrain_height_srv =
 		terrain_water.water_surface_height_texture.isValid()

@@ -11,11 +11,6 @@ cbuffer PS_CONSTANT_BUFFER1 : register(b6)
     float highlight_strength;
 };
 
-cbuffer PS_CONSTANT_BUFFER2 : register(b7)
-{
-    float4x4 inverse_view_projection;
-};
-
 struct PS_INPUT
 {
     float4 posH : SV_POSITION;
@@ -33,22 +28,23 @@ SamplerState samp : register(s0);
 
 #include "shader_water_common.hlsli"
 
-float2 ComputeScreenUv(float4 posH)
+float LinearEyeDepth(float raw_depth)
 {
-    uint width = 0;
-    uint height = 0;
-    scene_depth_tex.GetDimensions(width, height);
-    const float2 inv_size = 1.0f / max(float2(width, height), 1.0f.xx);
-    return saturate(posH.xy * inv_size);
+    const float near_z = 0.1f;
+    const float far_z = 5000.0f;
+    return (near_z * far_z) / max(far_z - raw_depth * (far_z - near_z), 1.0e-4f);
 }
 
-float3 ComputeSceneWorldPos(float2 uv, float raw_depth)
+float2 Hash2D(float2 p)
 {
-    const float2 ndc_xy = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
-    const float4 clip_pos = float4(ndc_xy, raw_depth, 1.0f);
-    float4 world_pos = mul(clip_pos, inverse_view_projection);
-    world_pos.xyz /= max(world_pos.w, 1.0e-6f);
-    return world_pos.xyz;
+    const float3 p3 = frac(float3(p.xyx) * 0.1031f);
+    const float3 q = p3 + dot(p3, p3.yzx + 33.33f);
+    return frac((q.xx + q.yz) * q.zy);
+}
+
+float2 Snorm2(float2 value)
+{
+    return value * 2.0f - 1.0f;
 }
 
 float4 main(PS_INPUT ps_in) : SV_TARGET
@@ -59,17 +55,17 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
 
     const float4 velocity_sample = water_velocity_tex.SampleLevel(samp, sample_uv, 0.0f);
     const float4 sediment_sample = water_sediment_tex.SampleLevel(samp, sample_uv, 0.0f);
-    const float water_speed_factor = saturate(length(velocity_sample.xy) * 8.0f + velocity_sample.z * 0.65f);
+    const float water_speed_factor = saturate(length(velocity_sample.xy * 60.0f) * 0.5f);
     const float suspended_sediment = saturate(sediment_sample.x);
 
-    const float4 packed_normal_sample = SampleTerrain4(terrain_normal_tex, samp, ps_in.posW.xz);
+    const float2 coord_offset =
+        Snorm2(Hash2D(ceil((ps_in.posH.xy + ps_in.posW.xz) * 128.0f) * 0.001f)) * 0.35f;
+    const float4 packed_normal_sample = SampleTerrain4(terrain_normal_tex, samp, ps_in.posW.xz + coord_offset);
     float3 surface_normal = ReconstructUpNormal(packed_normal_sample.zw);
-    const float shallow_normal_fade = smoothstep(0.08f, 0.35f, max(water_depth, 0.0f));
-    surface_normal = normalize(lerp(float3(0.0f, 1.0f, 0.0f), surface_normal, shallow_normal_fade));
     surface_normal = lerp(
         surface_normal,
         normalize(float3(surface_normal.x * 2.0f, surface_normal.y, surface_normal.z * 2.0f)),
-        water_speed_factor * shallow_normal_fade);
+        water_speed_factor);
     surface_normal = normalize(surface_normal);
 
     const float3 view_dir = normalize(camera_position - ps_in.posW);
@@ -78,7 +74,7 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     float3 base_color = lerp(
         float3(0.25f, 0.40f, 0.45f),
         float3(0.40f, 0.30f, 0.20f),
-        saturate(suspended_sediment * 5.0f));
+        saturate(suspended_sediment * 500.0f));
     base_color = lerp(base_color, float3(0.60f, 0.60f, 0.65f), water_speed_factor);
     base_color *= diffuse_color.rgb;
 
@@ -105,15 +101,13 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const int2 pixel = int2(ps_in.posH.xy);
     const float scene_depth = scene_depth_tex.Load(int3(pixel, 0)).r;
     const float scene_sample_valid = scene_depth < 0.99995f ? 1.0f : 0.0f;
-    const float2 screen_uv = ComputeScreenUv(ps_in.posH);
-    const float3 scene_world_pos = ComputeSceneWorldPos(screen_uv, scene_depth);
+    const float scene_linear_depth = LinearEyeDepth(scene_depth);
+    const float water_linear_depth = LinearEyeDepth(ps_in.posH.z);
     const float scene_depth_fade =
         scene_sample_valid > 0.5f
-            ? length(scene_world_pos - ps_in.posW)
-            : 0.0f;
-    const float water_absorption =
-        saturate(water_depth * 0.10f + scene_depth_fade * 0.035f);
-    water_color = lerp(water_color, float3(0.42f, 0.62f, 0.68f), water_absorption);
+            ? max(scene_linear_depth - water_linear_depth, 0.0f)
+            : max(water_depth, 0.0f);
+    const float water_coverage = smoothstep(0.03f, 0.16f, water_depth);
 
     const float edge_fade_distance = 0.40f;
     const float camera_height_delta = camera_position.y - ps_in.posW.y;
@@ -121,17 +115,22 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
         ps_in.isFrontFace
             ? saturate(pow(saturate(scene_depth_fade * 0.10f), 0.25f))
             : clamp(-camera_height_delta * 0.01f + 0.5f, 0.8f, 1.0f);
-    alpha -= 1.0f - saturate(scene_depth_fade / edge_fade_distance);
+    const float edge_alpha =
+        scene_sample_valid > 0.5f
+            ? saturate(scene_depth_fade / edge_fade_distance)
+            : 1.0f;
+    alpha *= edge_alpha;
     alpha = max(alpha, 0.0f);
-    alpha *= scene_sample_valid;
 
     const float camera_horizontality =
         pow(saturate(length(normalize(ps_in.posW - camera_position).xz)), 0.2f);
     alpha *= saturate(9.0f + 6.0f * log(max(length(ps_in.posW - camera_position), 1.0f)) * camera_horizontality);
-    const float depth_opacity =
-        smoothstep(0.08f, 0.85f, max(water_depth, 0.0f)) *
-        lerp(0.72f, 0.98f, saturate(scene_depth_fade * 0.08f));
-    alpha = max(alpha, depth_opacity);
+    const float invalid_depth_opacity =
+        (1.0f - scene_sample_valid) *
+        smoothstep(0.20f, 0.90f, max(water_depth, 0.0f)) *
+        0.72f;
+    alpha = max(alpha, invalid_depth_opacity);
+    alpha *= water_coverage;
     alpha = saturate(alpha);
 
     return float4(saturate(water_color), alpha);
