@@ -102,8 +102,8 @@ DirectX::XMFLOAT3 ExtractMatrixAxis(const DirectX::XMMATRIX& matrix, int row_ind
 }
 }
 
-constexpr bool kEnableComputeNoise = true;
-constexpr bool kEnableFloatingLights = true;
+constexpr bool kEnableComputeNoise = false;
+constexpr bool kEnableFloatingLights = false;
 constexpr bool kEnableMeteorograph = true;
 constexpr bool kEnableWaterSimulation = true;
 
@@ -113,9 +113,11 @@ static double water_simulation_accumulator = 0.0;
 
 void Application::ConfigureComputeTasks()
 {
+	m_simulation.compute_task_runner.Clear();
+
 	if constexpr (kEnableComputeNoise)
 	{
-		m_simulation.compute_task_runner.Clear();
+		
 		m_simulation.compute_task_runner.Register(
 			m_simulation.compute_noise_texture,
 			[this](double current_time, double /*elapsed_time*/)
@@ -177,6 +179,8 @@ void Application::ConfigureComputeTasks()
 				if (m_simulation.pending_surface_water_reset)
 				{
 					m_simulation.compute_water_surface_height_texture.ResetState();
+					m_simulation.pending_surface_water_reset = false;
+					water_simulation_accumulator = 0.0;
 				}
 
 				if (!m_simulation.compute_water_surface_height_texture.HasBootstrappedState())

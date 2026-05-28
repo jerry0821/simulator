@@ -1,4 +1,4 @@
-﻿cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
+cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
 {
     float water_surface_height;
     float minimum_depth_for_surface;
@@ -232,7 +232,7 @@ float2 ComputeUpstreamCoordOffset(float2 flow_vector)
 
 float2 PackNormalXZ(float3 n)
 {
-    return n.xz * 0.5f + 0.5f;
+    return n.xz;
 }
 
 float4 ComputePackedTerrainWaterNormal(int2 coord, float terrain_height, float water_height)
