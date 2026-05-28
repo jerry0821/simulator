@@ -102,84 +102,105 @@ DirectX::XMFLOAT3 ExtractMatrixAxis(const DirectX::XMMATRIX& matrix, int row_ind
 }
 }
 
+constexpr bool kEnableComputeNoise = true;
+constexpr bool kEnableFloatingLights = true;
+constexpr bool kEnableMeteorograph = true;
+constexpr bool kEnableWaterSimulation = true;
+
 void Application::ConfigureComputeTasks()
 {
-	m_simulation.compute_task_runner.Clear();
-	m_simulation.compute_task_runner.Register(
-		m_simulation.compute_noise_texture,
-		[this](double current_time, double /*elapsed_time*/)
-		{
-			m_simulation.compute_noise_texture.Update(
-				static_cast<float>(current_time),
-				DebugMenu_GetComputeNoiseSettings());
-		});
-	m_simulation.compute_task_runner.Register(
-		m_simulation.compute_floating_light_points,
-		[this](double current_time, double /*elapsed_time*/)
-		{
-			const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&Camera_GetMatrix());
-			const DirectX::XMFLOAT3 camera_position = Camera_GetPosition();
-			const DirectX::XMFLOAT3 camera_front = Camera_GetVector_Front();
-			const DirectX::XMMATRIX inverse_view = DirectX::XMMatrixInverse(nullptr, view);
-			const DirectX::XMFLOAT3 camera_right = ExtractMatrixAxis(inverse_view, 0);
-			const DirectX::XMFLOAT3 camera_up = ExtractMatrixAxis(inverse_view, 1);
-			m_simulation.compute_floating_light_points.Update(
-				static_cast<float>(current_time),
-				SimulationTerrainHeightResource().shaderResourceView(),
-				m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
-				camera_position,
-				camera_front,
-				camera_right,
-				camera_up);
-		});
-	m_simulation.compute_task_runner.Register(
-		m_simulation.compute_meteorograph_texture,
-		[this](double current_time, double elapsed_time)
-		{
-			const Backend::RenderShaderResource atmosphere_terrain =
-				m_simulation.compute_water_surface_height_texture.HasBootstrappedState()
+	if constexpr (kEnableComputeNoise)
+	{
+		m_simulation.compute_task_runner.Clear();
+		m_simulation.compute_task_runner.Register(
+			m_simulation.compute_noise_texture,
+			[this](double current_time, double /*elapsed_time*/)
+			{
+				m_simulation.compute_noise_texture.Update(
+					static_cast<float>(current_time),
+					DebugMenu_GetComputeNoiseSettings());
+			});
+	}
+
+
+	if constexpr (kEnableFloatingLights)
+	{
+		m_simulation.compute_task_runner.Register(
+			m_simulation.compute_floating_light_points,
+			[this](double current_time, double /*elapsed_time*/)
+			{
+				const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&Camera_GetMatrix());
+				const DirectX::XMFLOAT3 camera_position = Camera_GetPosition();
+				const DirectX::XMFLOAT3 camera_front = Camera_GetVector_Front();
+				const DirectX::XMMATRIX inverse_view = DirectX::XMMatrixInverse(nullptr, view);
+				const DirectX::XMFLOAT3 camera_right = ExtractMatrixAxis(inverse_view, 0);
+				const DirectX::XMFLOAT3 camera_up = ExtractMatrixAxis(inverse_view, 1);
+				m_simulation.compute_floating_light_points.Update(
+					static_cast<float>(current_time),
+					SimulationTerrainHeightResource().shaderResourceView(),
+					m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
+					camera_position,
+					camera_front,
+					camera_right,
+					camera_up);
+			});
+	}
+
+	if constexpr (kEnableMeteorograph)
+	{
+		m_simulation.compute_task_runner.Register(
+			m_simulation.compute_meteorograph_texture,
+			[this](double current_time, double elapsed_time)
+			{
+				const Backend::RenderShaderResource atmosphere_terrain =
+					m_simulation.compute_water_surface_height_texture.HasBootstrappedState()
 					? SimulationTerrainHeightResource()
 					: BaseTerrainHeightResource();
-			m_simulation.compute_meteorograph_texture.Update(
-				static_cast<float>(current_time),
-				static_cast<float>(elapsed_time),
-				DebugMenu_GetComputeNoiseSettings(),
-				atmosphere_terrain);
-		});
-	m_simulation.compute_task_runner.Register(
-		m_simulation.compute_water_surface_height_texture,
-		[this](double current_time, double elapsed_time)
-		{
-			if (m_simulation.pending_surface_water_reset)
-			{
-				m_simulation.compute_water_surface_height_texture.ResetState();
-			}
-
-			if (!m_simulation.compute_water_surface_height_texture.HasBootstrappedState())
-			{
-				m_simulation.compute_water_surface_height_texture.InitializeState(
-					BaseTerrainHeightResource().shaderResourceView(),
-					m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
-					m_simulation.active_water_surface_height,
-					DebugMenu_GetSurfaceWaterSimulationSettings());
-			}
-			else
-			{
-				const SurfaceWaterSimulationSettings& water_sim_settings =
-					DebugMenu_GetSurfaceWaterSimulationSettings();
-				const bool inject_water_pulse =
-					DebugMenu_ConsumeSurfaceWaterInjectionRequest();
-				m_simulation.compute_water_surface_height_texture.Update(
-					BaseTerrainHeightResource().shaderResourceView(),
-					m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
-					m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
-					m_simulation.active_water_surface_height,
-					water_sim_settings,
-					inject_water_pulse,
+				m_simulation.compute_meteorograph_texture.Update(
 					static_cast<float>(current_time),
-					static_cast<float>(elapsed_time));
-			}
-		});
+					static_cast<float>(elapsed_time),
+					DebugMenu_GetComputeNoiseSettings(),
+					atmosphere_terrain);
+			});
+	}
+
+	if constexpr (kEnableWaterSimulation)
+	{
+		m_simulation.compute_task_runner.Register(
+			m_simulation.compute_water_surface_height_texture,
+			[this](double current_time, double elapsed_time)
+			{
+				if (m_simulation.pending_surface_water_reset)
+				{
+					m_simulation.compute_water_surface_height_texture.ResetState();
+				}
+
+				if (!m_simulation.compute_water_surface_height_texture.HasBootstrappedState())
+				{
+					m_simulation.compute_water_surface_height_texture.InitializeState(
+						BaseTerrainHeightResource().shaderResourceView(),
+						m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
+						m_simulation.active_water_surface_height,
+						DebugMenu_GetSurfaceWaterSimulationSettings());
+				}
+				else
+				{
+					const SurfaceWaterSimulationSettings& water_sim_settings =
+						DebugMenu_GetSurfaceWaterSimulationSettings();
+					const bool inject_water_pulse =
+						DebugMenu_ConsumeSurfaceWaterInjectionRequest();
+					m_simulation.compute_water_surface_height_texture.Update(
+						BaseTerrainHeightResource().shaderResourceView(),
+						m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
+						m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
+						m_simulation.active_water_surface_height,
+						water_sim_settings,
+						inject_water_pulse,
+						static_cast<float>(current_time),
+						static_cast<float>(elapsed_time));
+				}
+			});
+	}
 }
 
 bool Application::InitializeComputeResources()
