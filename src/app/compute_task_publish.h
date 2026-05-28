@@ -6,7 +6,7 @@
 #include "compute_noise_texture.h"
 #include "compute_shared_resource_registry.h"
 #include "compute_terrain_classification_texture.h"
-#include "compute_water_surface_height_texture.h"
+#include "compute_terrain_data_texture.h"
 #include "render_water_surface.h"
 #include "terrain_water_state.h"
 
@@ -19,7 +19,7 @@ struct ComputeTaskPublishInputs
 	Backend::RenderShaderResource base_terrain_height{};
 	Backend::RenderShaderResource active_terrain_height{};
 	Backend::RenderShaderResource active_terrain_normal{};
-	const ComputeWaterSurfaceHeightTexture* water = nullptr;
+	const ComputeTerrainDataTexture* water = nullptr;
 	const ComputeTerrainClassificationTexture* classification = nullptr;
 	const ComputeGrassDataTexture* grass_data = nullptr;
 	const ComputeMeteorographTexture* meteorograph = nullptr;

@@ -1,4 +1,4 @@
-#include "compute_water_surface_height_texture.h"
+#include "compute_terrain_data_texture.h"
 
 #include <algorithm>
 #include <cstring>
@@ -86,7 +86,7 @@ bool CreateFloat4Texture(
 }
 }
 
-bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+bool ComputeTerrainDataTexture::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	Finalize();
 
@@ -97,10 +97,10 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 		return false;
 	}
 
-	std::ifstream shader_stream("resource/shader/shader_compute_water_surface_height.cso", std::ios::binary);
+	std::ifstream shader_stream("resource/shader/shader_compute_terrain_data.cso", std::ios::binary);
 	if (!shader_stream)
 	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): failed to open shader_compute_water_surface_height.cso" << std::endl;
+		hal::dout << "ComputeTerrainDataTexture::Initialize(): failed to open shader_compute_terrain_data.cso" << std::endl;
 		return false;
 	}
 
@@ -113,7 +113,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 
 	if (FAILED(m_device->CreateComputeShader(shader_bytes.data(), shader_bytes.size(), nullptr, &m_compute_shader)))
 	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): CreateComputeShader failed" << std::endl;
+		hal::dout << "ComputeTerrainDataTexture::Initialize(): CreateComputeShader failed" << std::endl;
 		Finalize();
 		return false;
 	}
@@ -121,7 +121,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 	std::ifstream terrain_normal_shader_stream("resource/shader/shader_compute_terrain_normal.cso", std::ios::binary);
 	if (!terrain_normal_shader_stream)
 	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): failed to open shader_compute_terrain_normal.cso" << std::endl;
+		hal::dout << "ComputeTerrainDataTexture::Initialize(): failed to open shader_compute_terrain_normal.cso" << std::endl;
 		Finalize();
 		return false;
 	}
@@ -141,7 +141,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 			nullptr,
 			&m_terrain_normal_compute_shader)))
 	{
-		hal::dout << "ComputeWaterSurfaceHeightTexture::Initialize(): CreateComputeShader(terrain normal) failed" << std::endl;
+		hal::dout << "ComputeTerrainDataTexture::Initialize(): CreateComputeShader(terrain normal) failed" << std::endl;
 		Finalize();
 		return false;
 	}
@@ -237,7 +237,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 
 	D3D11_BUFFER_DESC buffer_desc{};
 	buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-	buffer_desc.ByteWidth = sizeof(WaterSurfaceHeightConstants);
+	buffer_desc.ByteWidth = sizeof(TerrainDataConstants);
 	buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 
 	if (FAILED(m_device->CreateBuffer(&buffer_desc, nullptr, &m_constant_buffer)))
@@ -268,7 +268,7 @@ bool ComputeWaterSurfaceHeightTexture::Initialize(ID3D11Device* device, ID3D11De
 	return true;
 }
 
-void ComputeWaterSurfaceHeightTexture::Finalize()
+void ComputeTerrainDataTexture::Finalize()
 {
 	m_cpu_height_data_ready = false;
 	m_terrain_height_samples.clear();
@@ -310,7 +310,7 @@ void ComputeWaterSurfaceHeightTexture::Finalize()
 	m_last_cpu_readback_request_time = -1000.0f;
 }
 
-void ComputeWaterSurfaceHeightTexture::ResetState()
+void ComputeTerrainDataTexture::ResetState()
 {
 	if (!IsValid())
 	{
@@ -336,7 +336,7 @@ void ComputeWaterSurfaceHeightTexture::ResetState()
 	m_water_height_samples.clear();
 }
 
-void ComputeWaterSurfaceHeightTexture::InitializeState(
+void ComputeTerrainDataTexture::InitializeState(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* meteorograph_srv,
 	float water_surface_height,
@@ -348,7 +348,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	}
 
 	const TerrainMaterialSettings terrain_material_settings = DebugMenu_GetTerrainMaterialSettings();
-	const WaterSurfaceHeightConstants constants = {
+	const TerrainDataConstants constants = {
 		water_surface_height,
 		0.02f,
 		settings.downhill_flow_rate * 3.0f,
@@ -435,7 +435,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	UpdateCpuReadback(0.0f);
 }
 
-void ComputeWaterSurfaceHeightTexture::Update(
+void ComputeTerrainDataTexture::Update(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* rain_map_srv,
 	ID3D11ShaderResourceView* meteorograph_srv,
@@ -451,7 +451,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	}
 
 	const TerrainMaterialSettings terrain_material_settings = DebugMenu_GetTerrainMaterialSettings();
-	const WaterSurfaceHeightConstants constants = {
+	const TerrainDataConstants constants = {
 		water_surface_height,
 		0.02f,
 		settings.downhill_flow_rate * 3.0f,
@@ -536,7 +536,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 	UpdateCpuReadback(time_seconds);
 }
 
-void ComputeWaterSurfaceHeightTexture::DispatchTerrainNormalPass(
+void ComputeTerrainDataTexture::DispatchTerrainNormalPass(
 	ID3D11ShaderResourceView* terrain_height_srv,
 	ID3D11ShaderResourceView* water_velocity_srv,
 	float time_seconds) const
@@ -589,7 +589,7 @@ void ComputeWaterSurfaceHeightTexture::DispatchTerrainNormalPass(
 	m_context->CSSetShader(nullptr, nullptr, 0);
 }
 
-void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) const
+void ComputeTerrainDataTexture::UpdateCpuReadback(float time_seconds) const
 {
 	if (m_readback_texture == nullptr)
 	{
@@ -614,7 +614,7 @@ void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) con
 
 		if (FAILED(map_result))
 		{
-			hal::dout << "ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(): staging readback Map failed -> 0x"
+			hal::dout << "ComputeTerrainDataTexture::UpdateCpuReadback(): staging readback Map failed -> 0x"
 					  << std::hex << static_cast<unsigned long>(map_result) << std::dec << std::endl;
 			m_cpu_readback_pending = false;
 			m_cpu_height_data_ready = false;
@@ -638,7 +638,7 @@ void ComputeWaterSurfaceHeightTexture::UpdateCpuReadback(float time_seconds) con
 	m_cpu_readback_pending = true;
 }
 
-void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
+void ComputeTerrainDataTexture::ConsumeMappedReadback(
 	const D3D11_MAPPED_SUBRESOURCE& mapped_resource) const
 {
 	if (!kEnableCpuReadback)
@@ -662,7 +662,7 @@ void ComputeWaterSurfaceHeightTexture::ConsumeMappedReadback(
 	}
 }
 
-bool ComputeWaterSurfaceHeightTexture::IsValid() const
+bool ComputeTerrainDataTexture::IsValid() const
 {
 	return m_compute_shader != nullptr &&
 		   m_terrain_normal_compute_shader != nullptr &&
@@ -703,37 +703,37 @@ bool ComputeWaterSurfaceHeightTexture::IsValid() const
 		   m_terrain_normal_constant_buffer != nullptr;
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::Resource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::Resource() const
 {
 	return Backend::RenderShaderResource(m_srvs[m_current_index]);
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::TerrainNormalResource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::TerrainNormalResource() const
 {
 	return Backend::RenderShaderResource(m_terrain_normal_srv);
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::TerrainSurfaceDataResource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::TerrainSurfaceDataResource() const
 {
 	return Backend::RenderShaderResource(m_surface_srvs[m_current_index]);
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::FlowResource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::FlowResource() const
 {
 	return Backend::RenderShaderResource(m_flow_srvs[m_current_index]);
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::VelocityResource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::VelocityResource() const
 {
 	return Backend::RenderShaderResource(m_velocity_srvs[m_current_index]);
 }
 
-Backend::RenderShaderResource ComputeWaterSurfaceHeightTexture::SedimentResource() const
+Backend::RenderShaderResource ComputeTerrainDataTexture::SedimentResource() const
 {
 	return Backend::RenderShaderResource(m_sediment_srvs[m_current_index]);
 }
 
-bool ComputeWaterSurfaceHeightTexture::ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const
+bool ComputeTerrainDataTexture::ComputeTerrainHeightRange(float& out_min_height, float& out_max_height) const
 {
 	if (!m_cpu_height_data_ready || m_terrain_height_samples.empty())
 	{
@@ -752,7 +752,7 @@ bool ComputeWaterSurfaceHeightTexture::ComputeTerrainHeightRange(float& out_min_
 	return true;
 }
 
-bool ComputeWaterSurfaceHeightTexture::ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const
+bool ComputeTerrainDataTexture::ComputeWaterHeightRange(float& out_min_height, float& out_max_height) const
 {
 	if (!m_cpu_height_data_ready || m_water_height_samples.empty())
 	{

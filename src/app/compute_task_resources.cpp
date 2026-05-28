@@ -14,7 +14,7 @@ Backend::RenderShaderResource Application::SimulationTerrainHeightResource() con
 {
 	if (UsingSharedTerrainWaterHeightfield())
 	{
-		return m_simulation.compute_water_surface_height_texture.Resource();
+		return m_simulation.compute_terrain_data_texture.Resource();
 	}
 
 	return BaseTerrainHeightResource();
@@ -24,7 +24,7 @@ Backend::RenderShaderResource Application::ActiveTerrainHeightResource() const
 {
 	if (UsingSharedTerrainWaterHeightfield())
 	{
-		return m_simulation.compute_water_surface_height_texture.Resource();
+		return m_simulation.compute_terrain_data_texture.Resource();
 	}
 
 	return TerrainDataModel::HeightResource();
@@ -32,15 +32,15 @@ Backend::RenderShaderResource Application::ActiveTerrainHeightResource() const
 
 Backend::RenderShaderResource Application::ActiveTerrainNormalResource() const
 {
-	return m_simulation.compute_water_surface_height_texture.TerrainNormalResource();
+	return m_simulation.compute_terrain_data_texture.TerrainNormalResource();
 }
 
 bool Application::UsingSharedTerrainWaterHeightfield() const
 {
 	return
 		m_simulation.use_shared_terrain_water_heightfield &&
-		m_simulation.compute_water_surface_height_texture.IsValid() &&
-		m_simulation.compute_water_surface_height_texture.Resource().isValid();
+		m_simulation.compute_terrain_data_texture.IsValid() &&
+		m_simulation.compute_terrain_data_texture.Resource().isValid();
 }
 
 WaterSurfaceDesc Application::ResolveActiveWaterSurfaceDesc() const
@@ -77,7 +77,7 @@ void Application::PublishSharedComputeResources()
 		BaseTerrainHeightResource(),
 		ActiveTerrainHeightResource(),
 		ActiveTerrainNormalResource(),
-		&m_simulation.compute_water_surface_height_texture,
+		&m_simulation.compute_terrain_data_texture,
 		&m_simulation.compute_terrain_classification_texture,
 		&m_simulation.compute_grass_data_texture,
 		&m_simulation.compute_meteorograph_texture,

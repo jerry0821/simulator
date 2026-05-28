@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -251,7 +251,7 @@
     <ClCompile Include="src\compute\compute_rain_map_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
-    <ClCompile Include="src\compute\compute_water_surface_height_texture.cpp">
+    <ClCompile Include="src\compute\compute_terrain_data_texture.cpp">
       <Filter>Source Files\Renderer\Resources</Filter>
     </ClCompile>
     <ClCompile Include="src\compute\compute_terrain_classification_texture.cpp">
@@ -571,7 +571,7 @@
     <ClInclude Include="src\compute\compute_rain_map_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="src\compute\compute_water_surface_height_texture.h">
+    <ClInclude Include="src\compute\compute_terrain_data_texture.h">
       <Filter>Header Files\Renderer\Resources</Filter>
     </ClInclude>
     <ClInclude Include="src\compute\compute_terrain_classification_texture.h">
@@ -789,7 +789,7 @@
     <FxCompile Include="shader\environment\shader_compute_rain_map.hlsl">
       <Filter>Shader Files\Environment</Filter>
     </FxCompile>
-    <FxCompile Include="shader\water\shader_compute_water_surface_height.hlsl">
+    <FxCompile Include="shader\terrain\shader_compute_terrain_data.hlsl">
       <Filter>Shader Files\Water</Filter>
     </FxCompile>
     <FxCompile Include="shader\terrain\shader_compute_final_terrain_height.hlsl">

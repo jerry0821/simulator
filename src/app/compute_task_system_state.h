@@ -8,7 +8,7 @@
 #include "compute_shared_resource_registry.h"
 #include "compute_task_runner.h"
 #include "compute_terrain_classification_texture.h"
-#include "compute_water_surface_height_texture.h"
+#include "compute_terrain_data_texture.h"
 #include "render_water_surface.h"
 #include "terrain_surface_settings.h"
 #include "terrain_water_state.h"
@@ -22,7 +22,7 @@ struct ComputeTaskSystemState
 	ComputeNoiseTexture compute_noise_texture{};
 	ComputeSharedResourceRegistry compute_shared_resource_registry{};
 	ComputeTerrainClassificationTexture compute_terrain_classification_texture{};
-	ComputeWaterSurfaceHeightTexture compute_water_surface_height_texture{};
+	ComputeTerrainDataTexture compute_terrain_data_texture{};
 	TerrainWaterState terrain_water_state{};
 
 	double terrain_classification_last_update_time = -1000.0;

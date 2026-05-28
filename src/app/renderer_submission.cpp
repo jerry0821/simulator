@@ -6,7 +6,7 @@ void Application::RenderCurrentFrame(double current_time, double elapsed_time)
 		m_scene_render_adapter.get(),
 		&m_simulation.terrain_water_state,
 		&m_simulation.compute_shared_resource_registry,
-		&m_simulation.compute_water_surface_height_texture,
+		&m_simulation.compute_terrain_data_texture,
 		&m_simulation.compute_terrain_classification_texture,
 		&m_simulation.compute_grass_data_texture,
 		&m_simulation.compute_floating_light_points,

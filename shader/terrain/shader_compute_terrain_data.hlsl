@@ -1,4 +1,4 @@
-cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
+cbuffer TERRAIN_HEIGHT_CONSTANT_BUFFER : register(b0)
 {
     float water_surface_height;
     float minimum_depth_for_surface;

@@ -1,5 +1,5 @@
-#ifndef COMPUTE_WATER_SURFACE_HEIGHT_TEXTURE_H
-#define COMPUTE_WATER_SURFACE_HEIGHT_TEXTURE_H
+#ifndef COMPUTE_TERRAIN_DATA_TEXTURE_H
+#define COMPUTE_TERRAIN_DATA_TEXTURE_H
 
 #include <d3d11.h>
 #include "compute_task.h"
@@ -16,15 +16,15 @@ struct ID3D11UnorderedAccessView;
 struct ID3D11Buffer;
 struct SurfaceWaterSimulationSettings;
 
-class ComputeWaterSurfaceHeightTexture : public ComputeTask
+class ComputeTerrainDataTexture : public ComputeTask
 {
 public:
-	ComputeWaterSurfaceHeightTexture() = default;
-	~ComputeWaterSurfaceHeightTexture() override = default;
+	ComputeTerrainDataTexture() = default;
+	~ComputeTerrainDataTexture() override = default;
 
 	const char* DebugName() const override
 	{
-		return "ComputeWaterSurfaceHeightTexture";
+		return "ComputeTerrainDataTexture";
 	}
 
 	ComputeTaskDispatchMode DispatchMode() const override
@@ -106,7 +106,7 @@ private:
 		float wind_ripple_speed = 1.20f;
 	};
 
-	struct WaterSurfaceHeightConstants
+	struct TerrainDataConstants
 	{
 		float water_surface_height = 0.0f;
 		float minimum_depth_for_surface = 0.004f;
@@ -180,4 +180,4 @@ private:
 	mutable std::vector<float> m_water_height_samples{};
 };
 
-#endif // COMPUTE_WATER_SURFACE_HEIGHT_TEXTURE_H
+#endif // COMPUTE_TERRAIN_DATA_TEXTURE_H

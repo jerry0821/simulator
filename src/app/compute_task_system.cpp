@@ -159,7 +159,7 @@ void Application::ConfigureComputeTasks()
 			[this](double current_time, double elapsed_time)
 			{
 				const Backend::RenderShaderResource atmosphere_terrain =
-					m_simulation.compute_water_surface_height_texture.HasBootstrappedState()
+					m_simulation.compute_terrain_data_texture.HasBootstrappedState()
 					? SimulationTerrainHeightResource()
 					: BaseTerrainHeightResource();
 				m_simulation.compute_meteorograph_texture.Update(
@@ -173,19 +173,19 @@ void Application::ConfigureComputeTasks()
 	if constexpr (kEnableWaterSimulation)
 	{
 		m_simulation.compute_task_runner.Register(
-			m_simulation.compute_water_surface_height_texture,
+			m_simulation.compute_terrain_data_texture,
 			[this](double current_time, double elapsed_time)
 			{
 				if (m_simulation.pending_surface_water_reset)
 				{
-					m_simulation.compute_water_surface_height_texture.ResetState();
+					m_simulation.compute_terrain_data_texture.ResetState();
 					m_simulation.pending_surface_water_reset = false;
 					water_simulation_accumulator = 0.0;
 				}
 
-				if (!m_simulation.compute_water_surface_height_texture.HasBootstrappedState())
+				if (!m_simulation.compute_terrain_data_texture.HasBootstrappedState())
 				{
-					m_simulation.compute_water_surface_height_texture.InitializeState(
+					m_simulation.compute_terrain_data_texture.InitializeState(
 						BaseTerrainHeightResource().shaderResourceView(),
 						m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
 						m_simulation.active_water_surface_height,
@@ -197,7 +197,7 @@ void Application::ConfigureComputeTasks()
 				//		DebugMenu_GetSurfaceWaterSimulationSettings();
 				//	const bool inject_water_pulse =
 				//		DebugMenu_ConsumeSurfaceWaterInjectionRequest();
-				//	m_simulation.compute_water_surface_height_texture.Update(
+				//	m_simulation.compute_terrain_data_texture.Update(
 				//		BaseTerrainHeightResource().shaderResourceView(),
 				//		m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
 				//		m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
@@ -226,7 +226,7 @@ void Application::ConfigureComputeTasks()
 					const bool inject_water_pulse =
 						DebugMenu_ConsumeSurfaceWaterInjectionRequest();
 
-					m_simulation.compute_water_surface_height_texture.Update(
+					m_simulation.compute_terrain_data_texture.Update(
 						BaseTerrainHeightResource().shaderResourceView(),
 						m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
 						m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
@@ -263,7 +263,7 @@ bool Application::InitializeComputeResources()
 		1.0f / 60.0f,
 		DebugMenu_GetComputeNoiseSettings(),
 		BaseTerrainHeightResource());
-	m_simulation.compute_water_surface_height_texture.InitializeState(
+	m_simulation.compute_terrain_data_texture.InitializeState(
 		BaseTerrainHeightResource().shaderResourceView(),
 		m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
 		m_simulation.active_water_surface_height,
@@ -297,13 +297,13 @@ void Application::ReloadComputeResources()
 			DebugMenu_GetComputeNoiseSettings(),
 			BaseTerrainHeightResource());
 	}
-	if (!m_simulation.compute_water_surface_height_texture.IsValid())
+	if (!m_simulation.compute_terrain_data_texture.IsValid())
 	{
 		DebugMenu_SetShaderReloadStatus(false, "Compute water surface height reload failed");
 	}
-	else if (!m_simulation.compute_water_surface_height_texture.HasBootstrappedState())
+	else if (!m_simulation.compute_terrain_data_texture.HasBootstrappedState())
 	{
-		m_simulation.compute_water_surface_height_texture.InitializeState(
+		m_simulation.compute_terrain_data_texture.InitializeState(
 			BaseTerrainHeightResource().shaderResourceView(),
 			m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
 			m_simulation.active_water_surface_height,
@@ -311,7 +311,7 @@ void Application::ReloadComputeResources()
 	}
 	else
 	{
-		m_simulation.compute_water_surface_height_texture.Update(
+		m_simulation.compute_terrain_data_texture.Update(
 			BaseTerrainHeightResource().shaderResourceView(),
 			m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
 			m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
@@ -367,7 +367,7 @@ void Application::RefreshDerivedComputeResources(double current_time)
 			{
 				m_simulation.compute_grass_data_texture.Update(
 					ActiveTerrainNormalResource().shaderResourceView(),
-					m_simulation.compute_water_surface_height_texture.Resource().shaderResourceView(),
+					m_simulation.compute_terrain_data_texture.Resource().shaderResourceView(),
 					m_simulation.compute_terrain_classification_texture.VegetationSuitabilityResource().shaderResourceView());
 			}
 			m_simulation.terrain_classification_last_update_time = current_time;

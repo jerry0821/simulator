@@ -5,7 +5,7 @@
 #include "compute_grass_data_texture.h"
 #include "compute_shared_resource_registry.h"
 #include "compute_terrain_classification_texture.h"
-#include "compute_water_surface_height_texture.h"
+#include "compute_terrain_data_texture.h"
 #include "render_frame_context.h"
 #include "render_scene.h"
 #include "terrain_water_state.h"
@@ -15,7 +15,7 @@ struct RendererFrameBuildInputs
 	RenderScene* render_scene = nullptr;
 	const TerrainWaterState* terrain_water_state = nullptr;
 	const ComputeSharedResourceRegistry* shared_registry = nullptr;
-	const ComputeWaterSurfaceHeightTexture* water = nullptr;
+	const ComputeTerrainDataTexture* water = nullptr;
 	const ComputeTerrainClassificationTexture* classification = nullptr;
 	const ComputeGrassDataTexture* grass_data = nullptr;
 	const ComputeFloatingLightPoints* floating_lights = nullptr;

@@ -12,7 +12,7 @@ class ComputeTerrainClassificationTexture;
 class ComputeGrassDataTexture;
 class ComputeMeteorographTexture;
 class ComputeRainMapTexture;
-class ComputeWaterSurfaceHeightTexture;
+class ComputeTerrainDataTexture;
 class MeshFieldRenderer;
 class TerrainHeightField;
 
@@ -51,7 +51,7 @@ private:
 	friend class ::ComputeGrassDataTexture;
 	friend class ::ComputeMeteorographTexture;
 	friend class ::ComputeRainMapTexture;
-	friend class ::ComputeWaterSurfaceHeightTexture;
+	friend class ::ComputeTerrainDataTexture;
 	friend class ::MeshFieldRenderer;
 	friend class ::TerrainHeightField;
 };
