@@ -1,4 +1,4 @@
-cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
+﻿cbuffer WATER_SURFACE_HEIGHT_CONSTANT_BUFFER : register(b0)
 {
     float water_surface_height;
     float minimum_depth_for_surface;
@@ -46,6 +46,7 @@ RWTexture2D<float4> g_WaterFlowOut : register(u1);
 RWTexture2D<float4> g_WaterVelocityOut : register(u2);
 RWTexture2D<float4> g_WaterSedimentOut : register(u3);
 RWTexture2D<float4> g_TerrainSurfaceDataOut : register(u4);
+RWTexture2D<float4> g_TerrainNormalOut : register(u5);
 
 static const float kWaterDeltaTime = 1.0f / 60.0f;
 static const float kWaterFlowDamping = 0.020f;
@@ -229,6 +230,45 @@ float2 ComputeUpstreamCoordOffset(float2 flow_vector)
     return clamp(flow_vector * 4.0f, -1.0f.xx, 1.0f.xx);
 }
 
+float2 PackNormalXZ(float3 n)
+{
+    return n.xz * 0.5f + 0.5f;
+}
+
+float4 ComputePackedTerrainWaterNormal(int2 coord, float terrain_height, float water_height)
+{
+    const float cell_size_x = field_width / max(float(width), 1.0f);
+    const float cell_size_z = field_depth / max(float(height), 1.0f);
+
+    
+    const float terrain_r = SampleWorkingTerrainHeight(coord + int2(1, 0));
+    const float terrain_l = SampleWorkingTerrainHeight(coord + int2(-1, 0));
+    const float terrain_u = SampleWorkingTerrainHeight(coord + int2(0, 1));
+    const float terrain_d = SampleWorkingTerrainHeight(coord + int2(0, -1));
+
+    const float water_r = SamplePreviousWaterHeight(coord + int2(1, 0));
+    const float water_l = SamplePreviousWaterHeight(coord + int2(-1, 0));
+    const float water_u = SamplePreviousWaterHeight(coord + int2(0, 1));
+    const float water_d = SamplePreviousWaterHeight(coord + int2(0, -1));
+
+    // 中心だけ今回計算した terrain_height / water_height を使う。
+    // 左右/上下は previous を使うので、normal は少し遅れるけど安全。
+    const float terrain_dx = ((terrain_r - terrain_height) + (terrain_height - terrain_l)) * 0.5f / max(cell_size_x, 1.0e-4f);
+    const float terrain_dz = ((terrain_u - terrain_height) + (terrain_height - terrain_d)) * 0.5f / max(cell_size_z, 1.0e-4f);
+
+    const float water_dx = ((water_r - water_height) + (water_height - water_l)) * 0.5f / max(cell_size_x, 1.0e-4f);
+    const float water_dz = ((water_u - water_height) + (water_height - water_d)) * 0.5f / max(cell_size_z, 1.0e-4f);
+
+    const float3 terrain_n = normalize(float3(-terrain_dx, 1.0f, -terrain_dz));
+    const float3 water_n = normalize(float3(-water_dx, 1.0f, -water_dz));
+
+    // xy = terrain normal xz, zw = water normal xz
+    return float4(PackNormalXZ(terrain_n), PackNormalXZ(water_n));
+}
+
+
+
+
 [numthreads(8, 8, 1)]
 void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 {
@@ -368,13 +408,31 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
     const float humidity = max((water_to_terrain - 0.5f) / max(basin_fade, 1.0e-4f), 0.0f);
     const float roughness = saturate(lerp(0.24f, 0.92f, max(erosion_tendency, surface_slope * 0.65f)));
 
-    g_WaterFlowOut[dispatch_thread_id.xy] = next_depth > kDryDepthEpsilon ? outflow : 0.0f.xxxx;
+    //g_WaterFlowOut[dispatch_thread_id.xy] = next_depth > kDryDepthEpsilon ? outflow : 0.0f.xxxx;
+    //g_TerrainSurfaceDataOut[dispatch_thread_id.xy] =
+    //    float4(surface_slope, beach_mask, humidity, roughness);
+    //g_WaterVelocityOut[dispatch_thread_id.xy] =
+    //    float4(water_velocity_xy, water_speed, transport_energy);
+    //g_WaterSedimentOut[dispatch_thread_id.xy] =
+    //    float4(suspended_sediment, deposition_tendency, erosion_tendency, sediment_capacity);
+    //g_WaterSurfaceHeight[dispatch_thread_id.xy] =
+    //    float2(terrain_height, water_height);
+    
+    g_WaterFlowOut[dispatch_thread_id.xy] =
+    next_depth > kDryDepthEpsilon ? outflow : 0.0f.xxxx;
+
     g_TerrainSurfaceDataOut[dispatch_thread_id.xy] =
-        float4(surface_slope, beach_mask, humidity, roughness);
+    float4(surface_slope, beach_mask, humidity, roughness);
+
     g_WaterVelocityOut[dispatch_thread_id.xy] =
-        float4(water_velocity_xy, water_speed, transport_energy);
+    float4(water_velocity_xy, water_speed, transport_energy);
+
     g_WaterSedimentOut[dispatch_thread_id.xy] =
-        float4(suspended_sediment, deposition_tendency, erosion_tendency, sediment_capacity);
+    float4(suspended_sediment, deposition_tendency, erosion_tendency, sediment_capacity);
+
     g_WaterSurfaceHeight[dispatch_thread_id.xy] =
-        float2(terrain_height, water_height);
+    float2(terrain_height, water_height);
+
+    g_TerrainNormalOut[dispatch_thread_id.xy] =
+    ComputePackedTerrainWaterNormal(coord, terrain_height, water_height);
 }

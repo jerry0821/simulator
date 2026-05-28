@@ -401,7 +401,8 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 		m_flow_uavs[next_index],
 		m_velocity_uavs[next_index],
 		m_sediment_uavs[next_index],
-		m_surface_uavs[next_index]
+		m_surface_uavs[next_index],
+		m_terrain_normal_uav
 	};
 	ID3D11Buffer* constant_buffers[] = { m_constant_buffer };
 	ID3D11SamplerState* samplers[] = { Backend::DX11::Sampler::GetState() };
@@ -410,19 +411,19 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	m_context->CSSetConstantBuffers(0, 1, constant_buffers);
 	m_context->CSSetShaderResources(0, 6, srvs);
 	m_context->CSSetSamplers(0, 1, samplers);
-	m_context->CSSetUnorderedAccessViews(0, 5, uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 6, uavs, nullptr);
 	m_context->Dispatch(
 		(kTextureWidth + kThreadGroupSize - 1) / kThreadGroupSize,
 		(kTextureHeight + kThreadGroupSize - 1) / kThreadGroupSize,
 		1);
 
 	ID3D11ShaderResourceView* null_srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
-	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	ID3D11UnorderedAccessView* null_uavs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11Buffer* null_cb = nullptr;
 	ID3D11SamplerState* null_sampler = nullptr;
 	m_context->CSSetShaderResources(0, 6, null_srvs);
 	m_context->CSSetSamplers(0, 1, &null_sampler);
-	m_context->CSSetUnorderedAccessViews(0, 5, null_uavs, nullptr);
+	m_context->CSSetUnorderedAccessViews(0, 6, null_uavs, nullptr);
 	m_context->CSSetConstantBuffers(0, 1, &null_cb);
 	m_context->CSSetShader(nullptr, nullptr, 0);
 
@@ -430,7 +431,7 @@ void ComputeWaterSurfaceHeightTexture::InitializeState(
 	// CPU readback is only for debug/range inspection and must not gate render usage.
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
-	DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], 0.0f);
+	//DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], 0.0f);
 	UpdateCpuReadback(0.0f);
 }
 
@@ -530,7 +531,7 @@ void ComputeWaterSurfaceHeightTexture::Update(
 
 	m_current_index = next_index;
 	m_has_bootstrapped_state = true;
-	DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], time_seconds);
+	//DispatchTerrainNormalPass(m_srvs[m_current_index], m_velocity_srvs[m_current_index], time_seconds);
 	UpdateCpuReadback(time_seconds);
 }
 

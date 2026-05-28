@@ -107,6 +107,10 @@ constexpr bool kEnableFloatingLights = true;
 constexpr bool kEnableMeteorograph = true;
 constexpr bool kEnableWaterSimulation = true;
 
+
+constexpr double kWaterSimulationInterval = 1.0 / 15.0;
+static double water_simulation_accumulator = 0.0;
+
 void Application::ConfigureComputeTasks()
 {
 	if constexpr (kEnableComputeNoise)
@@ -183,12 +187,41 @@ void Application::ConfigureComputeTasks()
 						m_simulation.active_water_surface_height,
 						DebugMenu_GetSurfaceWaterSimulationSettings());
 				}
+				//else
+				//{
+				//	const SurfaceWaterSimulationSettings& water_sim_settings =
+				//		DebugMenu_GetSurfaceWaterSimulationSettings();
+				//	const bool inject_water_pulse =
+				//		DebugMenu_ConsumeSurfaceWaterInjectionRequest();
+				//	m_simulation.compute_water_surface_height_texture.Update(
+				//		BaseTerrainHeightResource().shaderResourceView(),
+				//		m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
+				//		m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
+				//		m_simulation.active_water_surface_height,
+				//		water_sim_settings,
+				//		inject_water_pulse,
+				//		static_cast<float>(current_time),
+				//		static_cast<float>(elapsed_time));
+				//}
 				else
 				{
+					water_simulation_accumulator += elapsed_time;
+
+					if (water_simulation_accumulator < kWaterSimulationInterval)
+					{
+						return;
+					}
+
+					water_simulation_accumulator = std::fmod(
+						water_simulation_accumulator,
+						kWaterSimulationInterval);
+
 					const SurfaceWaterSimulationSettings& water_sim_settings =
 						DebugMenu_GetSurfaceWaterSimulationSettings();
+
 					const bool inject_water_pulse =
 						DebugMenu_ConsumeSurfaceWaterInjectionRequest();
+
 					m_simulation.compute_water_surface_height_texture.Update(
 						BaseTerrainHeightResource().shaderResourceView(),
 						m_simulation.compute_meteorograph_texture.RainResource().shaderResourceView(),
@@ -197,7 +230,7 @@ void Application::ConfigureComputeTasks()
 						water_sim_settings,
 						inject_water_pulse,
 						static_cast<float>(current_time),
-						static_cast<float>(elapsed_time));
+						static_cast<float>(kWaterSimulationInterval));
 				}
 			});
 	}
