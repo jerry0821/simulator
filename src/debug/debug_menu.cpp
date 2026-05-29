@@ -716,6 +716,13 @@ bool DebugMenu_ConsumeSurfaceWaterInjectionRequest()
     return was_requested;
 }
 
+void DebugMenu_TriggerSurfaceWaterInjectionAt(float x, float z)
+{
+    g_SurfaceWaterSimulationSettings.debug_injection_x = x;
+    g_SurfaceWaterSimulationSettings.debug_injection_z = z;
+    g_SurfaceWaterInjectionRequested = true;
+}
+
 bool DebugMenu_ConsumeSurfaceWaterResetRequest()
 {
     const bool was_requested = g_SurfaceWaterResetRequested;

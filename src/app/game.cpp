@@ -1,4 +1,4 @@
-﻿// ----------------------------------------------------
+// ----------------------------------------------------
 // 
 // 繧ｲ繝ｼ繝譛ｬ菴・[game.cpp]
 // 
@@ -95,9 +95,40 @@ void GameController::Finalize()
 	ResourceManager::Finalize();
 }
 
+#include "debug_menu.h"
+
 void GameController::Update(double elapsed_time)
 {
 	Camera_Update(elapsed_time);
+
+	Mouse_State ms;
+	Mouse_GetState(&ms);
+	bool altHeld = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+
+	// Left click to inject water
+	if (ms.leftButton && !altHeld)
+	{
+		XMFLOAT4X4 mtxView = Camera_GetMatrix();
+		XMFLOAT3 test_near = Direct3D_ScreenToWorld(ms.x, ms.y, 0.0f, mtxView, Camera_GetPerspectiveMatrix());
+		XMFLOAT3 test_far = Direct3D_ScreenToWorld(ms.x, ms.y, 1.0f, mtxView, Camera_GetPerspectiveMatrix());
+
+		XMVECTOR vtest = XMLoadFloat3(&test_far) - XMLoadFloat3(&test_near);
+		vtest = XMVector3Normalize(vtest);
+		XMFLOAT3 dir;
+		XMStoreFloat3(&dir, vtest);
+
+		if (dir.y != 0.0f)
+		{
+			float t = -test_near.y / dir.y;
+			if (t > 0.0f)
+			{
+				float hit_x = test_near.x + dir.x * t;
+				float hit_z = test_near.z + dir.z * t;
+				DebugMenu_TriggerSurfaceWaterInjectionAt(hit_x, hit_z);
+			}
+		}
+	}
+
 }
 
 void GameController::Draw(const RenderFrameContext& frame_context)
