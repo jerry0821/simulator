@@ -444,6 +444,11 @@ void Sprite3D_DrawWaterSRV(ID3D11ShaderResourceView* terrain_height_srv,
 	ShaderWater_SetWaterSediment(water_sediment_srv);
 	ShaderWater_SetTerrainNormal(terrain_normal_srv);
 	ShaderWater_SetSceneDepth(scene_depth_srv);
+	static float water_time = 0.0f;
+	water_time += 1.0f / 60.0f;
+	ShaderWater_SetAnimationSettings(water_time);
+
+
 	ShaderWater_Begin();
 
 	Direct3D_SetCullMode(Direct3DCullMode::None);

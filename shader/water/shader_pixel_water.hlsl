@@ -11,6 +11,14 @@ cbuffer PS_CONSTANT_BUFFER1 : register(b6)
     float highlight_strength;
 };
 
+cbuffer PS_CONSTANT_BUFFER2 : register(b7)
+{
+    float time_seconds;
+    float noise_scale;
+    float noise_speed;
+    float foam_strength;
+};
+
 struct PS_INPUT
 {
     float4 posH : SV_POSITION;
@@ -58,9 +66,38 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float water_speed_factor = saturate(length(velocity_sample.xy * 60.0f) * 0.5f);
     const float suspended_sediment = saturate(sediment_sample.x);
 
+    //const float2 coord_offset =
+    //    Snorm2(Hash2D(ceil(ps_in.posW.xz * 128.0f) * 0.001f)) * 0.35f;
+    
+    float2 water_velocity = velocity_sample.xy;
+
+    float2 base_noise_uv = ps_in.posW.xz * noise_scale;
+    float2 noise_velocity_offset = clamp(water_velocity, -0.1f.xx, 0.1f.xx) * 2.0f;
+
+    float noise_time = time_seconds * noise_speed;
+
+    float noise_a = Hash2D(floor(base_noise_uv - noise_velocity_offset * frac(noise_time))).x;
+    float noise_b = Hash2D(floor(base_noise_uv + 0.5f - noise_velocity_offset * frac(noise_time + 0.5f))).x;
+
+    float moving_noise = lerp(
+    noise_a,
+    noise_b,
+    abs(frac(noise_time) * 2.0f - 1.0f)
+);
+
     const float2 coord_offset =
-        Snorm2(Hash2D(ceil(ps_in.posW.xz * 128.0f) * 0.001f)) * 0.35f;
+    Snorm2(Hash2D(ceil((ps_in.posH.xy + ps_in.posW.xz) * 128.0f) * 0.001f))
+    * 0.35f
+    + Snorm2(float2(moving_noise, Hash2D(base_noise_uv + moving_noise).y))
+    * 0.12f
+    * foam_strength
+    * lerp(0.2f, 1.0f, water_speed_factor);
+    
+    
+    
     const float4 packed_normal_sample = SampleTerrain4(terrain_normal_tex, samp, ps_in.posW.xz + coord_offset);
+    
+    
     float3 surface_normal = ReconstructUpNormal(packed_normal_sample.zw);
     const float shallow_normal_fade = smoothstep(0.08f, 0.35f, max(water_depth, 0.0f));
     surface_normal = normalize(lerp(float3(0.0f, 1.0f, 0.0f), surface_normal, shallow_normal_fade));
@@ -73,12 +110,21 @@ float4 main(PS_INPUT ps_in) : SV_TARGET
     const float3 view_dir = normalize(camera_position - ps_in.posW);
     const float3 light_dir = normalize(float3(-0.34f, 0.88f, 0.24f));
 
+    
     float3 base_color = lerp(
         float3(0.25f, 0.40f, 0.45f),
         float3(0.40f, 0.30f, 0.20f),
-        saturate(suspended_sediment * 500.0f));
+        saturate(suspended_sediment * 5.0f));
+    
     base_color = lerp(base_color, float3(0.60f, 0.60f, 0.65f), water_speed_factor);
+    
+    float foam_mask = saturate((moving_noise - 0.45f) * 4.0f);
+    foam_mask *= water_speed_factor;
+    foam_mask *= foam_strength;
+
+    base_color = lerp(base_color,float3(0.70f, 0.70f, 0.75f),foam_mask);
     base_color *= diffuse_color.rgb;
+    
 
     const float metallic = lerp(0.25f, 0.10f, water_speed_factor);
     const float specular = lerp(0.50f, 0.10f, water_speed_factor);

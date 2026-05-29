@@ -18,6 +18,7 @@ void ShaderWater_SetWaterVelocity(ID3D11ShaderResourceView* water_velocity_srv);
 void ShaderWater_SetWaterSediment(ID3D11ShaderResourceView* water_sediment_srv);
 void ShaderWater_SetTerrainNormal(ID3D11ShaderResourceView* terrain_normal_srv);
 void ShaderWater_SetSceneDepth(ID3D11ShaderResourceView* scene_depth_srv);
+void ShaderWater_SetAnimationSettings(float time_seconds);
 void ShaderWater_Begin();
 void ShaderWater_End();
 
