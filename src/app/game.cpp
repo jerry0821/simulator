@@ -124,7 +124,7 @@ void GameController::Update(double elapsed_time)
 			{
 				float hit_x = test_near.x + dir.x * t;
 				float hit_z = test_near.z + dir.z * t;
-				DebugMenu_TriggerSurfaceWaterInjectionAt(hit_x, hit_z);
+				DebugMenu_TriggerTerrainInjectionAt(hit_x, hit_z);
 			}
 		}
 	}

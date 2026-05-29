@@ -223,8 +223,8 @@ void Application::ConfigureComputeTasks()
 					const SurfaceWaterSimulationSettings& water_sim_settings =
 						DebugMenu_GetSurfaceWaterSimulationSettings();
 
-					const bool inject_water_pulse =
-						DebugMenu_ConsumeSurfaceWaterInjectionRequest();
+					const int injection_mode =
+						DebugMenu_ConsumeTerrainInjectionRequest();
 
 					m_simulation.compute_terrain_data_texture.Update(
 						BaseTerrainHeightResource().shaderResourceView(),
@@ -232,7 +232,7 @@ void Application::ConfigureComputeTasks()
 						m_simulation.compute_meteorograph_texture.Resource().shaderResourceView(),
 						m_simulation.active_water_surface_height,
 						water_sim_settings,
-						inject_water_pulse,
+						injection_mode,
 						static_cast<float>(current_time),
 						static_cast<float>(kWaterSimulationInterval));
 				}

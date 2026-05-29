@@ -27,7 +27,7 @@ cbuffer TERRAIN_HEIGHT_CONSTANT_BUFFER : register(b0)
     uint width;
     uint height;
     uint initialize_from_water_level;
-    uint injection_enabled;
+    uint injection_mode;
     uint padding1;
     uint padding2;
     uint padding3;
@@ -144,7 +144,7 @@ float ComputeBasinFactor(float terrain_height)
 float ComputeInjectedWater(int2 coord)
 {
     const float injection_active =
-        injection_enabled != 0u && injection_radius > 1.0e-4f && injection_amount > 1.0e-4f
+        injection_mode != 0u && injection_radius > 1.0e-4f && injection_amount > 1.0e-4f
             ? 1.0f
             : 0.0f;
     const float2 world_pos = ComputeWorldPosition(coord);
@@ -310,7 +310,17 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
         kHydrologicalCycleRate *
         water_dt *
         lerp(0.55f, 1.0f, basin_factor);
-    water_height += rain_input + ComputeInjectedWater(coord);
+    float injected_amount = ComputeInjectedWater(coord);
+    if (injection_mode == 2u) {
+        terrain_height += injected_amount;
+    } else if (injection_mode == 3u) {
+        terrain_height -= injected_amount;
+    } else if (injection_mode == 1u) {
+        if (injected_amount > 0.0f) {
+            water_height = max(water_height, terrain_height) + injected_amount;
+        }
+    }
+    water_height += rain_input;
 
     const float incoming =
         g_WaterFlowOut[uint2(ClampCoord(coord + int2(-1, 0)))].x +

@@ -10,8 +10,8 @@ struct TerrainMaterialSettings
 	float grass_height_end = 16.0f;
 	float rock_slope_start = 0.45f;
 	float rock_slope_end = 0.82f;
-	float rock_height_start = 9.0f;
-	float rock_height_end = 18.0f;
+	float rock_height_start = 28.0f;
+	float rock_height_end = 36.0f;
 	float stone_noise_scale = 0.035f;
 	float shoreline_offset_start = 0.55f;
 	float shoreline_offset_end = 5.5f;

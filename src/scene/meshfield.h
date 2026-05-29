@@ -15,16 +15,16 @@
 
 struct TerrainSettings
 {
-	float base_frequency = 0.0031f;
-	float base_height = 24.0f;
-	float detail_frequency = 1.7f;
-	float detail_height = 3.2f;
-	float ridge_frequency = 0.78f;
-	float ridge_height = 26.0f;
-	float continent_height = 6.5f;
+	float base_frequency = 0.0024238f;
+	float base_height = 21.012f;
+	float detail_frequency = 1.4308f;
+	float detail_height = 4.5957f;
+	float ridge_frequency = 0.6368f;
+	float ridge_height = 13.588f;
+	float continent_height = 4.562f;
 	float lake_center_z = 0.0f;
-	float lake_radius_x = 32.0f;
-	float lake_radius_z = 32.0f;
+	float lake_radius_x = 31.976f;
+	float lake_radius_z = 15.988f;
 	float lake_depth = 0.0f;
 
 	bool operator==(const TerrainSettings& other) const

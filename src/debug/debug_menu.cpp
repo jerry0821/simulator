@@ -46,7 +46,7 @@ static float g_DebugFrameTimeMs = 0.0f;
 static bool g_ShaderReloadRequested = false;
 static bool g_ShaderReloadSucceeded = true;
 static std::string g_ShaderReloadMessage = "Ready";
-static bool g_SurfaceWaterInjectionRequested = false;
+static int g_TerrainInjectionRequestedMode = 0;
 static bool g_SurfaceWaterResetRequested = false;
 static bool g_ShowComputeResourcePreviews = false;
 static bool g_EnableTerrainSurfacePresentation = true;
@@ -129,7 +129,7 @@ void SyncTerrainAuthoringControlsFromSettings(
         InverseLerpClamped(0.0f, 28.0f, settings.ridge_height) +
         InverseLerpClamped(-2.0f, 10.0f, settings.continent_height)) / 4.0f;
 
-    controls.plains_coverage = Saturate(1.0f - (peak_density * 0.45f + peak_height * 0.55f));
+    controls.plains_coverage = 0.25f;
     controls.peak_density = peak_density;
     controls.peak_height = peak_height;
     controls.lake_amount = InverseLerpClamped(0.0f, 20.0f, settings.lake_depth);
@@ -709,18 +709,18 @@ bool DebugMenu_ConsumeShaderReloadRequest()
     return was_requested;
 }
 
-bool DebugMenu_ConsumeSurfaceWaterInjectionRequest()
+int DebugMenu_ConsumeTerrainInjectionRequest()
 {
-    const bool was_requested = g_SurfaceWaterInjectionRequested;
-    g_SurfaceWaterInjectionRequested = false;
-    return was_requested;
+    const int mode = g_TerrainInjectionRequestedMode;
+    g_TerrainInjectionRequestedMode = 0;
+    return mode;
 }
 
-void DebugMenu_TriggerSurfaceWaterInjectionAt(float x, float z)
+void DebugMenu_TriggerTerrainInjectionAt(float x, float z)
 {
     g_SurfaceWaterSimulationSettings.debug_injection_x = x;
     g_SurfaceWaterSimulationSettings.debug_injection_z = z;
-    g_SurfaceWaterInjectionRequested = true;
+    g_TerrainInjectionRequestedMode = g_SurfaceWaterSimulationSettings.debug_injection_mode;
 }
 
 bool DebugMenu_ConsumeSurfaceWaterResetRequest()
@@ -992,10 +992,16 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
         g_SurfaceWaterSimulationSettings.debug_injection_x = 46.0f;
         g_SurfaceWaterSimulationSettings.debug_injection_z = 118.0f;
     }
+    ImGui::Text("Mouse Injection Mode:");
+    ImGui::RadioButton("Water", &g_SurfaceWaterSimulationSettings.debug_injection_mode, 1);
+    ImGui::SameLine();
+    ImGui::RadioButton("Dirt", &g_SurfaceWaterSimulationSettings.debug_injection_mode, 2);
+    ImGui::SameLine();
+    ImGui::RadioButton("Dig", &g_SurfaceWaterSimulationSettings.debug_injection_mode, 3);
     ImGui::SameLine();
     if (ImGui::Button("Inject Water Pulse"))
     {
-        g_SurfaceWaterInjectionRequested = true;
+        g_TerrainInjectionRequestedMode = 1;
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset Surface Water"))
@@ -1005,7 +1011,7 @@ void DebugMenu_Draw(const RenderFrameContext* frame_context)
     if (ImGui::Button("Isolated Peak Test"))
     {
         g_SurfaceWaterResetRequested = true;
-        g_SurfaceWaterInjectionRequested = true;
+        g_TerrainInjectionRequestedMode = 1;
         g_SurfaceWaterSimulationSettings.debug_injection_x = 46.0f;
         g_SurfaceWaterSimulationSettings.debug_injection_z = 118.0f;
     }

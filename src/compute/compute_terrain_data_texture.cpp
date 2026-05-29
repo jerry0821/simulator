@@ -441,7 +441,7 @@ void ComputeTerrainDataTexture::Update(
 	ID3D11ShaderResourceView* meteorograph_srv,
 	float water_surface_height,
 	const SurfaceWaterSimulationSettings& settings,
-	bool inject_water_pulse,
+	int injection_mode,
 	float time_seconds,
 	float delta_time_seconds) const
 {
@@ -479,7 +479,7 @@ void ComputeTerrainDataTexture::Update(
 		kTextureWidth,
 		kTextureHeight,
 		0u,
-		inject_water_pulse ? 1u : 0u,
+		static_cast<uint32_t>(injection_mode),
 		0u,
 		0u,
 		0u,

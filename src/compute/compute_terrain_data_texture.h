@@ -69,7 +69,7 @@ public:
 		ID3D11ShaderResourceView* meteorograph_srv,
 		float water_surface_height,
 		const SurfaceWaterSimulationSettings& settings,
-		bool inject_water_pulse,
+		int injection_mode,
 		float time_seconds,
 		float delta_time_seconds) const;
 	bool IsValid() const override;

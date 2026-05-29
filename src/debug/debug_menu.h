@@ -30,6 +30,7 @@ struct SurfaceWaterSimulationSettings
 	float debug_injection_z = 118.0f;
 	float debug_injection_radius = 14.0f;
 	float debug_injection_amount = 0.90f;
+	int debug_injection_mode = 1; // 0=None, 1=Water, 2=Dirt
 };
 
 struct PostProcessSettings
@@ -81,8 +82,8 @@ void DebugMenu_SetGrassComputeStats(const GrassComputeStats& grass_compute_stats
 void DebugMenu_SetPerformanceStats(float fps, float frame_time_ms);
 void DebugMenu_SetShaderReloadStatus(bool succeeded, const char* message);
 bool DebugMenu_ConsumeShaderReloadRequest();
-bool DebugMenu_ConsumeSurfaceWaterInjectionRequest();
-void DebugMenu_TriggerSurfaceWaterInjectionAt(float x, float z);
+int DebugMenu_ConsumeTerrainInjectionRequest();
+void DebugMenu_TriggerTerrainInjectionAt(float x, float z);
 bool DebugMenu_ConsumeSurfaceWaterResetRequest();
 const ComputeNoiseSettings& DebugMenu_GetComputeNoiseSettings();
 const TerrainSettings& DebugMenu_GetTerrainSettings();
