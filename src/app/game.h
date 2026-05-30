@@ -1,4 +1,4 @@
-﻿// ----------------------------------------------------
+// ----------------------------------------------------
 // ゲーム本体 [game.h]
 // ====================================================
 // Created by: Yasuda Atsushi
@@ -31,6 +31,12 @@ public:
 	void DrawShadow(const RenderFrameContext& frame_context);
 
 private:
+	// Sphere State
+	DirectX::XMFLOAT3 m_sphere_pos = { 46.0f, 30.0f, 118.0f };
+	float m_sphere_vel_y = 0.0f;
+	float m_sphere_yaw = 0.0f;
+	bool m_third_person_mode = false;
+
 	// Small runtime state for game-side rendering.
 	int m_test_texture = -1;
 	MapController m_map_controller{};

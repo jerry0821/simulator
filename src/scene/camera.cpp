@@ -296,3 +296,16 @@ void Camera_DebugDraw()
 	g_pDT->Clear();
 #endif
 }
+void Camera_SetTransform(const DirectX::XMFLOAT3& position,
+	const DirectX::XMFLOAT3& front,
+	const DirectX::XMFLOAT3& right)
+{
+	g_CameraPos = position;
+	XMVECTOR f = XMVector3Normalize(XMLoadFloat3(&front));
+	XMVECTOR r = XMVector3Normalize(XMLoadFloat3(&right) * XMVECTOR { 1.0f, 0.0f, 1.0f });
+	XMVECTOR u = XMVector3Normalize(XMVector3Cross(f, r));
+
+	XMStoreFloat3(&g_CameraVector_Front, f);
+	XMStoreFloat3(&g_CameraVector_Right, r);
+	XMStoreFloat3(&g_CameraVector_Up, u);
+}

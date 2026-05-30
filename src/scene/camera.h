@@ -13,6 +13,7 @@
 void Camera_Initialize(const DirectX::XMFLOAT3& position,
 	const DirectX::XMFLOAT3& front,
 	const DirectX::XMFLOAT3& right);
+void Camera_SetTransform(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& front, const DirectX::XMFLOAT3& right);
 void Camera_Initialize();
 void Camera_Finalize();
 void Camera_Update(double elapsed_time);

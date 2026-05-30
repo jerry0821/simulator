@@ -25,7 +25,10 @@ using namespace DirectX;
 #include "mouse.h"
 #include "sampler.h"
 #include "sky.h"
+#include "../compute/terrain_height_field.h"
+#include "sphere.h"
 #include "direct3d.h"
+#include <algorithm>
 
 #include "pad_logger.h"
 
@@ -99,7 +102,73 @@ void GameController::Finalize()
 
 void GameController::Update(double elapsed_time)
 {
-	Camera_Update(elapsed_time);
+	static bool tab_pressed = false;
+	if (GetAsyncKeyState(VK_TAB) & 0x8000) {
+		if (!tab_pressed) {
+			m_third_person_mode = !m_third_person_mode;
+			tab_pressed = true;
+		}
+	} else {
+		tab_pressed = false;
+	}
+
+	float move_speed = 30.0f * (float)elapsed_time;
+	float turn_speed = 2.0f * (float)elapsed_time;
+	
+	if (GetAsyncKeyState('A') & 0x8000) m_sphere_yaw -= turn_speed;
+	if (GetAsyncKeyState('D') & 0x8000) m_sphere_yaw += turn_speed;
+	
+	if (GetAsyncKeyState('W') & 0x8000) {
+		m_sphere_pos.x += sinf(m_sphere_yaw) * move_speed;
+		m_sphere_pos.z += cosf(m_sphere_yaw) * move_speed;
+	}
+	if (GetAsyncKeyState('S') & 0x8000) {
+		m_sphere_pos.x -= sinf(m_sphere_yaw) * move_speed;
+		m_sphere_pos.z -= cosf(m_sphere_yaw) * move_speed;
+	}
+
+	float surface_height = TerrainHeightField::GetHeight(m_sphere_pos.x, m_sphere_pos.z);
+	
+	m_sphere_vel_y -= 40.0f * (float)elapsed_time;
+	m_sphere_pos.y += m_sphere_vel_y * (float)elapsed_time;
+
+	if (m_sphere_pos.y <= surface_height + 1.0f) { // radius=1.0f
+		m_sphere_pos.y = surface_height + 1.0f;
+		m_sphere_vel_y = 0.0f;
+		if (GetAsyncKeyState(VK_SPACE) & 0x8000) {
+			m_sphere_vel_y = 15.0f;
+		}
+	}
+
+	if (m_third_person_mode) {
+		float cam_dist = 6.0f;
+		float cam_height = 2.5f;
+		XMFLOAT3 cam_pos = {
+			m_sphere_pos.x - sinf(m_sphere_yaw) * cam_dist,
+			m_sphere_pos.y + cam_height,
+			m_sphere_pos.z - cosf(m_sphere_yaw) * cam_dist
+		};
+		
+		float cam_ground = TerrainHeightField::GetHeight(cam_pos.x, cam_pos.z);
+		if (cam_pos.y < cam_ground + 0.5f) {
+			cam_pos.y = cam_ground + 0.5f;
+		}
+
+		XMFLOAT3 front = {
+			m_sphere_pos.x - cam_pos.x,
+			(m_sphere_pos.y + 1.0f) - cam_pos.y,
+			m_sphere_pos.z - cam_pos.z
+		};
+		float len = sqrtf(front.x*front.x + front.y*front.y + front.z*front.z);
+		front.x /= len; front.y /= len; front.z /= len;
+		XMFLOAT3 right = { front.z, 0.0f, -front.x };
+		len = sqrtf(right.x*right.x + right.z*right.z);
+		right.x /= len; right.z /= len;
+		
+		Camera_SetTransform(cam_pos, front, right);
+	} else {
+		Camera_Update(elapsed_time);
+	}
 
 	Mouse_State ms;
 	Mouse_GetState(&ms);
@@ -149,6 +218,9 @@ void GameController::Draw(const RenderFrameContext& frame_context)
 	}
 
 	m_map_controller.Draw(frame_context);
+
+	XMMATRIX world = XMMatrixRotationY(m_sphere_yaw) * XMMatrixTranslation(m_sphere_pos.x, m_sphere_pos.y, m_sphere_pos.z);
+	Sphere_Draw(-1, world, MaterialType::Lit);
 }
 
 void GameController::DrawDepthPrePass(const RenderFrameContext& frame_context)
